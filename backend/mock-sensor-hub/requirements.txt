@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+aiosqlite
+pydantic
+python-multipart
+websockets
+pyyaml
+python-dateutil
+numpy
+matplotlib
+pandas
+requests
+pyserial
+pynmea2

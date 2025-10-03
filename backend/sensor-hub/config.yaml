@@ -1,0 +1,217 @@
+# Raspberry Pi Zero Sensor Hub Configuration
+# Hardware pin assignments and sensor configurations
+
+# General Settings
+general:
+  engine_state: false  # GPIO input for engine on/off detection
+  power_source: "house_battery"  # house_battery or starter_battery
+  power_source_switch_pin: 18  # GPIO pin for power source switching
+  engine_signal_pin: 23  # GPIO pin for engine state detection
+  system_led_pin: 24  # GPIO pin for system status LED
+
+# TPMS Configuration (CC1101 radio module)
+tpms:
+  enabled: true
+  spi_bus: 0
+  spi_device: 0
+  cs_pin: 8  # GPIO8 (CE0)
+  gdo0_pin: 25  # GPIO25 for interrupt
+  gdo2_pin: 26  # GPIO26 for data
+  frequency: 433.92  # MHz
+  power: 10  # dBm
+  sensors:
+    - id: "0x14AC091"
+      name: "Front Left"
+      position: "FL"
+      low_threshold: 20
+      high_threshold: 40
+    - id: "0x1431415"
+      name: "Front Right"
+      position: "FR"
+      low_threshold: 20
+      high_threshold: 40
+    - id: "0x14DB9BF"
+      name: "Rear Left"
+      position: "RL"
+      low_threshold: 20
+      high_threshold: 40
+    - id: "0x1430FDD"
+      name: "Rear Right"
+      position: "RR"
+      low_threshold: 20
+      high_threshold: 40
+    - id: "0x147F886"
+      name: "Spare"
+      position: "S"
+      low_threshold: 20
+      high_threshold: 40
+
+# GPS Configuration (UART)
+gps:
+  enabled: true
+  uart_port: "/dev/ttyAMA0"
+  baud_rate: 9600
+  update_interval: 1000  # milliseconds
+  route_tracking: true
+  altitude_history: true
+  speed_monitoring: true
+
+# Temperature and Humidity Sensors (DHT22)
+environmental:
+  enabled: true
+  sensors:
+    outdoor:
+      type: "DHT22"
+      pin: 17  # GPIO17
+      update_interval: 5000
+      calibration_offset_temp: -1.0
+      calibration_offset_humidity: 0.0
+    cabin:
+      type: "DHT22"
+      pin: 27  # GPIO27
+      update_interval: 5000
+      calibration_offset_temp: 0.5
+      calibration_offset_humidity: -2.0
+    refrigerator:
+      type: "DHT22"
+      pin: 22  # GPIO22
+      update_interval: 10000  # Longer interval for fridge
+      calibration_offset_temp: 0.0
+      calibration_offset_humidity: 0.0
+
+# Cooling System Configuration
+cooling:
+  enabled: true
+  low_speed_trigger_temp: 93    # °C - Low speed fan activation temperature
+  high_speed_trigger_temp: 105  # °C - High speed fan activation temperature
+  min_temp: 60.0                # °C - Minimum display temperature (140°F)
+  max_temp: 121.11              # °C - Maximum display temperature (250°F)
+  overheat_temp: 112            # °C - Overheat warning temperature (239°F)
+  operating_temp: 90.5          # °C - Normal operating temperature (195°F)
+  temp_update_interval: 1000    # milliseconds - Temperature update frequency
+  fan_update_interval: 100      # milliseconds - Fan control update frequency
+  ambient_temp: 25.0            # °C - Ambient temperature for cooling calculations
+  cooling_efficiency: 0.8       # Cooling system efficiency factor
+  ac_integration: true          # Enable A/C state integration
+  manual_override: true         # Enable manual fan override controls
+  low_speed_pin: 5              # GPIO pin for low speed fan control
+  high_speed_pin: 6             # GPIO pin for high speed fan control
+  temp_sensor_pin: 17           # GPIO pin for temperature sensor
+  temp_sensor_type: "DS18B20"   # Temperature sensor type (DS18B20 or DHT22)
+
+# Power Monitoring (ADC via I2C)
+power:
+  enabled: true
+  i2c_bus: 1
+  adc_address: 0x48  # ADS1115 default address
+
+# Ethernet Communication Configuration
+ethernet:
+  enabled: true
+  host: "0.0.0.0"  # Bind to all interfaces
+  port: 8080       # TCP port for ESP32 display connections
+  max_clients: 10  # Maximum number of connected displays
+  heartbeat_timeout: 30  # seconds - Client heartbeat timeout
+  buffer_size: 4096      # bytes - Message buffer size
+  auto_start: true       # Start Ethernet server automatically
+  fallback_to_uart: true # Fallback to UART if Ethernet fails
+  voltage_channels:
+    house_battery: 0  # ADC channel for house battery voltage
+    starter_battery: 1  # ADC channel for starter battery voltage
+    solar_panels: 2  # ADC channel for solar panel voltage
+  current_channels:
+    house_battery: 3  # ADC channel for house battery current
+    solar_charging: 4  # ADC channel for solar charging current
+    refrigerator: 5  # ADC channel for refrigerator current
+  voltage_divider_ratio: 3.0  # Voltage divider ratio for voltage measurement
+  current_shunt_resistance: 0.1  # Ohms - Current shunt resistance
+  calibration_offset: 0.0  # Voltage calibration offset
+
+# Inclinometer Configuration (MPU6050 via I2C)
+inclinometer:
+  enabled: true
+  i2c_bus: 1
+  i2c_address: 0x68  # MPU6050 default address
+  update_interval: 100  # milliseconds
+  calibration_samples: 1000  # Number of samples for calibration
+  temperature_compensation: true
+  low_power_mode: false
+
+# Database Configuration
+database:
+  path: "/home/pi/sensor_hub/sensor_data.db"
+  max_history_days: 90
+  backup_interval_hours: 24
+  cleanup_interval_hours: 6
+  compression_enabled: true
+
+# Communication Configuration
+communication:
+  serial:
+    enabled: true
+    port: "/dev/ttyAMA0"
+    baud_rate: 115200
+    timeout: 1.0
+  wifi:
+    enabled: true
+    ssid: "JeepSensorHub"
+    password: "secure_password_here"
+    hostname: "jeep-sensor-hub"
+    static_ip: "192.168.1.100"
+    gateway: "192.168.1.1"
+    dns: ["8.8.8.8", "8.8.4.4"]
+  websocket:
+    enabled: true
+    port: 8080
+    max_connections: 10
+
+# API Configuration
+api:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8000
+  cors_enabled: true
+  rate_limit_requests: 100
+  rate_limit_window: 60  # seconds
+  authentication_required: false
+  api_key: "your_api_key_here"
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file_path: "/var/log/jeep-sensor-hub.log"
+  max_file_size: "10MB"
+  backup_count: 5
+  console_output: true
+  syslog_enabled: false
+
+# System Configuration
+system:
+  hostname: "jeep-sensor-hub"
+  timezone: "America/New_York"
+  ntp_servers: ["pool.ntp.org", "time.nist.gov"]
+  watchdog_enabled: true
+  watchdog_timeout: 30  # seconds
+  auto_restart: true
+  restart_conditions:
+    - memory_usage: 90  # Restart if memory usage exceeds 90%
+    - cpu_usage: 95     # Restart if CPU usage exceeds 95%
+    - uptime_hours: 168 # Restart every 7 days (168 hours)
+
+# Power Management Configuration
+power_management:
+  enabled: true
+  power_source_switch_pin: 18  # GPIO pin for power source switching
+  engine_signal_pin: 23  # GPIO pin for engine state detection
+  system_led_pin: 24  # GPIO pin for system status LED
+  i2c_bus: 1
+  adc_address: 0x48
+  sleep_mode_enabled: true
+  sleep_conditions:
+    engine_off_duration: 300  # Sleep after 5 minutes of engine off
+    low_battery_threshold: 11.5  # Sleep if battery voltage drops below 11.5V
+  wake_conditions:
+    engine_start: true
+    power_button: true
+    scheduled_wake: true
+    scheduled_wake_time: "06:00"  # Daily wake time

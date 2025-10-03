@@ -38,4 +38,22 @@
 *.app
 
 # debug information files
+
 *.dwo
+.devcontainer/
+.history/
+.vscode/
+
+# Ignore Python bytecode files and directories
+__pycache__/
+*.pyc
+
+
+# hardware UI app dependencies
+pi-ui/lvgl
+pi-ui/lv_drivers
+pi-ui/node_modules
+
+# hardware UI app build and executable
+pi-ui/build
+pi_ui

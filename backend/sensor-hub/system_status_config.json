@@ -1,0 +1,182 @@
+{
+	"systemStatus": {
+		"reportingSystems": {
+			"sensorHub": {
+				"name": "Sensor Hub",
+				"enabled": true,
+				"priority": 1,
+				"subsystems": {
+					"tpmsModule": {
+						"name": "TPMS Module",
+						"enabled": true,
+						"dataRequired": ["tpms_front_left", "tpms_front_right", "tpms_rear_left", "tpms_rear_right"],
+						"checkType": "data_presence"
+					},
+					"voltageMeters": {
+						"name": "Voltage Meters",
+						"enabled": true,
+						"dataRequired": ["voltage", "current"],
+						"checkType": "data_presence"
+					},
+					"gpsModule": {
+						"name": "GPS Module",
+						"enabled": true,
+						"dataRequired": ["gps_latitude", "gps_longitude"],
+						"checkType": "data_presence"
+					},
+					"inclinometer": {
+						"name": "Inclinometer",
+						"enabled": true,
+						"dataRequired": ["roll", "pitch", "acceleration"],
+						"checkType": "data_presence"
+					},
+					"engineManagement": {
+						"name": "Engine Management",
+						"enabled": true,
+						"dataRequired": ["engine_temperature", "engine_rpm", "oil_pressure"],
+						"checkType": "data_presence"
+					},
+					"environmentalSensors": {
+						"name": "Environmental Sensors",
+						"enabled": true,
+						"dataRequired": ["ambient_temperature", "humidity"],
+						"checkType": "data_presence"
+					},
+					"coolingManagement": {
+						"name": "Cooling Management",
+						"enabled": true,
+						"dataRequired": ["coolant_temperature", "fan_state"],
+						"checkType": "data_presence"
+					}
+				}
+			},
+			"powerSystem": {
+				"name": "Power System",
+				"enabled": true,
+				"priority": 2,
+				"subsystems": {
+					"starterBattery": {
+						"name": "Starter Battery",
+						"enabled": true,
+						"dataRequired": ["starter_voltage", "starter_current"],
+						"checkType": "data_presence"
+					},
+					"houseBattery": {
+						"name": "House Battery",
+						"enabled": true,
+						"dataRequired": ["house_voltage", "house_current"],
+						"checkType": "data_presence"
+					}
+				}
+			},
+			"communicationSystems": {
+				"name": "Communication Systems",
+				"enabled": true,
+				"priority": 3,
+				"subsystems": {
+					"ethernetConnection": {
+						"name": "Ethernet Connection",
+						"enabled": true,
+						"checkType": "connection_status"
+					},
+					"wirelessConnection": {
+						"name": "Wireless Connection",
+						"enabled": false,
+						"checkType": "connection_status"
+					}
+				}
+			}
+		}
+	},
+	"displayModules": {
+		"coolingManagement": {
+			"name": "Cooling Management System",
+			"enabled": true,
+			"position": {"x": 0, "y": 0},
+			"size": {"width": 160, "height": 120},
+			"dataSources": ["coolant_temperature", "ac_power_state", "fan_override", "fan_state"],
+			"layouts": ["compact", "detailed", "graph"],
+			"defaultLayout": "compact"
+		},
+		"environmental": {
+			"name": "Environmental Conditions",
+			"enabled": true,
+			"position": {"x": 170, "y": 0},
+			"size": {"width": 160, "height": 120},
+			"dataSources": ["cabin_temperature", "outdoor_temperature", "refrigerator_temperature"],
+			"layouts": ["compact", "detailed", "trends"],
+			"defaultLayout": "compact"
+		},
+		"tpms": {
+			"name": "TPMS System",
+			"enabled": true,
+			"position": {"x": 340, "y": 0},
+			"size": {"width": 140, "height": 120},
+			"dataSources": ["tpms_front_left", "tpms_front_right", "tpms_rear_left", "tpms_rear_right", "tpms_spare"],
+			"layouts": ["compact", "detailed", "visual"],
+			"defaultLayout": "compact"
+		},
+		"inclinometer": {
+			"name": "Inclinometer",
+			"enabled": true,
+			"position": {"x": 0, "y": 130},
+			"size": {"width": 160, "height": 120},
+			"dataSources": ["roll", "pitch", "acceleration", "yaw"],
+			"layouts": ["compact", "detailed", "compass"],
+			"defaultLayout": "compact"
+		},
+		"gps": {
+			"name": "GPS",
+			"enabled": true,
+			"position": {"x": 170, "y": 130},
+			"size": {"width": 160, "height": 120},
+			"dataSources": ["gps_latitude", "gps_longitude", "gps_heading", "gps_speed", "gps_altitude", "gps_satellites"],
+			"layouts": ["compact", "detailed", "navigation"],
+			"defaultLayout": "compact"
+		},
+		"engineManagement": {
+			"name": "Engine Management System",
+			"enabled": true,
+			"position": {"x": 340, "y": 130},
+			"size": {"width": 140, "height": 120},
+			"dataSources": ["oil_temperature", "oil_pressure", "manifold_pressure", "engine_bay_temperature"],
+			"layouts": ["compact", "detailed", "gauges"],
+			"defaultLayout": "compact"
+		},
+		"vehiclePower": {
+			"name": "Vehicle Power System",
+			"enabled": true,
+			"position": {"x": 0, "y": 260},
+			"size": {"width": 240, "height": 120},
+			"dataSources": ["starter_voltage", "starter_current", "house_voltage", "house_current"],
+			"layouts": ["compact", "detailed", "monitoring"],
+			"defaultLayout": "compact"
+		}
+	},
+	"globalSettings": {
+		"display": {
+			"brightness": {
+				"min": 10,
+				"max": 100,
+				"default": 80,
+				"unit": "percent"
+			},
+			"autoSleep": {
+				"enabled": true,
+				"timeout": 300,
+				"unit": "seconds"
+			},
+			"colorScheme": {
+				"options": ["green", "blue", "amber", "white"],
+				"default": "green"
+			}
+		},
+		"controller": {
+			"name": "Primary Display Controller",
+			"id": "PDC-001",
+			"connectionType": "ethernet",
+			"privileges": ["read", "write"],
+			"version": "1.0.0"
+		}
+	}
+}

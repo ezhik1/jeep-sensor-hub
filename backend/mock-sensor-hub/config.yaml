@@ -1,0 +1,225 @@
+# Mock Sensor Hub Configuration
+# This file configures the behavior of simulated sensors for development and testing
+
+# General Settings
+general:
+  engine_state: false  # Simulated engine on/off state
+  power_source: "house_battery"  # house_battery or starter_battery
+  simulation_speed: 1.0  # Time multiplier for simulation (1.0 = real-time)
+
+# TPMS Configuration (based on existing Arduino code)
+tpms:
+  enabled: true
+  sensors:
+    - id: "0x14AC091"
+      name: "Front Left"
+      position: "FL"
+      pressure: 32.5
+      temperature: 25.0
+      battery_level: 85
+      target_pressure: 32.0
+      pressure_range: [28.0, 36.0]
+      temp_range: [40.0, 120.0]
+      low_threshold: 20
+      high_threshold: 40
+    - id: "0x1431415"
+      name: "Front Right"
+      position: "FR"
+      pressure: 33.2
+      temperature: 26.1
+      battery_level: 87
+      target_pressure: 32.0
+      pressure_range: [28.0, 36.0]
+      temp_range: [40.0, 120.0]
+      low_threshold: 20
+      high_threshold: 40
+    - id: "0x14DB9BF"
+      name: "Rear Left"
+      position: "RL"
+      pressure: 31.8
+      temperature: 24.5
+      battery_level: 82
+      target_pressure: 30.0
+      pressure_range: [26.0, 34.0]
+      temp_range: [40.0, 120.0]
+      low_threshold: 20
+      high_threshold: 40
+    - id: "0x1430FDD"
+      name: "Rear Right"
+      position: "RR"
+      pressure: 32.1
+      temperature: 25.3
+      battery_level: 84
+      target_pressure: 30.0
+      pressure_range: [26.0, 34.0]
+      temp_range: [40.0, 120.0]
+      low_threshold: 20
+      high_threshold: 40
+    - id: "0x147F886"
+      name: "Spare"
+      position: "S"
+      pressure: 35.0
+      temperature: 22.0
+      battery_level: 90
+      target_pressure: 35.0
+      pressure_range: [31.0, 39.0]
+      temp_range: [40.0, 120.0]
+      low_threshold: 20
+      high_threshold: 40
+
+# GPS Configuration
+gps:
+  enabled: true
+  simulation_mode: "route"  # route, random, or static
+  static_position:
+    latitude: 37.7749
+    longitude: -122.4194
+    altitude: 100
+  route_file: "sample_routes.json"
+  update_interval: 1000  # milliseconds
+
+# Temperature and Humidity Sensors
+environmental:
+  enabled: true
+  weather_conditions: "clear"
+  sensors:
+    outside_temp:
+      type: "temperature"
+      unit: "°F"
+      base_value: 22.5
+      variation_range: [5.0, 15.0]
+      update_rate: 0.1
+      location: "outside"
+      description: "Outside Air Temperature"
+    cabin_temp:
+      type: "temperature"
+      unit: "°F"
+      base_value: 24.8
+      variation_range: [2.0, 8.0]
+      update_rate: 0.05
+      location: "cabin"
+      description: "Cabin Temperature"
+    humidity:
+      type: "humidity"
+      unit: "%"
+      base_value: 45.0
+      variation_range: [10.0, 25.0]
+      update_rate: 0.05
+      location: "cabin"
+      description: "Cabin Humidity"
+    barometric:
+      type: "pressure"
+      unit: "inHg"
+      base_value: 29.92
+      variation_range: [0.5, 1.5]
+      update_rate: 0.01
+      location: "outside"
+      description: "Barometric Pressure"
+
+# Power System Configuration
+power:
+  enabled: true
+  house_battery:
+    voltage: 12.8
+    capacity: 100.0
+    charge_rate: 5.0
+    discharge_rate: 2.5
+  starter_battery:
+    voltage: 12.6
+    capacity: 60.0
+    charge_rate: 0.0
+    discharge_rate: 0.0
+  solar_system:
+    enabled: true
+    panel_voltage: 18.5
+    panel_current: 3.2
+    efficiency: 0.85
+
+# Engine Sensors Configuration
+engine:
+  enabled: true
+  oil_pressure:
+    current: 45.0
+    min_threshold: 15.0
+    max_threshold: 80.0
+    unit: "PSI"
+  oil_temperature:
+    current: 210.0
+    min_threshold: 180.0
+    max_threshold: 250.0
+    unit: "°F"
+  coolant_temperature:
+    current: 195.0
+    min_threshold: 160.0
+    max_threshold: 220.0
+    unit: "°F"
+  vacuum_pressure:
+    current: 18.5
+    min_threshold: 15.0
+    max_threshold: 22.0
+    unit: "inHg"
+
+# Inclinometer Configuration
+inclinometer:
+  enabled: true
+  pitch:
+    current: 2.5
+    range: [-45.0, 45.0]
+    unit: "degrees"
+  roll:
+    current: -1.2
+    range: [-45.0, 45.0]
+    unit: "degrees"
+  yaw:
+    current: 0.0
+    range: [0.0, 360.0]
+    unit: "degrees"
+
+# Cooling System Configuration
+cooling:
+  enabled: true
+  low_speed_trigger_temp: 93.0  # °C
+  high_speed_trigger_temp: 105.0  # °C
+  min_temp: 60.0  # °C
+  max_temp: 121.11  # °C
+  overheat_temp: 112.0  # °C
+  operating_temp: 90.5  # °C
+  temp_update_interval: 1000  # ms
+  fan_update_interval: 100  # ms
+  ambient_temp: 25.0  # °C
+  cooling_efficiency: 0.8
+  ac_integration: true
+  manual_override: false
+
+# Database Configuration
+database:
+  path: "sensor_data.db"
+  max_history_days: 30
+  cleanup_interval_hours: 24
+
+# API Configuration
+api:
+  host: "0.0.0.0"
+  port: 8000
+  cors_enabled: true
+  websocket_enabled: true
+
+# Simulation Configuration
+simulation:
+  enabled: true
+  time_multiplier: 1.0
+  events:
+    engine_start_stop: true
+    temperature_changes: true
+    pressure_variations: true
+  routes:
+    - name: "Daily Commute"
+      start_time: "08:00"
+      end_time: "17:00"
+      distance: 25.5
+      avg_speed: 35.0
+    - name: "Weekend Trip"
+      start_time: "10:00"
+      end_time: "16:00"
+      distance: 120.0
+      avg_speed: 55.0
