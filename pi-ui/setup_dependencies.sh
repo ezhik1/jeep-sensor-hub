@@ -17,6 +17,20 @@ else
 	echo "✓ lv_drivers already exists"
 fi
 
+# Check if lvgl exists
+if [ ! -d "lv_drivers" ]; then
+	echo "Cloning lv_drivers repository..."
+	git clone https://github.com/lvgl/lvgl.git
+	if [ $? -eq 0 ]; then
+		echo "✓ LVGL cloned successfully"
+	else
+		echo "✗ Failed to clone LVGL"
+		exit 1
+	fi
+else
+	echo "✓ LVGL already exists"
+fi
+
 # Check if lv_drv_conf.h exists
 if [ ! -f "lv_drv_conf.h" ]; then
 	echo "Creating lv_drv_conf.h from template..."

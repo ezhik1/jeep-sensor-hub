@@ -1,8 +1,10 @@
+#include <stdio.h>
 #include "bar_graph_gauge.h"
-#include "esp_compat.h"
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 static const char *TAG = "bar_graph_gauge";
 
@@ -10,7 +12,7 @@ static const char *TAG = "bar_graph_gauge";
 static void bar_graph_gauge_draw_range_indicator(bar_graph_gauge_t *gauge)
 {
 	if (!gauge || !gauge->canvas_buffer || !gauge->show_y_axis) {
-		ESP_LOGW(TAG, "Cannot draw range indicator: gauge=%p, buffer=%p, show_y_axis=%d",
+		printf("[W] bar_graph_gauge: Cannot draw range indicator: gauge=%p, buffer=%p, show_y_axis=%d\n",
 			gauge, gauge ? gauge->canvas_buffer : NULL, gauge ? gauge->show_y_axis : 0);
 		return;
 	}
@@ -20,7 +22,7 @@ static void bar_graph_gauge_draw_range_indicator(bar_graph_gauge_t *gauge)
 
 	// Safety check for valid dimensions
 	if (canvas_width <= 0 || canvas_height <= 0) {
-		ESP_LOGW(TAG, "Invalid canvas dimensions: %dx%d", canvas_width, canvas_height);
+		printf("[W] bar_graph_gauge: Invalid canvas dimensions: %dx%d\n", canvas_width, canvas_height);
 		return;
 	}
 
@@ -76,17 +78,17 @@ void bar_graph_gauge_init(
 )
 {
 	if (!gauge || !parent) {
-		ESP_LOGE(TAG, "Invalid parameters: gauge=%p, parent=%p", gauge, parent);
+		printf("[E] bar_graph_gauge: Invalid parameters: gauge=%p, parent=%p\n", gauge, parent);
 		return;
 	}
 
 	// Check if parent is valid
 	if (!lv_obj_is_valid(parent)) {
-		ESP_LOGE(TAG, "Parent object is not valid");
+		printf("[E] bar_graph_gauge: Parent object is not valid\n");
 		return;
 	}
 
-	ESP_LOGI(TAG, "Initializing gauge: parent=%p, size=%dx%d", parent, width, height);
+	printf("[I] bar_graph_gauge: Initializing gauge: parent=%p, size=%dx%d\n", parent, width, height);
 
 	memset(gauge, 0, sizeof(bar_graph_gauge_t));
 
@@ -120,7 +122,7 @@ void bar_graph_gauge_init(
 
 	gauge->data_points = malloc(gauge->max_data_points * sizeof(float));
 	if (!gauge->data_points) {
-		ESP_LOGE(TAG, "Failed to allocate data points array");
+		printf("[E] bar_graph_gauge: Failed to allocate data points array\n");
 		return;
 	}
 	memset(gauge->data_points, 0, gauge->max_data_points * sizeof(float));
@@ -130,7 +132,7 @@ void bar_graph_gauge_init(
 	gauge->container = lv_obj_create(parent);
 	lv_obj_set_size(gauge->container, width, height);
 	// Don't set position for flexbox layout - let parent handle positioning
-	ESP_LOGI(TAG, "Gauge container created with size: %dx%d", width, height);
+	printf("[I] bar_graph_gauge: Gauge container created with size: %dx%d\n", width, height);
 	lv_obj_set_style_pad_all(gauge->container, 0, 0);
 	lv_obj_set_style_pad_left(gauge->container, 0, 0);
 	lv_obj_set_style_pad_right(gauge->container, 0, 0);
@@ -151,7 +153,7 @@ void bar_graph_gauge_init(
 	lv_obj_set_style_pad_gap(gauge->container, 0, 0); // NO gap between content and title
 	lv_obj_set_style_pad_row(gauge->container, 0, 0); // NO row gap
 	lv_obj_set_style_pad_column(gauge->container, 0, 0); // NO column gap
-	ESP_LOGI(TAG, "Gauge container ID: %p", gauge->container);
+	printf("[I] bar_graph_gauge: Gauge container ID: %p\n", gauge->container);
 
 	// Create Graph Container (orange border) - contains Y-axis + Canvas
 	gauge->content_container = lv_obj_create(gauge->container);
@@ -159,7 +161,7 @@ void bar_graph_gauge_init(
 	int content_height = gauge->height - 15;
 	lv_obj_set_size(gauge->content_container, gauge->width, content_height);
 	// Let flexbox handle positioning - content_container will be first child
-	ESP_LOGI(TAG, "Content container created: width=%d, height=%d, gauge_height=%d, show_title=%d",
+	printf("[I] bar_graph_gauge: Content container created: width=%d, height=%d, gauge_height=%d, show_title=%d\n",
 		gauge->width, content_height, gauge->height, gauge->show_title);
 	lv_obj_set_style_bg_opa(gauge->content_container, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(gauge->content_container, 0, 0); // No border
@@ -179,26 +181,26 @@ void bar_graph_gauge_init(
 	lv_obj_set_style_pad_gap(gauge->content_container, 0, 0); // NO gap between Y-axis and canvas
 	lv_obj_set_style_pad_row(gauge->content_container, 0, 0); // NO row gap
 	lv_obj_set_style_pad_column(gauge->content_container, 0, 0); // NO column gap
-	ESP_LOGI(TAG, "Graph container ID: %p", gauge->content_container);
+		printf("[I] bar_graph_gauge: Graph container ID: %p\n", gauge->content_container);
 
 	// Create Y-axis labels container (left side)
 	if (gauge->show_y_axis) {
 		// Safety check: ensure content_container is valid
 		if (!gauge->content_container || !lv_obj_is_valid(gauge->content_container)) {
-			ESP_LOGE(TAG, "Cannot create labels container - content_container is NULL or invalid");
+			printf("[E] bar_graph_gauge: Cannot create labels container - content_container is NULL or invalid\n");
 			return;
 		}
 
 		gauge->labels_container = lv_obj_create(gauge->content_container);
 		if (!gauge->labels_container) {
-			ESP_LOGE(TAG, "Failed to create labels container");
+			printf("[E] bar_graph_gauge: Failed to create labels container\n");
 			return;
 		}
 
 		lv_obj_set_size(gauge->labels_container, 22, content_height); // 22px wide (20px + 2px for negative values)
 		// Prevent Y-axis labels container from growing beyond its specified width
 		lv_obj_set_style_flex_grow(gauge->labels_container, 0, 0);
-		ESP_LOGI(TAG, "Y-axis labels container created: width=22, height=%d, gauge_height=%d",
+		printf("[I] bar_graph_gauge: Y-axis labels container created: width=22, height=%d, gauge_height=%d\n",
 			content_height, gauge->height);
 		lv_obj_set_style_bg_opa(gauge->labels_container, LV_OPA_TRANSP, 0);
 		lv_obj_set_style_border_width(gauge->labels_container, 0, 0); // No border
@@ -218,12 +220,12 @@ void bar_graph_gauge_init(
 		lv_obj_set_style_pad_gap(gauge->labels_container, 0, 0);
 		lv_obj_set_style_pad_row(gauge->labels_container, 0, 0);
 		lv_obj_set_style_pad_column(gauge->labels_container, 0, 0);
-		ESP_LOGI(TAG, "Labels container ID: %p", gauge->labels_container);
+		printf("[I] bar_graph_gauge: Labels container ID: %p\n", gauge->labels_container);
 
 		// Max Label Container - positioned at top
 		lv_obj_t* max_container = lv_obj_create(gauge->labels_container);
 		if (!max_container) {
-			ESP_LOGE(TAG, "Failed to create max_container");
+			printf("[E] bar_graph_gauge: Failed to create max_container\n");
 			return;
 		}
 		lv_obj_set_size(max_container, LV_PCT(100), 20); // Fixed height for proper spacing
@@ -313,25 +315,25 @@ void bar_graph_gauge_init(
 	// Create canvas container (right side of content area, next to Y-axis labels) - red border
 	// Safety check: ensure content_container is valid
 	if (!gauge->content_container || !lv_obj_is_valid(gauge->content_container)) {
-		ESP_LOGE(TAG, "Cannot create canvas container - content_container is NULL or invalid");
+		printf("[E] bar_graph_gauge: Cannot create canvas container - content_container is NULL or invalid\n");
 		return;
 	}
 
 	gauge->canvas_container = lv_obj_create(gauge->content_container);
 	if (!gauge->canvas_container) {
-		ESP_LOGE(TAG, "Failed to create canvas container");
+		printf("[E] bar_graph_gauge: Failed to create canvas container\n");
 		return;
 	}
 
 	// Calculate canvas container width based on whether Y-axis is shown
 	int canvas_container_width = gauge->show_y_axis ? gauge->width - 20 : gauge->width;
-	ESP_LOGI(TAG, "Canvas container width calculation: show_y_axis=%d, gauge_width=%d, canvas_width=%d",
+	printf("[I] bar_graph_gauge: Canvas container width calculation: show_y_axis=%d, gauge_width=%d, canvas_width=%d\n",
 		gauge->show_y_axis, gauge->width, canvas_container_width);
 	lv_obj_set_size(gauge->canvas_container, canvas_container_width, content_height);
 	// Prevent canvas container from growing beyond its specified width
 	lv_obj_set_style_flex_grow(gauge->canvas_container, 0, 0);
 	// Let flexbox handle positioning - canvas will be positioned next to Y-axis labels
-	ESP_LOGI(TAG, "Canvas container created: width=%d, height=%d, show_y_axis=%d, gauge_width=%d",
+	printf("[I] bar_graph_gauge: Canvas container created: width=%d, height=%d, show_y_axis=%d, gauge_width=%d\n",
 		canvas_container_width, content_height, gauge->show_y_axis, gauge->width);
 	lv_obj_set_style_bg_opa(gauge->canvas_container, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(gauge->canvas_container, 0, 0); // No border
@@ -343,7 +345,7 @@ void bar_graph_gauge_init(
 	lv_obj_clear_flag(gauge->canvas_container, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(gauge->canvas_container, LV_OBJ_FLAG_EVENT_BUBBLE); // Allow events to bubble up
 	lv_obj_clear_flag(gauge->canvas_container, LV_OBJ_FLAG_SCROLLABLE);
-	ESP_LOGI(TAG, "Canvas container ID: %p", gauge->canvas_container);
+		printf("[I] bar_graph_gauge: Canvas container ID: %p\n", gauge->canvas_container);
 
 	// Create canvas
 	gauge->cached_draw_width = canvas_container_width; // Match canvas container width
@@ -351,17 +353,17 @@ void bar_graph_gauge_init(
 
 	// Safety check: ensure canvas_container is valid
 	if (!gauge->canvas_container || !lv_obj_is_valid(gauge->canvas_container)) {
-		ESP_LOGE(TAG, "Cannot create canvas - canvas_container is NULL or invalid");
+		printf("[E] bar_graph_gauge: Cannot create canvas - canvas_container is NULL or invalid\n");
 		return;
 	}
 
 	gauge->canvas = lv_canvas_create(gauge->canvas_container);
 	if (!gauge->canvas) {
-		ESP_LOGE(TAG, "Failed to create canvas");
+		printf("[E] bar_graph_gauge: Failed to create canvas\n");
 		return;
 	}
 	lv_obj_set_size(gauge->canvas, canvas_container_width, content_height); // Match container size
-	ESP_LOGI(TAG, "CANVAS CREATED: container_width=%d, canvas_size=%dx%d, gauge_width=%d",
+	printf("[I] bar_graph_gauge: CANVAS CREATED: container_width=%d, canvas_size=%dx%d, gauge_width=%d\n",
 		canvas_container_width, canvas_container_width, content_height, gauge->width);
 	// Let flexbox handle positioning - canvas fills its container
 	lv_obj_set_style_border_width(gauge->canvas, 0, 0); // No border
@@ -375,19 +377,19 @@ void bar_graph_gauge_init(
 
 	// Calculate buffer size and log it
 	size_t buffer_size = gauge->cached_draw_width * gauge->cached_draw_height * sizeof(lv_color_t);
-	ESP_LOGI(TAG, "Allocating canvas buffer: %dx%d = %zu bytes",
+	printf("[I] bar_graph_gauge: Allocating canvas buffer: %dx%d = %zu bytes\n",
 		gauge->cached_draw_width, gauge->cached_draw_height, buffer_size);
 
 	gauge->canvas_buffer = malloc(buffer_size);
 
 	if (!gauge->canvas_buffer) {
-		ESP_LOGE(TAG, "Failed to allocate canvas buffer of %zu bytes", buffer_size);
+		printf("[E] bar_graph_gauge: Failed to allocate canvas buffer of %zu bytes\n", buffer_size);
 		free(gauge->data_points);
 		gauge->data_points = NULL;
 		return;
 	}
 
-	ESP_LOGI(TAG, "Canvas buffer allocated successfully: %p", gauge->canvas_buffer);
+		printf("[I] bar_graph_gauge: Canvas buffer allocated successfully: %p\n", gauge->canvas_buffer);
 	lv_canvas_set_buffer(
 		gauge->canvas, gauge->canvas_buffer,
 						 gauge->cached_draw_width, gauge->cached_draw_height,
@@ -421,18 +423,18 @@ void bar_graph_gauge_init(
 
 		// Position inline with gauge container, 10px up and 10px right from bottom-right corner
 		lv_obj_align_to(gauge->title_label, gauge->container, LV_ALIGN_BOTTOM_RIGHT, -50, 8);
-		ESP_LOGI(TAG, "Title label ID: %p (positioned inline bottom-right)", gauge->title_label);
+		printf("[I] bar_graph_gauge: Title label ID: %p (positioned inline bottom-right)\n", gauge->title_label);
 	} else {
 		gauge->title_label = NULL;
 	}
 
 	// Canvas is ready for bar graph drawing
-	ESP_LOGI(TAG, "Canvas initialized: container=%dx%d, canvas=%dx%d",
+	printf("[I] bar_graph_gauge: Canvas initialized: container=%dx%d, canvas=%dx%d\n",
 		gauge->width, gauge->height, gauge->cached_draw_width, gauge->cached_draw_height);
 
 
 	gauge->initialized = true;
-	ESP_LOGI(TAG, "Gauge initialization completed successfully: %p", gauge);
+		printf("[I] bar_graph_gauge: Gauge initialization completed successfully: %p\n", gauge);
 
 	// Canvas is ready for bar graph drawing
 	// Bar graph gauge initialized
@@ -441,13 +443,15 @@ void bar_graph_gauge_init(
 void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, float value)
 {
 	if (!gauge || !gauge->initialized || !gauge->data_points ) {
-		ESP_LOGW(TAG, "Cannot add data point: gauge=%p, initialized=%d, data_points=%p",
+		printf("[W] bar_graph_gauge: Cannot add data point: gauge=%p, initialized=%d, data_points=%p\n",
 			gauge, gauge ? gauge->initialized : 0, gauge ? gauge->data_points : NULL);
 		return;
 	}
 
 	// Rate limiting: only add data if enough time has passed
-	uint32_t current_time = esp_timer_get_time() / 1000; // Convert to milliseconds
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	uint32_t current_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000; // Convert to milliseconds
 	if (gauge->update_interval_ms > 0 &&
 		(current_time - gauge->last_data_time) < gauge->update_interval_ms) {
 		// Not enough time has passed, skip this data point
@@ -491,24 +495,24 @@ void bar_graph_gauge_push_data(bar_graph_gauge_t *gauge, float value)
 void bar_graph_gauge_update_labels_and_ticks(bar_graph_gauge_t *gauge)
 {
 	if (!gauge) {
-		ESP_LOGE(TAG, "bar_graph_gauge_update_labels_and_ticks: gauge is NULL");
+		printf("[E] bar_graph_gauge: bar_graph_gauge_update_labels_and_ticks: gauge is NULL\n");
 		return;
 	}
 
 	if (!gauge->initialized) {
-		ESP_LOGW(TAG, "bar_graph_gauge_update_labels_and_ticks: gauge not initialized, skipping");
+		printf("[W] bar_graph_gauge: bar_graph_gauge_update_labels_and_ticks: gauge not initialized, skipping\n");
 		return;
 	}
 
 	if (!gauge->show_y_axis) {
-		ESP_LOGE(TAG, "bar_graph_gauge_update_labels_and_ticks: show_y_axis is NULL");
+		printf("[E] bar_graph_gauge: bar_graph_gauge_update_labels_and_ticks: show_y_axis is NULL\n");
 		return;
 	}
 
 
 	// Update labels and ticks (removed range_values_changed check for initialization)
 	// if (!gauge->range_values_changed) {
-	//	ESP_LOGD(TAG, "bar_graph_gauge_update_labels_and_ticks: range values unchanged, skipping");
+	//	printf("[D] TAG: "bar_graph_gauge_update_labels_and_ticks: range values unchanged, skipping"\n");
 	//	return;
 	// }
 
@@ -565,7 +569,7 @@ void bar_graph_gauge_update_labels_and_ticks(bar_graph_gauge_t *gauge)
 void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 {
 	if (!gauge || !gauge->initialized || !gauge->data_points) {
-		ESP_LOGW(TAG, "Cannot update canvas: gauge=%p, initialized=%d, data_points=%p",
+		printf("[W] bar_graph_gauge: Cannot update canvas: gauge=%p, initialized=%d, data_points=%p\n",
 			gauge, gauge ? gauge->initialized : 0, gauge ? gauge->data_points : NULL);
 		return;
 	}
@@ -824,7 +828,9 @@ void bar_graph_gauge_set_update_interval(bar_graph_gauge_t *gauge, uint32_t inte
 
 	// Initialize last_data_time if not set
 	if (gauge->last_data_time == 0) {
-		gauge->last_data_time = esp_timer_get_time() / 1000; // Convert to milliseconds
+		struct timespec ts;
+		clock_gettime(CLOCK_MONOTONIC, &ts);
+		gauge->last_data_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000; // Convert to milliseconds
 	}
 }
 
@@ -843,7 +849,7 @@ void bar_graph_gauge_configure_advanced(
 	bool show_border
 ){
 	if (!gauge || !gauge->initialized) {
-		ESP_LOGE(TAG, "bar_graph_gauge_configure_advanced: gauge=%p, initialized=%d", gauge, gauge ? gauge->initialized : 0);
+		printf("[E] bar_graph_gauge: bar_graph_gauge_configure_advanced: gauge=%p, initialized=%d\n", gauge, gauge ? gauge->initialized : 0);
 		return;
 	}
 
@@ -929,7 +935,7 @@ void bar_graph_gauge_configure_advanced(
 
 		if (!gauge->canvas_buffer) {
 
-			ESP_LOGE(TAG, "Failed to reallocate canvas buffer (title toggle)");
+			printf("[E] bar_graph_gauge: Failed to reallocate canvas buffer (title toggle)\n");
 			return;
 		}
 
@@ -962,7 +968,7 @@ void bar_graph_gauge_configure_advanced(
 		}
 		gauge->canvas_buffer = malloc(gauge->cached_draw_width * gauge->cached_draw_height * sizeof(lv_color_t));
 		if (!gauge->canvas_buffer) {
-			ESP_LOGE(TAG, "Failed to reallocate canvas buffer");
+			printf("[E] bar_graph_gauge: Failed to reallocate canvas buffer\n");
 			return;
 		}
 		lv_canvas_set_buffer(gauge->canvas, gauge->canvas_buffer,
@@ -978,7 +984,7 @@ void bar_graph_gauge_configure_advanced(
 
 	// Create Y-axis labels if they don't exist but are now enabled
 	if (gauge->show_y_axis && !gauge->labels_container) {
-		ESP_LOGI(TAG, "Creating Y-axis labels for gauge %p", gauge);
+		printf("[I] bar_graph_gauge: Creating Y-axis labels for gauge %p\n", gauge);
 		// Create Y-axis labels container (left side) - use same width as initial creation
 		gauge->labels_container = lv_obj_create(gauge->content_container);
 		lv_obj_set_size(gauge->labels_container, 22, gauge->height - 20); // Match initial creation width and height
@@ -995,7 +1001,7 @@ void bar_graph_gauge_configure_advanced(
 		// FLEXBOX LAYOUT: Labels container (vertical distribution, right-aligned)
 		lv_obj_set_flex_flow(gauge->labels_container, LV_FLEX_FLOW_COLUMN);
 		lv_obj_set_flex_align(gauge->labels_container, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER);
-		ESP_LOGI(TAG, "Labels container created during configuration: %p", gauge->labels_container);
+		printf("[I] bar_graph_gauge: Labels container created during configuration: %p\n", gauge->labels_container);
 
 		// Create Y-axis labels
 		// Max Label
@@ -1043,10 +1049,10 @@ void bar_graph_gauge_configure_advanced(
 
 	// Debug: Log Y-axis label creation
 	if (gauge->show_y_axis && gauge->labels_container) {
-		ESP_LOGI(TAG, "Y-axis labels ready: container=%p, max=%p, center=%p, min=%p",
+		printf("[I] bar_graph_gauge: Y-axis labels ready: container=%p, max=%p, center=%p, min=%p\n",
 			gauge->labels_container, gauge->max_label, gauge->center_label, gauge->min_label);
 	} else {
-		ESP_LOGW(TAG, "Y-axis labels NOT created: show_y_axis=%d, labels_container=%p",
+		printf("[W] bar_graph_gauge: Y-axis labels NOT created: show_y_axis=%d, labels_container=%p\n",
 			gauge->show_y_axis, gauge->labels_container);
 	}
 

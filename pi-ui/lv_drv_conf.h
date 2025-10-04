@@ -95,8 +95,8 @@
 #endif
 
 #if USE_SDL || USE_SDL_GPU
-#  define SDL_HOR_RES     480
-#  define SDL_VER_RES     800
+#  define SDL_HOR_RES     800
+#  define SDL_VER_RES     480
 
 /* Scale window by this factor (useful when simulating small screens) */
 #  define SDL_ZOOM        1
@@ -113,6 +113,9 @@
 
 /* Fullscreen mode */
 #  define SDL_FULLSCREEN              1
+
+/* SDL rotation - not applicable for UI rotation */
+#  define SDL_ROTATION                0
 
 /* Window Title  */
 #  define SDL_WINDOW_TITLE "Jeep Sensor Hub - Raspberry Pi"

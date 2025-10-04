@@ -1,12 +1,13 @@
+#include <stdio.h>
 #include "real_data.h"
-#include "../../esp_compat.h"
+
 
 static const char *TAG = "real_data";
 
 void real_data_init(void)
 {
-	ESP_LOGI(TAG, "Initializing real data component");
-	ESP_LOGI(TAG, "Real data component initialized (placeholder implementation)");
+		printf("[I] real_data: Initializing real data component\n");
+	printf("[I] real_data: Real data component initialized (placeholder implementation)\n");
 }
 
 void real_data_update(void)
@@ -17,7 +18,7 @@ void real_data_update(void)
 	update_count++;
 
 	if (update_count % 100 == 0) {
-		ESP_LOGI(TAG, "Real data update cycle: %d", update_count);
+		printf("[I] real_data: Real data update cycle: %d\n", update_count);
 	}
 }
 
@@ -30,54 +31,54 @@ void real_data_write_to_state_objects(void)
 
 	// Placeholder implementation
 	// This will be implemented when real sensors are connected
-	ESP_LOGD(TAG, "Writing real data to state objects (placeholder)");
+	printf("[D] real_data: Writing real data to state objects (placeholder)\n");
 }
 
 // Placeholder getter functions
 void* real_data_get_power_monitor(void)
 {
-	ESP_LOGD(TAG, "Getting real power monitor data (placeholder)");
+		printf("[D] real_data: Getting real power monitor data (placeholder)\n");
 	return NULL;
 }
 
 void* real_data_get_temp_humidity(void)
 {
-	ESP_LOGD(TAG, "Getting real temp humidity data (placeholder)");
+		printf("[D] real_data: Getting real temp humidity data (placeholder)\n");
 	return NULL;
 }
 
 void* real_data_get_inclinometer(void)
 {
-	ESP_LOGD(TAG, "Getting real inclinometer data (placeholder)");
+	printf("[D] real_data: Getting real inclinometer data (placeholder)\n");
 	return NULL;
 }
 
 void* real_data_get_gps(void)
 {
-	ESP_LOGD(TAG, "Getting real GPS data (placeholder)");
+	printf("[D] real_data: Getting real GPS data (placeholder)\n");
 	return NULL;
 }
 
 void* real_data_get_coolant_temp(void)
 {
-	ESP_LOGD(TAG, "Getting real coolant temp data (placeholder)");
+	printf("[D] real_data: Getting real coolant temp data (placeholder)\n");
 	return NULL;
 }
 
 void* real_data_get_voltage_monitor(void)
 {
-	ESP_LOGD(TAG, "Getting real voltage monitor data (placeholder)");
+	printf("[D] real_data: Getting real voltage monitor data (placeholder)\n");
 	return NULL;
 }
 
 void* real_data_get_tpms(void)
 {
-	ESP_LOGD(TAG, "Getting real TPMS data (placeholder)");
+	printf("[D] real_data: Getting real TPMS data (placeholder)\n");
 	return NULL;
 }
 
 void* real_data_get_compressor_controller(void)
 {
-	ESP_LOGD(TAG, "Getting real compressor controller data (placeholder)");
+	printf("[D] real_data: Getting real compressor controller data (placeholder)\n");
 	return NULL;
 }

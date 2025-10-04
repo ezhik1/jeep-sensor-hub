@@ -1,6 +1,7 @@
+#include <stdio.h>
 #include "boot_screen.h"
 #include <lvgl.h>
-#include "esp_compat.h"
+
 
 static const char *TAG = "boot_screen";
 
@@ -11,7 +12,7 @@ static lv_obj_t *progress_bar = NULL;
 
 void boot_screen_init(void)
 {
-	ESP_LOGI(TAG, "Initializing boot screen");
+	printf("[I] boot_screen: Initializing boot screen\n");
 
 	// Create main container
 	boot_container = lv_obj_create(lv_scr_act());
@@ -20,7 +21,7 @@ void boot_screen_init(void)
 	lv_obj_set_style_bg_color(boot_container, lv_color_hex(0x000000), 0); // Black background
 	lv_obj_set_style_border_width(boot_container, 0, 0);
 
-	ESP_LOGI(TAG, "Boot screen container created");
+	printf("[I] boot_screen: Boot screen container created\n");
 
 	// Create logo/title label
 	logo_label = lv_label_create(boot_container);
@@ -45,23 +46,23 @@ void boot_screen_init(void)
 	lv_obj_set_style_bg_color(progress_bar, lv_color_hex(0x333333), LV_PART_MAIN);
 	lv_obj_set_style_bg_color(progress_bar, lv_color_hex(0x00AA00), LV_PART_INDICATOR);
 
-	ESP_LOGI(TAG, "Boot screen initialized successfully");
+	printf("[I] boot_screen: Boot screen initialized successfully\n");
 }
 
 void boot_screen_update_progress(int progress)
 {
-	ESP_LOGI(TAG, "Updating boot screen progress: %d%%", progress);
+		printf("[I] boot_screen: Updating boot screen progress: %d%%\n", progress);
 	if (progress_bar) {
 		lv_bar_set_value(progress_bar, progress, LV_ANIM_ON);
-		ESP_LOGI(TAG, "Progress bar updated to %d%%", progress);
+		printf("[I] boot_screen: Progress bar updated to %d%%\n", progress);
 	} else {
-		ESP_LOGW(TAG, "Progress bar not available for update");
+		printf("[W] boot_screen: Progress bar not available for update\n");
 	}
 }
 
 void boot_screen_cleanup(void)
 {
-	ESP_LOGI(TAG, "Cleaning up boot screen");
+	printf("[I] boot_screen: Cleaning up boot screen\n");
 	if (boot_container) {
 	// Clear all child objects first to avoid event handler issues
 	lv_obj_t *child = lv_obj_get_child(boot_container, 0);
@@ -82,8 +83,8 @@ void boot_screen_cleanup(void)
 		logo_label = NULL;
 		loading_label = NULL;
 		progress_bar = NULL;
-		ESP_LOGI(TAG, "Boot screen objects deleted");
+		printf("[I] boot_screen: Boot screen objects deleted\n");
 	} else {
-		ESP_LOGW(TAG, "Boot container not found for cleanup");
+		printf("[W] boot_screen: Boot container not found for cleanup\n");
 	}
 }

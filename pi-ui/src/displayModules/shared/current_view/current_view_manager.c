@@ -1,23 +1,24 @@
+#include <stdio.h>
 #include "current_view_manager.h"
 #include "../../../state/device_state.h"
-#include "../../../esp_compat.h"
+
 #include <string.h>
 
 static const char *TAG = "current_view_manager";
 
 void current_view_manager_init(int available_views_count)
 {
-	ESP_LOGI(TAG, "Initializing shared current view manager with %d available views", available_views_count);
+		printf("[I] current_view_manager: Initializing shared current view manager with %d available views\n", available_views_count);
 
 	if (available_views_count <= 0) {
-		ESP_LOGE(TAG, "Invalid available views count: %d", available_views_count);
+		printf("[E] current_view_manager: Invalid available views count: %d\n", available_views_count);
 		return;
 	}
 
 	// Initialize the view lifecycle (separated from state management)
 	current_view_initialize(available_views_count);
 
-	ESP_LOGI(TAG, "Shared current view manager initialized with %d views", available_views_count);
+		printf("[I] current_view_manager: Shared current view manager initialized with %d views\n", available_views_count);
 }
 
 int current_view_manager_get_index(void)
@@ -28,13 +29,13 @@ int current_view_manager_get_index(void)
 
 void current_view_manager_cycle_to_next(void)
 {
-	ESP_LOGI(TAG, "=== REQUESTING VIEW CYCLE ===");
+	printf("[I] current_view_manager: === REQUESTING VIEW CYCLE ===\n");
 
 	// Use module-specific state management for cycling
 	// For now, assume power-monitor module (this should be made configurable)
 	module_screen_view_cycle_to_next("power-monitor");
 
-	ESP_LOGI(TAG, "View cycle requested, current index: %d", module_screen_view_get_view_index("power-monitor"));
+		printf("[I] current_view_manager: View cycle requested, current index: %d\n", module_screen_view_get_view_index("power-monitor"));
 }
 
 bool current_view_manager_is_cycling_in_progress(void)
@@ -69,7 +70,7 @@ void current_view_manager_set_visible(bool visible)
 
 void current_view_manager_cleanup(void)
 {
-	ESP_LOGI(TAG, "Cleaning up shared current view manager");
+	printf("[I] current_view_manager: Cleaning up shared current view manager\n");
 
 	// Clean up view lifecycle
 	current_view_cleanup();
@@ -77,5 +78,5 @@ void current_view_manager_cleanup(void)
 	// Reset state management
 	view_state_set_cycling_in_progress(false);
 
-	ESP_LOGI(TAG, "Shared current view manager cleanup complete");
+	printf("[I] current_view_manager: Shared current view manager cleanup complete\n");
 }

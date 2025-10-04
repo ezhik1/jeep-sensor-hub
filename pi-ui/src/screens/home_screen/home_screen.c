@@ -1,10 +1,11 @@
+#include <stdio.h>
 #include "home_screen.h"
 #include "../../lvgl_port_pi.h"
 #include "../../displayModules/power-monitor/power-monitor.h"
 #include "../../fonts/lv_font_noplato_10.h"
 #include "../../fonts/lv_font_noplato_18.h"
 #include <lvgl.h>
-#include "esp_compat.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -134,7 +135,7 @@ static void display_module_init(display_module_t *module, lv_obj_t *parent, int 
 	// Check parent size
 	int parent_width = lv_obj_get_width(parent);
 	int parent_height = lv_obj_get_height(parent);
-	ESP_LOGI(TAG, "Parent container size: %dx%d", parent_width, parent_height);
+		printf("[I] home_screen: Parent container size: %dx%d\n", parent_width, parent_height);
 
 	lv_obj_set_size(module->container, width, height);
 	lv_obj_set_pos(module->container, x, y);
@@ -145,7 +146,7 @@ static void display_module_init(display_module_t *module, lv_obj_t *parent, int 
 	// Debug: Log the actual size after setting
 	lv_area_t area;
 	lv_obj_get_coords(module->container, &area);
-	ESP_LOGW(TAG, "Home module created: requested=(%d,%d %dx%d) actual=(%d,%d %dx%d)",
+		printf("[W] home_screen: Home module created: requested=(%d,%d %dx%d) actual=(%d,%d %dx%d)\n",
 		x, y, width, height, area.x1, area.y1, lv_area_get_width(&area), lv_area_get_height(&area));
 	// Clear any default padding that might be causing the 17px offset
 	lv_obj_set_style_pad_all(module->container, 0, 0);
@@ -177,7 +178,7 @@ static void display_module_set_touch_callback(display_module_t *module, const ch
 	module->module_name[sizeof(module->module_name) - 1] = '\0';
 
 	// No hitbox needed - current view template handles all touch events
-	ESP_LOGI(TAG, "*** Module setup complete for: %s (current view template handles touch events) ***", module->module_name);
+		printf("[I] home_screen: *** Module setup complete for: %s (current view template handles touch events) ***\n", module->module_name);
 
 }
 
@@ -198,7 +199,7 @@ static void display_module_cleanup(display_module_t *module)
 
 void home_screen_init(void)
 {
-	ESP_LOGI(TAG, "Initializing home screen");
+	printf("[I] home_screen: Initializing home screen\n");
 
 	// Get display dimensions from LVGL port (NO individual screen configs!)
 	uint32_t screen_width, screen_height;
@@ -210,7 +211,7 @@ void home_screen_init(void)
 
 	// Force screen to use correct dimensions
 	lvgl_port_force_screen_dimensions(scr);
-	ESP_LOGI(TAG, "Home screen background set to black, screen size: %dx%d", screen_width, screen_height);
+		printf("[I] home_screen: Home screen background set to black, screen size: %dx%d\n", screen_width, screen_height);
 
 	// Mark as initialized
 	s_home_screen_initialized = true;
@@ -314,9 +315,9 @@ void home_screen_init(void)
 	int start_x = outer_margin; // Start with left margin
 	int start_y = context_panel_height; // Start right after context panel (no top margin since context panel is at top)
 
-	ESP_LOGI(TAG, "Module dimensions: %dx%d, Screen: %dx%d", module_width, module_height, screen_width, screen_height);
-	ESP_LOGI(TAG, "Start position: x=%d, y=%d, Context panel height: %d", start_x, start_y, context_panel_height);
-	ESP_LOGI(TAG, "Total module area: %dx%d (2x3 grid layout with margins)", module_width * 2, module_height * 3);
+		printf("[I] home_screen: Module dimensions: %dx%d, Screen: %dx%d\n", module_width, module_height, screen_width, screen_height);
+	printf("[I] home_screen: Start position: x=%d, y=%d, Context panel height: %d\n", start_x, start_y, context_panel_height);
+	printf("[I] home_screen: Total module area: %dx%d (2x3 grid layout with margins)\n", module_width * 2, module_height * 3);
 
 	// Force layout update to ensure containers have proper dimensions
 	lv_obj_update_layout(home_container);
@@ -328,13 +329,13 @@ void home_screen_init(void)
 	int actual_content_width = lv_obj_get_width(content_container);
 	int actual_content_height = lv_obj_get_height(content_container);
 
-	ESP_LOGI(TAG, "Container dimensions after layout: home=%dx%d, content=%dx%d",
+	printf("[I] home_screen: Container dimensions after layout: home=%dx%d, content=%dx%d\n",
 		actual_home_width, actual_home_height, actual_content_width, actual_content_height);
 
 	// Create modules from registry - each module has a .render_current_view() function
 	int modules_to_show = sizeof(module_registry) / sizeof(module_registry[0]);
 
-	ESP_LOGI(TAG, "Creating %d display modules from registry", modules_to_show);
+		printf("[I] home_screen: Creating %d display modules from registry\n", modules_to_show);
 
 	for (int i = 0; i < modules_to_show; i++) {
 		// 2x3 grid layout: 2 columns, 3 rows
@@ -343,13 +344,13 @@ void home_screen_init(void)
 		int x = start_x + col * (module_width + inner_margin); // Position based on column with inner margin
 		int y = start_y + row * (module_height + inner_margin); // Position based on row with inner margin
 
-		ESP_LOGI(TAG, "Creating module %d at position (%d, %d) - col=%d, row=%d", i, x, y, col, row);
+			printf("[I] home_screen: Creating module %d at position (%d, %d) - col=%d, row=%d\n", i, x, y, col, row);
 
 		display_module_init(&display_modules[module_count], content_container, x, y, module_width, module_height);
 
 		// Set up the module using registry entry
 		const module_registry_entry_t *entry = &module_registry[i];
-		ESP_LOGI(TAG, "Setting up module %d: %s", i, entry->module_name);
+			printf("[I] home_screen: Setting up module %d: %s\n", i, entry->module_name);
 
 		// Enable touch on this module
 		display_module_set_touch_callback(&display_modules[module_count], entry->module_name, NULL);
@@ -398,12 +399,12 @@ void home_screen_init(void)
 	lv_obj_set_style_text_color(message_count, lv_color_hex(0x888888), 0);
 	lv_obj_align(message_count, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
 
-	ESP_LOGI(TAG, "State module created at position (%d, %d) with size %dx%d", state_x, state_y, state_width, state_height);
+		printf("[I] home_screen: State module created at position (%d, %d) with size %dx%d\n", state_x, state_y, state_width, state_height);
 
 	// Render all modules after they are created
 	home_screen_update_modules();
 
-	ESP_LOGI(TAG, "Home screen initialized with %d display modules + state module", module_count);
+	printf("[I] home_screen: Home screen initialized with %d display modules + state module\n", module_count);
 }
 
 void home_screen_update_status(const char *status)
@@ -416,7 +417,7 @@ void home_screen_update_context_panel(const char *connection_status, const char 
 {
 	// Check if home screen is actually visible before updating context panel
 	if (home_container && lv_obj_has_flag(home_container, LV_OBJ_FLAG_HIDDEN)) {
-		ESP_LOGI(TAG, "Home screen is hidden, skipping context panel update");
+		printf("[I] home_screen: Home screen is hidden, skipping context panel update\n");
 		return;
 	}
 
@@ -543,7 +544,7 @@ void home_screen_cleanup(void)
 // Screen manager wrapper functions
 void home_screen_show(void)
 {
-	ESP_LOGI(TAG, "*** HOME SCREEN FRESH CREATION START ***");
+	printf("[I] home_screen: *** HOME SCREEN FRESH CREATION START ***\n");
 
 	// Always create fresh home screen - rely on device state machine for configuration
 	home_screen_cleanup();  // Complete cleanup first
@@ -553,12 +554,12 @@ void home_screen_show(void)
 		home_screen_init();     // Fresh initialization
 	}
 
-	ESP_LOGI(TAG, "*** HOME SCREEN FRESH CREATION COMPLETE ***");
+	printf("[I] home_screen: *** HOME SCREEN FRESH CREATION COMPLETE ***\n");
 }
 
 void home_screen_destroy(void)
 {
-	ESP_LOGI(TAG, "*** HOME SCREEN COMPLETE DESTRUCTION ***");
+	printf("[I] home_screen: *** HOME SCREEN COMPLETE DESTRUCTION ***\n");
 
 	// Complete destruction - remove everything
 	home_screen_cleanup();
@@ -575,7 +576,7 @@ void home_screen_update_module_data(void)
 	// Debug: Log module data updates
 	static int update_count = 0;
 	if (update_count < 5) { // Only log first 5 times
-		ESP_LOGI(TAG, "home_screen_update_module_data called (%d)", update_count);
+		printf("[I] home_screen: home_screen_update_module_data called (%d)\n", update_count);
 		update_count++;
 	}
 
@@ -602,7 +603,7 @@ void home_screen_reset_module_rendered_flag(const char* module_name)
 	for (int i = 0; i < module_count; i++) {
 		if (strcmp(display_modules[i].module_name, module_name) == 0) {
 			display_modules[i].rendered_once = false;
-			ESP_LOGI(TAG, "Reset rendered_once flag for module: %s", module_name);
+			printf("[I] home_screen: Reset rendered_once flag for module: %s\n", module_name);
 			break;
 		}
 	}

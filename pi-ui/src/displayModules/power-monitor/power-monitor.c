@@ -1,6 +1,7 @@
+#include <stdio.h>
 #include "power-monitor.h"
 #include "../shared/module_interface.h"
-#include "../../esp_compat.h"
+
 #include "views/power_grid_view.h"
 #include "views/starter_voltage_view.h"
 // Use the unified detail screen template header (matches implementation under shared/detail_screen)
@@ -55,25 +56,25 @@ void crash_handler(int sig) {
 	void *array[20];
 	size_t size;
 
-	ESP_LOGE(TAG, "=== CRASH DETECTED: Signal %d ===", sig);
+		printf("[E] power_monitor: === CRASH DETECTED: Signal %d ===\n", sig);
 
 	// Get void*'s for all entries on the stack
 	size = backtrace(array, 20);
 
 	// Print out all the frames to stderr
-	ESP_LOGE(TAG, "Stack trace:");
+		printf("[E] power_monitor: Stack trace:\n");
 	backtrace_symbols_fd(array, size, STDERR_FILENO);
 
 	// Also log to ESP logger
 	char **strings = backtrace_symbols(array, size);
 	if (strings != NULL) {
 		for (size_t i = 0; i < size; i++) {
-			ESP_LOGE(TAG, "  %s", strings[i]);
+			printf("[E] power_monitor:   %s\n", strings[i]);
 		}
 		free(strings);
 	}
 
-	ESP_LOGE(TAG, "=== END CRASH DUMP ===");
+	printf("[E] power_monitor: === END CRASH DUMP ===\n");
 	exit(1);
 }
 
@@ -114,7 +115,7 @@ static power_monitor_view_type_t get_current_view_type(void)
 	int view_index = power_monitor_get_view_index();
 
 	if (view_index < 0 || view_index >= s_total_views) {
-		ESP_LOGE(TAG, "Invalid view index: %d (total: %d)", view_index, s_total_views);
+		printf("[E] power_monitor: Invalid view index: %d (total: %d)\n", view_index, s_total_views);
 		return POWER_MONITOR_VIEW_BAR_GRAPH; // Default fallback
 	}
 
@@ -128,48 +129,48 @@ static void power_monitor_navigation_request_home_screen(void);
 
 static void power_monitor_navigation_cycle_to_next_view(void)
 {
-	ESP_LOGI(TAG, "=== SIMPLE VIEW CYCLING ===");
+		printf("[I] power_monitor: === SIMPLE VIEW CYCLING ===\n");
 
 	// Get current index from device state
 	int current_index = power_monitor_get_view_index();
-	ESP_LOGI(TAG, "Before cycle: index=%d, total_views=%d", current_index, s_total_views);
+	printf("[I] power_monitor: Before cycle: index=%d, total_views=%d\n", current_index, s_total_views);
 
 	// Simple wrap-around logic
 	int next_index = (current_index + 1) % s_total_views;
 
 	// Update device state directly
 	power_monitor_set_view_index(next_index);
-	ESP_LOGI(TAG, "View cycle complete - updated from index %d to %d", current_index, next_index);
+		printf("[I] power_monitor: View cycle complete - updated from index %d to %d\n", current_index, next_index);
 }
 
 // Callback to request home screen after LVGL cleanup
 static void power_monitor_navigation_hide_detail_screen(void)
 {
-	ESP_LOGI(TAG, "About to DESTROY detail screen completely");
-	ESP_LOGI(TAG, "Detail screen pointer: %p", detail_screen);
+		printf("[I] power_monitor: About to DESTROY detail screen completely\n");
+	printf("[I] power_monitor: Detail screen pointer: %p\n", detail_screen);
 	if (detail_screen) {
-		ESP_LOGI(TAG, "Calling detail_screen_destroy");
+		printf("[I] power_monitor: Calling detail_screen_destroy\n");
 		detail_screen_destroy(detail_screen);
 		detail_screen = NULL; // Clear the pointer after destruction
-		ESP_LOGI(TAG, "detail_screen_destroy completed");
+		printf("[I] power_monitor: detail_screen_destroy completed\n");
 	} else {
-		ESP_LOGW(TAG, "Detail screen is NULL");
+		printf("[W] power_monitor: Detail screen is NULL\n");
 	}
-	ESP_LOGI(TAG, "Detail screen completely destroyed");
+	printf("[I] power_monitor: Detail screen completely destroyed\n");
 
 	// Request transition back to home screen
-	ESP_LOGI(TAG, "Requesting transition back to home screen");
+		printf("[I] power_monitor: Requesting transition back to home screen\n");
 	power_monitor_navigation_request_home_screen();
 }
 
 static void power_monitor_navigation_request_home_screen(void)
 {
-	ESP_LOGI(TAG, "About to request home screen transition");
+	printf("[I] power_monitor: About to request home screen transition\n");
 	extern void screen_navigation_request_home_screen(void);
-	ESP_LOGI(TAG, "Calling screen_navigation_request_home_screen");
+	printf("[I] power_monitor: Calling screen_navigation_request_home_screen\n");
 	screen_navigation_request_home_screen();
-	ESP_LOGI(TAG, "Home screen transition requested");
-	ESP_LOGI(TAG, "power_monitor_navigation_request_home_screen completed");
+	printf("[I] power_monitor: Home screen transition requested\n");
+	printf("[I] power_monitor: power_monitor_navigation_request_home_screen completed\n");
 }
 
 
@@ -182,7 +183,7 @@ static lv_obj_t* power_monitor_container = NULL;
 static void power_monitor_init_widget(void)
 {
 	if (power_monitor_container) {
-		ESP_LOGI(TAG, "Container already initialized");
+		printf("[I] power_monitor: Container already initialized\n");
 		return;
 	}
 
@@ -194,7 +195,7 @@ static void power_monitor_init_widget(void)
 	lv_obj_set_style_border_width(power_monitor_container, 0, 0);
 	lv_obj_clear_flag(power_monitor_container, LV_OBJ_FLAG_SCROLLABLE);
 
-	ESP_LOGI(TAG, "Power monitor container created successfully");
+	printf("[I] power_monitor: Power monitor container created successfully\n");
 }
 
 
@@ -204,11 +205,11 @@ static void power_monitor_init_widget(void)
 // View creator function for the shared current view template
 static void power_monitor_view_creator(lv_obj_t* container, void* user_data)
 {
-	ESP_LOGI(TAG, "=== POWER MONITOR VIEW CREATOR CALLED ===");
-	ESP_LOGI(TAG, "Container: %p, User data: %p", container, user_data);
+	printf("[I] power_monitor: === POWER MONITOR VIEW CREATOR CALLED ===\n");
+		printf("[I] power_monitor: Container: %p, User data: %p\n", container, user_data);
 
 	if (!container) {
-		ESP_LOGE(TAG, "Container is NULL");
+		printf("[E] power_monitor: Container is NULL\n");
 		return;
 	}
 
@@ -232,31 +233,31 @@ static void power_monitor_view_creator(lv_obj_t* container, void* user_data)
 			break;
 	}
 
-	ESP_LOGI(TAG, "Power monitor view content created successfully");
+	printf("[I] power_monitor: Power monitor view content created successfully\n");
 }
 
 // Create current view using the shared template system
 void power_monitor_create_current_view_content(lv_obj_t* container)
 {
-	ESP_LOGI(TAG, "=== CREATING CURRENT VIEW CONTENT ===");
-	ESP_LOGI(TAG, "Container: %p", container);
+	printf("[I] power_monitor: === CREATING CURRENT VIEW CONTENT ===\n");
+		printf("[I] power_monitor: Container: %p\n", container);
 
 	if (!container) {
-		ESP_LOGE(TAG, "Container is NULL");
+		printf("[E] power_monitor: Container is NULL\n");
 		return;
 	}
 
 	// Safety check: validate container
 	if (!lv_obj_is_valid(container)) {
-		ESP_LOGE(TAG, "Container is not valid");
+		printf("[E] power_monitor: Container is not valid\n");
 		return;
 	}
 
-	ESP_LOGI(TAG, "Container is valid, rendering current view");
+	printf("[I] power_monitor: Container is valid, rendering current view\n");
 
 	// Clear container first
 	lv_obj_clean(container);
-	ESP_LOGI(TAG, "Container cleared");
+	printf("[I] power_monitor: Container cleared\n");
 
 	// Re-apply container styling after clean (clean removes styling)
 	// Check if this is the current_view_container from detail screen
@@ -267,7 +268,7 @@ void power_monitor_create_current_view_content(lv_obj_t* container)
 		lv_obj_set_style_border_color(container, lv_color_hex(0xFFFFFF), 0);
 		lv_obj_set_style_radius(container, 4, 0);
 		lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
-		ESP_LOGI(TAG, "Re-applied current_view_container styling after clean");
+		printf("[I] power_monitor: Re-applied current_view_container styling after clean\n");
 	}
 
 	// Use the same approach as initial creation: create view containers first
@@ -285,12 +286,12 @@ void power_monitor_create_current_view_content(lv_obj_t* container)
 	} else if (view_index == 1) {
 		view_type = POWER_MONITOR_VIEW_NUMERICAL;
 	} else {
-		ESP_LOGW(TAG, "Unknown view index: %d, defaulting to BAR_GRAPH", view_index);
+		printf("[W] power_monitor: Unknown view index: %d, defaulting to BAR_GRAPH, view_index\n");
 		view_type = POWER_MONITOR_VIEW_BAR_GRAPH;
 	}
 
 		// Log the current view type and index
-		ESP_LOGI(TAG, "View cycling: index=%d, type=%d", view_index, view_type);
+		printf("[I] power_monitor: View cycling: index=%d, type=%d, view_index, view_type\n");
 
 	// Render on the appropriate view container (same as initial creation)
 	if (view_type == POWER_MONITOR_VIEW_BAR_GRAPH) {
@@ -298,16 +299,16 @@ void power_monitor_create_current_view_content(lv_obj_t* container)
 	} else if (view_type == POWER_MONITOR_VIEW_NUMERICAL) {
 		power_monitor_starter_voltage_view_render(g_starter_voltage_view_container);
 	} else {
-		ESP_LOGW(TAG, "Unknown view type: %d", view_type);
+		printf("[W] power_monitor: Unknown view type: %d, view_type\n");
 	}
 
 	// Mark view cycling as complete if this was called during cycling
 	if (current_view_manager_is_cycling_in_progress()) {
 		current_view_manager_set_cycling_in_progress(false);
-		ESP_LOGI(TAG, "View cycling marked as complete in create_current_view_content");
+		printf("[I] power_monitor: View cycling marked as complete in create_current_view_content\n");
 	}
 
-	ESP_LOGI(TAG, "Current view content creation complete");
+	printf("[I] power_monitor: Current view content creation complete\n");
 }
 
 
@@ -317,7 +318,7 @@ void power_monitor_create_current_view_content(lv_obj_t* container)
 // Simple view cycling - just calls the main cycling function
 static void power_monitor_cycle_view(void)
 {
-	ESP_LOGI(TAG, "=== CYCLING CURRENT VIEW ===");
+	printf("[I] power_monitor: === CYCLING CURRENT VIEW ===\n");
 	power_monitor_cycle_current_view();
 }
 
@@ -335,17 +336,17 @@ static bar_graph_gauge_t detail_solar_current_gauge = {0};
 // Create 6 bar graph gauges in the gauges container (matching original detail.c)
 static void power_monitor_create_detail_gauges(lv_obj_t* container)
 {
-	ESP_LOGI(TAG, "*** CREATING 6 BAR GRAPH GAUGES IN DETAIL SCREEN ***");
-	ESP_LOGI(TAG, "Container: %p, size: %dx%d", container,
+	printf("[I] power_monitor: *** CREATING 6 BAR GRAPH GAUGES IN DETAIL SCREEN ***\n");
+	printf("[I] power_monitor: Container: %p, size: %dx%d\n", container,
 		lv_obj_get_width(container), lv_obj_get_height(container));
 
 	if (!container) {
-		ESP_LOGE(TAG, "Gauges container is NULL");
+		printf("[E] power_monitor: Gauges container is NULL\n");
 		return;
 	}
 
 	// Always create fresh gauges
-	ESP_LOGI(TAG, "Creating fresh detail gauges");
+	printf("[I] power_monitor: Creating fresh detail gauges\n");
 
 	// Force layout update to get correct dimensions
 	lv_obj_update_layout(container);
@@ -356,11 +357,11 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	lv_coord_t container_width = lv_obj_get_width(container);
 	lv_coord_t container_height = lv_obj_get_height(container);
 
-	ESP_LOGI(TAG, "Container dimensions after layout update: %dx%d", container_width, container_height);
+	printf("[I] power_monitor: Container dimensions after layout update: %dx%d, container_width, container_height\n");
 
 	// Check for valid dimensions
 	if (container_width <= 0 || container_height <= 0) {
-		ESP_LOGE(TAG, "Invalid container dimensions: %dx%d", container_width, container_height);
+		printf("[E] power_monitor: Invalid container dimensions: %dx%d, container_width, container_height\n");
 		return;
 	}
 
@@ -370,7 +371,7 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	lv_coord_t gauge_width = container_width;  // Full width, no padding
 	lv_coord_t gauge_height = (container_height - 2 - total_padding) / 6; // 6 rows with padding and 2px offset for the title bleed
 
-	ESP_LOGI(TAG, "Gauge dimensions: %dx%d each with %dpx padding", gauge_width, gauge_height, gauge_padding);
+	printf("[I] power_monitor: Gauge dimensions: %dx%d each with %dpx padding, gauge_width, gauge_height, gauge_padding\n");
 
 	// Configure container for flexbox layout (vertical stack with fixed heights)
 	lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
@@ -383,7 +384,7 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	float starter_baseline = device_state_get_starter_baseline_voltage_v();
 	float starter_min = device_state_get_starter_min_voltage_v();
 	float starter_max = device_state_get_starter_max_voltage_v();
-	ESP_LOGI(TAG, "Detail starter gauge config: %.1f-%.1fV (baseline=%.1f)", starter_min, starter_max, starter_baseline);
+		printf("[I] power_monitor: Detail starter gauge config: %.1f-%.1fV (baseline=%.1f)\n", starter_min, starter_max, starter_baseline);
 	bar_graph_gauge_configure_advanced(
 		&detail_starter_voltage_gauge,
 		BAR_GRAPH_MODE_BIPOLAR,
@@ -411,7 +412,7 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	float house_baseline = device_state_get_house_baseline_voltage_v();
 	float house_min = device_state_get_house_min_voltage_v();
 	float house_max = device_state_get_house_max_voltage_v();
-	ESP_LOGI(TAG, "Detail house gauge config: %.1f-%.1fV (baseline=%.1f)", house_min, house_max, house_baseline);
+		printf("[I] power_monitor: Detail house gauge config: %.1f-%.1fV (baseline=%.1f)\n", house_min, house_max, house_baseline);
 	bar_graph_gauge_configure_advanced(&detail_house_voltage_gauge,
 		BAR_GRAPH_MODE_BIPOLAR, house_baseline, house_min, house_max,
 		"HOUSE BATTERY", "V", "V", 0x00FF00, true, true, true);
@@ -454,7 +455,7 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	bar_graph_gauge_update_labels_and_ticks(&detail_solar_voltage_gauge);
 	bar_graph_gauge_update_labels_and_ticks(&detail_solar_current_gauge);
 
-	ESP_LOGI(TAG, "3 gauges created successfully (LVGL memory increased to 512KB)");
+		printf("[I] power_monitor: 3 gauges created successfully (LVGL memory increased to 512KB)\n");
 }
 
 // Sensor label cleanup moved to detail_screen.c
@@ -539,11 +540,11 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 		// Set text for static labels
 		if (label_configs[i].is_static) {
 			lv_label_set_text(sensor_labels[i], label_configs[i].text);
-			ESP_LOGD(TAG, "Created static label %d: %s at y=%d", i, label_configs[i].text, current_y);
+			printf("[D] power_monitor: Created static label %d: %s at y=%d\n", i, label_configs[i].text, current_y);
 		} else {
 			// Dynamic labels start with "0.0" placeholder
 			lv_label_set_text(sensor_labels[i], "0.0");
-			ESP_LOGD(TAG, "Created dynamic label %d: %s at y=%d", i, "0.0", current_y);
+			printf("[D] power_monitor: Created dynamic label %d: %s at y=%d\n", i, "0.0", current_y);
 		}
 
 		// Update y position for next group
@@ -553,14 +554,14 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 		}
 	}
 
-	ESP_LOGI(TAG, "Sensor data labels created successfully");
+	printf("[I] power_monitor: Sensor data labels created successfully\n");
 
 	// Debug: Verify sensor_labels array is populated
 	for (int i = 0; i < 15; i++) {
 		if (sensor_labels[i]) {
-			ESP_LOGD(TAG, "sensor_labels[%d] = %p", i, sensor_labels[i]);
+			printf("[D] power_monitor: sensor_labels[%d] = %p\n", i, sensor_labels[i]);
 	} else {
-			ESP_LOGE(TAG, "sensor_labels[%d] is NULL!", i);
+			printf("[E] power_monitor: sensor_labels[%d] is NULL!, i\n");
 		}
 	}
 
@@ -597,7 +598,9 @@ static void power_monitor_apply_current_view_alert_flashing(void)
 	int solar_hi = device_state_get_solar_alert_high_voltage_v();
 
 	// Blink timing - asymmetric: 1 second on, 0.5 seconds off (1.5 second total cycle)
-	int tick_ms = (int)(xTaskGetTickCount() * 1);
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	int tick_ms = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 	bool blink_on = (tick_ms % 1500) < 1000;
 
 	// Apply alert flashing only to the currently active view
@@ -607,7 +610,7 @@ static void power_monitor_apply_current_view_alert_flashing(void)
 	} else if (current_view == POWER_MONITOR_VIEW_NUMERICAL) {
 		power_monitor_starter_voltage_view_apply_alert_flashing(data, starter_lo, starter_hi, house_lo, house_hi, solar_lo, solar_hi, blink_on);
 	} else {
-		ESP_LOGW(TAG, "Unknown view type: %d, skipping alert flashing", current_view);
+		printf("[W] power_monitor: Unknown view type: %d, skipping alert flashing, current_view\n");
 	}
 }
 
@@ -761,7 +764,7 @@ void power_monitor_init_with_default_view(power_monitor_view_type_t default_view
 // Module interface implementation
 void power_monitor_init(void)
 {
-	ESP_LOGI(TAG, "Power Monitor Module Initialized (V2)");
+		printf("[I] power_monitor: Power Monitor Module Initialized (V2)\n");
 
 	// Set up crash handlers for debugging
 	signal(SIGSEGV, crash_handler);
@@ -769,7 +772,7 @@ void power_monitor_init(void)
 	signal(SIGFPE, crash_handler);
 	signal(SIGILL, crash_handler);
 	signal(SIGBUS, crash_handler);
-	ESP_LOGI(TAG, "Crash handlers installed");
+	printf("[I] power_monitor: Crash handlers installed\n");
 
 	// Initialize module-specific screen view state
 	module_screen_view_initialize("power-monitor", SCREEN_HOME, sizeof(available_views) / sizeof(available_views[0]));
@@ -792,11 +795,11 @@ void power_monitor_init(void)
 
 void power_monitor_show_in_container(lv_obj_t *container)
 {
-	ESP_LOGI(TAG, "=== SHOW IN CONTAINER (V2) ===");
-	ESP_LOGI(TAG, "Container: %p", container);
+		printf("[I] power_monitor: === SHOW IN CONTAINER (V2) ===\n");
+	printf("[I] power_monitor: Container: %p, container\n");
 
 	if (!container) {
-		ESP_LOGE(TAG, "Container is NULL");
+		printf("[E] power_monitor: Container is NULL\n");
 		return;
 	}
 
@@ -808,17 +811,17 @@ void power_monitor_show_in_container_home(lv_obj_t *container)
 {
 	static int call_count = 0;
 	call_count++;
-	ESP_LOGI(TAG, "=== SHOW IN CONTAINER HOME CALLED #%d ===", call_count);
+	printf("[I] power_monitor: === SHOW IN CONTAINER HOME CALLED #%d ===, call_count\n");
 
 	// Store the home container for this module
 	g_home_container = container;
 
 
 	// Render the current view directly into the container
-	ESP_LOGI(TAG, "About to call power_monitor_render_current_view");
+	printf("[I] power_monitor: About to call power_monitor_render_current_view\n");
 	power_monitor_render_current_view(container);
-	ESP_LOGI(TAG, "power_monitor_render_current_view completed");
-	ESP_LOGI(TAG, "=== SHOW IN CONTAINER HOME COMPLETE #%d ===", call_count);
+	printf("[I] power_monitor: power_monitor_render_current_view completed\n");
+	printf("[I] power_monitor: === SHOW IN CONTAINER HOME COMPLETE #%d ===, call_count\n");
 }
 
 void power_monitor_show_in_container_detail(lv_obj_t *container)
@@ -835,11 +838,11 @@ void power_monitor_cycle_current_view(void)
 {
 	static int call_count = 0;
 	call_count++;
-	ESP_LOGI(TAG, "=== CYCLING CURRENT VIEW CALLED #%d ===", call_count);
+	printf("[I] power_monitor: === CYCLING CURRENT VIEW CALLED #%d ===, call_count\n");
 
 	// Simple guard against rapid cycling
 	if (s_detail_view_needs_refresh) {
-		ESP_LOGW(TAG, "View cycling already in progress, skipping");
+		printf("[W] power_monitor: View cycling already in progress, skipping\n");
 		return;
 	}
 
@@ -850,7 +853,7 @@ void power_monitor_cycle_current_view(void)
 	// This avoids immediate re-rendering which can cause crashes
 	extern screen_type_t screen_navigation_get_current_screen(void);
 	if (screen_navigation_get_current_screen() == SCREEN_DETAIL_VIEW) {
-		ESP_LOGI(TAG, "Marking detail view for re-render on next update cycle");
+		printf("[I] power_monitor: Marking detail view for re-render on next update cycle\n");
 		s_detail_view_needs_refresh = true;
 	}
 }
@@ -859,7 +862,7 @@ void power_monitor_cycle_current_view(void)
 
 void power_monitor_destroy(void)
 {
-	ESP_LOGI(TAG, "=== DESTROY ===");
+	printf("[I] power_monitor: === DESTROY ===\n");
 	// No cleanup needed - everything will be created fresh
 }
 
@@ -869,7 +872,7 @@ void power_monitor_destroy(void)
 
 void power_monitor_cleanup_internal(void)
 {
-	ESP_LOGI(TAG, "=== CLEANUP INTERNAL (V2) ===");
+		printf("[I] power_monitor: === CLEANUP INTERNAL (V2) ===\n");
 
 	// Clean up containers
 	if (power_monitor_container) {
@@ -901,12 +904,12 @@ void power_monitor_cleanup_internal(void)
 	memset(&detail_house_current_gauge, 0, sizeof(bar_graph_gauge_t));
 	memset(&detail_solar_voltage_gauge, 0, sizeof(bar_graph_gauge_t));
 	memset(&detail_solar_current_gauge, 0, sizeof(bar_graph_gauge_t));
-	ESP_LOGI(TAG, "Detail gauge variables reset");
+	printf("[I] power_monitor: Detail gauge variables reset\n");
 }
 
 void power_monitor_cleanup(void)
 {
-	ESP_LOGI(TAG, "Power monitor cleanup called");
+	printf("[I] power_monitor: Power monitor cleanup called\n");
 	power_monitor_cleanup_internal();
 }
 
@@ -919,10 +922,10 @@ static detail_button_config_t power_monitor_buttons[] = {
 // Detail screen management
 void power_monitor_create_detail_screen(void)
 {
-	ESP_LOGI(TAG, "=== CREATING DETAIL SCREEN (V2) ===");
+	printf("[I] power_monitor: === CREATING DETAIL SCREEN (V2) ===\n");
 
 	if (detail_screen) {
-		ESP_LOGW(TAG, "Detail screen already exists");
+		printf("[W] power_monitor: Detail screen already exists\n");
 		return;
 	}
 
@@ -943,7 +946,7 @@ void power_monitor_create_detail_screen(void)
 
 	detail_screen = detail_screen_create(&config);
 	if (detail_screen) {
-		ESP_LOGI(TAG, "Detail screen created successfully");
+		printf("[I] power_monitor: Detail screen created successfully\n");
 
 		// Create gauges in the gauges container
 		if (detail_screen->gauges_container) {
@@ -952,13 +955,13 @@ void power_monitor_create_detail_screen(void)
 
 		// Sensor data labels creation moved to detail_screen.c
 	} else {
-		ESP_LOGE(TAG, "Failed to create detail screen");
+		printf("[E] power_monitor: Failed to create detail screen\n");
 	}
 }
 
 void power_monitor_show_detail_screen(void)
 {
-	ESP_LOGI(TAG, "=== SHOW DETAIL SCREEN (V2) ===");
+	printf("[I] power_monitor: === SHOW DETAIL SCREEN (V2) ===\n");
 
 	// Create if missing
 	if (!detail_screen) {
@@ -968,29 +971,29 @@ void power_monitor_show_detail_screen(void)
 	if (detail_screen) {
 		// Show the detail screen via template helper (idempotent create inside)
 		detail_screen_show(detail_screen);
-		ESP_LOGI(TAG, "Detail screen shown");
+		printf("[I] power_monitor: Detail screen shown\n");
 
 		// Debug: Log container size after initial content is added
 		if (detail_screen->current_view_container) {
-			ESP_LOGI(TAG, "Current view container size after initial content: %dx%d",
+			printf("[I] power_monitor: Current view container size after initial content: %dx%d\n",
 				lv_obj_get_width(detail_screen->current_view_container),
 				lv_obj_get_height(detail_screen->current_view_container));
 		}
 	} else {
-		ESP_LOGE(TAG, "Detail screen unavailable");
+		printf("[E] power_monitor: Detail screen unavailable\n");
 	}
 }
 
 void power_monitor_destroy_detail_screen(void)
 {
-	ESP_LOGI(TAG, "=== DESTROY DETAIL SCREEN ===");
+	printf("[I] power_monitor: === DESTROY DETAIL SCREEN ===\n");
 	// No cleanup needed - everything will be created fresh
 }
 
 // Touch event handler for detail screen
 void power_monitor_handle_detail_touch(void)
 {
-	ESP_LOGI(TAG, "=== HANDLE DETAIL TOUCH (V2) ===");
+		printf("[I] power_monitor: === HANDLE DETAIL TOUCH (V2) ===\n");
 	power_monitor_cycle_view();
 }
 
@@ -1009,42 +1012,42 @@ void power_monitor_set_current_view_type(power_monitor_view_type_t view_type)
 		if (available_views[i] == view_type) {
 			// Note: We can't directly set the index in the shared manager
 			// This would require adding a set_index function to the shared manager
-			ESP_LOGI(TAG, "View type %d found at index %d (setting not implemented)", view_type, i);
+			printf("[I] power_monitor: View type %d found at index %d (setting not implemented)\n", view_type, i);
 			return;
 		}
 	}
-	ESP_LOGW(TAG, "View type %d not found in available views, keeping current", view_type);
+	printf("[W] power_monitor: View type %d not found in available views, keeping current, view_type\n");
 }
 
 // Create current view in container (for detail screen)
 void power_monitor_create_current_view_in_container(lv_obj_t* container)
 {
-	ESP_LOGI(TAG, "=== CREATE CURRENT VIEW IN CONTAINER (V2) ===");
-	ESP_LOGI(TAG, "Container: %p", container);
+		printf("[I] power_monitor: === CREATE CURRENT VIEW IN CONTAINER (V2) ===\n");
+	printf("[I] power_monitor: Container: %p, container\n");
 
 	if (!container) {
-		ESP_LOGE(TAG, "Container is NULL");
+		printf("[E] power_monitor: Container is NULL\n");
 		return;
 	}
 
 	// Always update the current view (for view cycling)
-	ESP_LOGI(TAG, "Updating current view content (always update for view cycling)");
+	printf("[I] power_monitor: Updating current view content (always update for view cycling\n");
 
 	// Check if this is the gauges container
 	if (detail_screen && container == detail_screen->gauges_container) {
 		// This is the gauges container - create the gauges
 		power_monitor_create_detail_gauges(container);
-		ESP_LOGI(TAG, "GAUGES CONTAINER SETUP COMPLETE");
+		printf("[I] power_monitor: GAUGES CONTAINER SETUP COMPLETE\n");
 	}
 	// Check if this is the sensor data section (for raw sensor values)
 	else if (detail_screen && container == detail_screen->sensor_data_section) {
 		// Sensor data labels creation moved to detail_screen.c
-		ESP_LOGI(TAG, "SENSOR DATA SECTION SETUP COMPLETE (labels handled by detail_screen.c)");
+		printf("[I] power_monitor: SENSOR DATA SECTION SETUP COMPLETE (labels handled by detail_screen.c\n");
 	}
 	else {
 		// Default behavior - create current view content
 		power_monitor_create_current_view_content(container);
-		ESP_LOGI(TAG, "DEFAULT CONTAINER SETUP COMPLETE");
+		printf("[I] power_monitor: DEFAULT CONTAINER SETUP COMPLETE\n");
 	}
 }
 
@@ -1057,14 +1060,14 @@ static void power_monitor_close_modal(void)
 				alerts_modal_hide(current_modal);
 		alerts_modal_destroy(current_modal);
 		current_modal = NULL;
-		ESP_LOGI(TAG, "Modal closed");
+		printf("[I] power_monitor: Modal closed\n");
 	}
 }
 
 // Handle back button - return to home screen
 void power_monitor_handle_back_button(void)
 {
-	ESP_LOGI(TAG, "=== BACK BUTTON CLICKED ===");
+	printf("[I] power_monitor: === BACK BUTTON CLICKED ===\n");
 
 	// Clear modal if exists first
 	if (current_modal) {
@@ -1091,33 +1094,33 @@ void power_monitor_handle_back_button(void)
 // Handle alerts button - open alerts modal
 void power_monitor_handle_alerts_button(void)
 {
-	ESP_LOGI(TAG, "=== ALERTS BUTTON CLICKED ===");
-	ESP_LOGI(TAG, "ALERTS BUTTON HANDLER CALLED - THIS IS WORKING!");
+	printf("[I] power_monitor: === ALERTS BUTTON CLICKED ===\n");
+	printf("[I] power_monitor: ALERTS BUTTON HANDLER CALLED - THIS IS WORKING!\n");
 
 	// Safety check: prevent multiple modals
 	if (current_modal) {
-		ESP_LOGW(TAG, "Modal already exists, destroying first");
+		printf("[W] power_monitor: Modal already exists, destroying first\n");
 		alerts_modal_destroy(current_modal);
 		current_modal = NULL;
 	}
 
 	// Create alerts modal
-	ESP_LOGI(TAG, "Creating alerts modal");
+	printf("[I] power_monitor: Creating alerts modal\n");
 	current_modal = alerts_modal_create(power_monitor_close_modal);
 
 	if (current_modal) {
-		ESP_LOGI(TAG, "Showing alerts modal");
+		printf("[I] power_monitor: Showing alerts modal\n");
 				alerts_modal_show(current_modal);
-		ESP_LOGI(TAG, "Alerts modal opened");
+		printf("[I] power_monitor: Alerts modal opened\n");
 	} else {
-		ESP_LOGE(TAG, "Failed to create alerts modal");
+		printf("[E] power_monitor: Failed to create alerts modal\n");
 	}
 }
 
 // Handle timeline button - open timeline modal (using alerts modal for now)
 void power_monitor_handle_timeline_button(void)
 {
-	ESP_LOGI(TAG, "=== TIMELINE BUTTON CLICKED ===");
+	printf("[I] power_monitor: === TIMELINE BUTTON CLICKED ===\n");
 
 	// Close any existing modal
 	if (current_modal) {
@@ -1129,9 +1132,9 @@ void power_monitor_handle_timeline_button(void)
 	current_modal = alerts_modal_create(power_monitor_close_modal);
 	if (current_modal) {
 				alerts_modal_show(current_modal);
-		ESP_LOGI(TAG, "Timeline modal opened (using alerts modal)");
+		printf("[I] power_monitor: Timeline modal opened (using alerts modal\n");
 	} else {
-		ESP_LOGE(TAG, "Failed to create timeline modal");
+		printf("[E] power_monitor: Failed to create timeline modal\n");
 	}
 }
 
@@ -1164,32 +1167,32 @@ static void power_monitor_create_view_containers(lv_obj_t* parent_container)
 {
 	// Prevent recursive calls
 	if (s_creation_in_progress) {
-		ESP_LOGW(TAG, "View container creation already in progress, skipping");
+		printf("[W] power_monitor: View container creation already in progress, skipping\n");
 		return;
 	}
 
 	s_creation_in_progress = true;
 
 	if (!parent_container) {
-		ESP_LOGE(TAG, "Parent container is NULL");
+		printf("[E] power_monitor: Parent container is NULL\n");
 		s_creation_in_progress = false;
 		return;
 	}
 
 	if (!lv_obj_is_valid(parent_container)) {
-		ESP_LOGE(TAG, "Parent container is not valid");
+		printf("[E] power_monitor: Parent container is not valid\n");
 		s_creation_in_progress = false;
 		return;
 	}
 
 	// Always create fresh containers - let device state machine handle state
-	ESP_LOGI(TAG, "Creating fresh view containers");
+	printf("[I] power_monitor: Creating fresh view containers\n");
 
 	// Create power grid view container
-		ESP_LOGI(TAG, "Creating power grid view container in parent: %p", parent_container);
+		printf("[I] power_monitor: Creating power grid view container in parent: %p, parent_container\n");
 		g_power_grid_view_container = lv_obj_create(parent_container);
 		if (!g_power_grid_view_container) {
-			ESP_LOGE(TAG, "Failed to create power grid view container");
+			printf("[E] power_monitor: Failed to create power grid view container\n");
 			return;
 		}
 		// Fill the parent container completely
@@ -1200,7 +1203,7 @@ static void power_monitor_create_view_containers(lv_obj_t* parent_container)
 
 		// Force layout calculation to ensure container gets proper size
 		lv_obj_update_layout(g_power_grid_view_container);
-		ESP_LOGI(TAG, "Power grid view container size after layout: %dx%d",
+		printf("[I] power_monitor: Power grid view container size after layout: %dx%d\n",
 			lv_obj_get_width(g_power_grid_view_container), lv_obj_get_height(g_power_grid_view_container));
 		lv_obj_set_style_pad_all(g_power_grid_view_container, 0, 0);
 		lv_obj_clear_flag(g_power_grid_view_container, LV_OBJ_FLAG_SCROLLABLE);
@@ -1209,24 +1212,24 @@ static void power_monitor_create_view_containers(lv_obj_t* parent_container)
 		// Add touch callback
 		if (parent_container == g_home_container) {
 			lv_obj_add_event_cb(g_power_grid_view_container, power_monitor_home_current_view_touch_cb, LV_EVENT_CLICKED, NULL);
-			ESP_LOGI(TAG, "Added home touch callback to power grid view container: %p", g_power_grid_view_container);
+			printf("[I] power_monitor: Added home touch callback to power grid view container: %p, g_power_grid_view_container\n");
 		} else if (parent_container == g_detail_container) {
 			lv_obj_add_event_cb(g_power_grid_view_container, power_monitor_detail_current_view_touch_cb, LV_EVENT_CLICKED, NULL);
-			ESP_LOGI(TAG, "Added detail touch callback to power grid view container: %p", g_power_grid_view_container);
+			printf("[I] power_monitor: Added detail touch callback to power grid view container: %p, g_power_grid_view_container\n");
 		} else {
-			ESP_LOGW(TAG, "Unknown parent container for power grid view: %p (home: %p, detail: %p)", parent_container, g_home_container, g_detail_container);
+			printf("[W] power_monitor: Unknown parent container for power grid view: %p (home: %p, detail: %p)\n", parent_container, g_home_container, g_detail_container);
 		}
 
-	ESP_LOGI(TAG, "Power grid view container created: %p", g_power_grid_view_container);
+	printf("[I] power_monitor: Power grid view container created: %p, g_power_grid_view_container\n");
 
 	// Create starter voltage view container
-		ESP_LOGI(TAG, "Creating starter voltage view container in parent: %p", parent_container);
+		printf("[I] power_monitor: Creating starter voltage view container in parent: %p, parent_container\n");
 		g_starter_voltage_view_container = lv_obj_create(parent_container);
 		if (!g_starter_voltage_view_container) {
-			ESP_LOGE(TAG, "Failed to create starter voltage view container");
+			printf("[E] power_monitor: Failed to create starter voltage view container\n");
 			return;
 		}
-		ESP_LOGI(TAG, "Starter voltage view container created: %p", g_starter_voltage_view_container);
+		printf("[I] power_monitor: Starter voltage view container created: %p, g_starter_voltage_view_container\n");
 		// Fill the parent container completely
 		lv_obj_set_size(g_starter_voltage_view_container, LV_PCT(100), LV_PCT(100));
 		lv_obj_align(g_starter_voltage_view_container, LV_ALIGN_TOP_LEFT, 0, 0);
@@ -1235,7 +1238,7 @@ static void power_monitor_create_view_containers(lv_obj_t* parent_container)
 
 		// Force layout calculation to ensure container gets proper size
 		lv_obj_update_layout(g_starter_voltage_view_container);
-		ESP_LOGI(TAG, "Starter voltage view container size after layout: %dx%d",
+		printf("[I] power_monitor: Starter voltage view container size after layout: %dx%d\n",
 			lv_obj_get_width(g_starter_voltage_view_container), lv_obj_get_height(g_starter_voltage_view_container));
 
 		lv_obj_set_style_pad_all(g_starter_voltage_view_container, 0, 0);
@@ -1245,12 +1248,12 @@ static void power_monitor_create_view_containers(lv_obj_t* parent_container)
 		// Add touch callback
 		if (parent_container == g_home_container) {
 			lv_obj_add_event_cb(g_starter_voltage_view_container, power_monitor_home_current_view_touch_cb, LV_EVENT_CLICKED, NULL);
-			ESP_LOGI(TAG, "Added home touch callback to starter voltage view container: %p", g_starter_voltage_view_container);
+			printf("[I] power_monitor: Added home touch callback to starter voltage view container: %p, g_starter_voltage_view_container\n");
 		} else if (parent_container == g_detail_container) {
 			lv_obj_add_event_cb(g_starter_voltage_view_container, power_monitor_detail_current_view_touch_cb, LV_EVENT_CLICKED, NULL);
-			ESP_LOGI(TAG, "Added detail touch callback to starter voltage view container: %p", g_starter_voltage_view_container);
+			printf("[I] power_monitor: Added detail touch callback to starter voltage view container: %p, g_starter_voltage_view_container\n");
 		} else {
-			ESP_LOGW(TAG, "Unknown parent container for starter voltage view: %p (home: %p, detail: %p)", parent_container, g_home_container, g_detail_container);
+			printf("[W] power_monitor: Unknown parent container for starter voltage view: %p (home: %p, detail: %p)\n", parent_container, g_home_container, g_detail_container);
 	}
 
 	s_creation_in_progress = false;
@@ -1260,84 +1263,84 @@ static void power_monitor_create_view_containers(lv_obj_t* parent_container)
 // Simple current view rendering - reuse existing view containers
 void power_monitor_render_current_view(lv_obj_t* container)
 {
-	ESP_LOGI(TAG, "=== RENDER CURRENT VIEW START ===");
+	printf("[I] power_monitor: === RENDER CURRENT VIEW START ===\n");
 
 	// Prevent recursive rendering
 	if (s_rendering_in_progress) {
-		ESP_LOGI(TAG, "Rendering already in progress, skipping");
+		printf("[I] power_monitor: Rendering already in progress, skipping\n");
 		return;
 	}
 	s_rendering_in_progress = true;
 
-	ESP_LOGI(TAG, "Rendering flag set, proceeding with view creation");
+	printf("[I] power_monitor: Rendering flag set, proceeding with view creation\n");
 
-	ESP_LOGI(TAG, "=== RENDER CURRENT VIEW: About to create view containers ===");
+	printf("[I] power_monitor: === RENDER CURRENT VIEW: About to create view containers ===\n");
 
 	// Make container clickable for touch navigation
 	lv_obj_add_flag(container, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
 
 	// Always create fresh view containers
-	ESP_LOGI(TAG, "=== CREATING FRESH VIEW CONTAINERS ===");
+	printf("[I] power_monitor: === CREATING FRESH VIEW CONTAINERS ===\n");
 	power_monitor_create_view_containers(container);
 
 	// Get current view type from shared manager
 	power_monitor_view_type_t current_type = get_current_view_type();
-	ESP_LOGI(TAG, "Showing view type: %d (index: %d)", current_type, current_view_manager_get_index());
+		printf("[I] power_monitor: Showing view type: %d (index: %d)\n", current_type, current_view_manager_get_index());
 
 	// Always render the current view fresh - no complex cleanup logic
 	if (current_type == POWER_MONITOR_VIEW_BAR_GRAPH) {
-			ESP_LOGI(TAG, "Rendering power grid view content");
+			printf("[I] power_monitor: Rendering power grid view content\n");
 			power_monitor_power_grid_view_render(g_power_grid_view_container);
-			ESP_LOGI(TAG, "Power grid view shown and rendered");
+			printf("[I] power_monitor: Power grid view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_NUMERICAL) {
-			ESP_LOGI(TAG, "Rendering starter voltage view content");
+			printf("[I] power_monitor: Rendering starter voltage view content\n");
 			power_monitor_starter_voltage_view_render(g_starter_voltage_view_container);
-			ESP_LOGI(TAG, "Starter voltage view shown and rendered");
+			printf("[I] power_monitor: Starter voltage view shown and rendered\n");
 	}
 
 	// Check if content was actually created
 	int child_count = lv_obj_get_child_cnt(container);
-	ESP_LOGI(TAG, "After rendering, container has %d children", child_count);
+	printf("[I] power_monitor: After rendering, container has %d children, child_count\n");
 
 	// Reset rendering flag
 	s_rendering_in_progress = false;
 
 	// CRITICAL: Ensure view state is consistent after rendering
-	ESP_LOGI(TAG, "=== RENDER CURRENT VIEW: Final state check ===");
-	ESP_LOGI(TAG, "Current view type: %d, index: %d", current_type, current_view_manager_get_index());
-	ESP_LOGI(TAG, "Power grid container: %p, valid: %d", g_power_grid_view_container,
+	printf("[I] power_monitor: === RENDER CURRENT VIEW: Final state check ===\n");
+	printf("[I] power_monitor: Current view type: %d, index: %d\n", current_type, current_view_manager_get_index());
+	printf("[I] power_monitor: Power grid container: %p, valid: %d\n", g_power_grid_view_container,
 		g_power_grid_view_container ? lv_obj_is_valid(g_power_grid_view_container) : 0);
-	ESP_LOGI(TAG, "Starter voltage container: %p, valid: %d", g_starter_voltage_view_container,
+	printf("[I] power_monitor: Starter voltage container: %p, valid: %d\n", g_starter_voltage_view_container,
 		g_starter_voltage_view_container ? lv_obj_is_valid(g_starter_voltage_view_container) : 0);
 
-	ESP_LOGI(TAG, "=== RENDER CURRENT VIEW COMPLETE ===");
+	printf("[I] power_monitor: === RENDER CURRENT VIEW COMPLETE ===\n");
 }
 
 static void power_monitor_update_all_containers(void)
 {
-	ESP_LOGI(TAG, "=== UPDATE ALL CONTAINERS START ===");
-	ESP_LOGI(TAG, "Current view index: %d", current_view_manager_get_index());
+	printf("[I] power_monitor: === UPDATE ALL CONTAINERS START ===\n");
+		printf("[I] power_monitor: Current view index: %d\n", current_view_manager_get_index());
 
-	ESP_LOGI(TAG, "Updating home container: %p, valid: %d", g_home_container, g_home_container ? lv_obj_is_valid(g_home_container) : 0);
+	printf("[I] power_monitor: Updating home container: %p, valid: %d\n", g_home_container, g_home_container ? lv_obj_is_valid(g_home_container) : 0);
 	// Update home container if it exists
 	if (g_home_container && lv_obj_is_valid(g_home_container)) {
-		ESP_LOGI(TAG, "Updating current view data in home container");
+		printf("[I] power_monitor: Updating current view data in home container\n");
 		// Only update data, don't recreate the view
 		power_monitor_power_grid_view_update_data();
-		ESP_LOGI(TAG, "Home container update complete");
+		printf("[I] power_monitor: Home container update complete\n");
 	}
 
-	ESP_LOGI(TAG, "Updating detail container: %p, valid: %d", g_detail_container, g_detail_container ? lv_obj_is_valid(g_detail_container) : 0);
+		printf("[I] power_monitor: Updating detail container: %p, valid: %d\n", g_detail_container, g_detail_container ? lv_obj_is_valid(g_detail_container) : 0);
 	// Update detail container if it exists
 	if (g_detail_container && lv_obj_is_valid(g_detail_container)) {
-		ESP_LOGI(TAG, "Updating current view data in detail container");
+		printf("[I] power_monitor: Updating current view data in detail container\n");
 		// Only update data, don't recreate the view
 		power_monitor_power_grid_view_update_data();
-		ESP_LOGI(TAG, "Detail container update complete");
+		printf("[I] power_monitor: Detail container update complete\n");
 	}
 
-	ESP_LOGI(TAG, "=== UPDATE ALL CONTAINERS COMPLETE ===");
+	printf("[I] power_monitor: === UPDATE ALL CONTAINERS COMPLETE ===\n");
 }
 
 // Touch callback for home current view - navigates to detail screen
@@ -1345,15 +1348,15 @@ static void power_monitor_home_current_view_touch_cb(lv_event_t * e)
 {
 	static int touch_count = 0;
 	touch_count++;
-	ESP_LOGI(TAG, "*** HOME TOUCH CALLBACK CALLED #%d ***", touch_count);
+	printf("[I] power_monitor: *** HOME TOUCH CALLBACK CALLED #%d ***, touch_count\n");
 
 	// Prevent recursive calls
 	if (s_reset_in_progress || s_creation_in_progress) {
-		ESP_LOGW(TAG, "Home touch callback ignored - navigation in progress");
+		printf("[W] power_monitor: Home touch callback ignored - navigation in progress\n");
 		return;
 	}
 
-	ESP_LOGI(TAG, "Home current view touched - navigating to detail screen");
+	printf("[I] power_monitor: Home current view touched - navigating to detail screen\n");
 
 	// Update detail container with current view before navigating
 	if (g_detail_container) {
@@ -1370,31 +1373,31 @@ static void power_monitor_detail_current_view_touch_cb(lv_event_t * e)
 {
 	static int touch_count = 0;
 	touch_count++;
-	ESP_LOGI(TAG, "*** DETAIL TOUCH CALLBACK CALLED #%d ***", touch_count);
+	printf("[I] power_monitor: *** DETAIL TOUCH CALLBACK CALLED #%d ***, touch_count\n");
 
 	// Debug: Check event details
 	if (e) {
-		ESP_LOGI(TAG, "Event type: %d, target: %p, current target: %p",
+		printf("[I] power_monitor: Event type: %d, target: %p, current target: %p\n",
 			lv_event_get_code(e), lv_event_get_target(e), lv_event_get_current_target(e));
 	}
 
 	// Check if we're actually on the detail screen
 	extern screen_type_t screen_navigation_get_current_screen(void);
 	screen_type_t current_screen = screen_navigation_get_current_screen();
-	ESP_LOGI(TAG, "Current screen: %d (detail=%d)", current_screen, SCREEN_DETAIL_VIEW);
+		printf("[I] power_monitor: Current screen: %d (detail=%d)\n", current_screen, SCREEN_DETAIL_VIEW);
 
 	if (current_screen != SCREEN_DETAIL_VIEW) {
-		ESP_LOGW(TAG, "Detail touch callback called but not on detail screen, ignoring");
+		printf("[W] power_monitor: Detail touch callback called but not on detail screen, ignoring\n");
 		return;
 	}
 
 	// Prevent recursive calls
 	if (s_reset_in_progress || s_creation_in_progress) {
-		ESP_LOGW(TAG, "Detail touch callback ignored - navigation in progress");
+		printf("[W] power_monitor: Detail touch callback ignored - navigation in progress\n");
 		return;
 	}
 
-	ESP_LOGI(TAG, "Detail current view touched - cycling views");
+	printf("[I] power_monitor: Detail current view touched - cycling views\n");
 	power_monitor_cycle_current_view();
 }
 
@@ -1413,7 +1416,7 @@ static int power_monitor_get_view_index(void)
 
 	// Validate and clamp the index
 	if (index < 0 || index >= s_total_views) {
-		ESP_LOGW(TAG, "Invalid view index %d from device state, using 0", index);
+		printf("[W] power_monitor: Invalid view index %d from device state, using 0, index\n");
 		index = 0;
 	}
 
@@ -1427,11 +1430,11 @@ static void power_monitor_set_view_index(int index)
 {
 	// Validate and clamp the index
 	if (index < 0 || index >= s_total_views) {
-		ESP_LOGW(TAG, "Invalid view index %d, clamping to valid range", index);
+		printf("[W] power_monitor: Invalid view index %d, clamping to valid range, index\n");
 		index = (index < 0) ? 0 : (s_total_views - 1);
 	}
 
-	ESP_LOGI(TAG, "Setting view index to %d", index);
+	printf("[I] power_monitor: Setting view index to %d, index\n");
 
 	// Set in device state
 	extern void module_screen_view_set_view_index(const char *module_name, int view_index);
@@ -1452,11 +1455,11 @@ static void power_monitor_set_view_index(int index)
 static void power_monitor_destroy_current_view(void)
 {
 	int view_index = power_monitor_get_view_index();
-	ESP_LOGI(TAG, "Destroying current view objects for index %d", view_index);
+	printf("[I] power_monitor: Destroying current view objects for index %d, view_index\n");
 
 	// CRITICAL: Cleanup gauge canvas buffers BEFORE destroying LVGL objects
 	// This prevents memory leaks from malloc'd canvas buffers
-	ESP_LOGI(TAG, "Cleaning up gauge canvas buffers before LVGL object destruction");
+	printf("[I] power_monitor: Cleaning up gauge canvas buffers before LVGL object destruction\n");
 	extern void power_monitor_reset_static_gauges(void);
 	extern void power_monitor_reset_starter_voltage_static_gauge(void);
 	power_monitor_reset_static_gauges();
@@ -1465,7 +1468,7 @@ static void power_monitor_destroy_current_view(void)
 	// Get the detail screen container to clean
 	extern detail_screen_t* detail_screen;
 	if (detail_screen && detail_screen->current_view_container) {
-		ESP_LOGI(TAG, "Cleaning current view container");
+		printf("[I] power_monitor: Cleaning current view container\n");
 		lv_obj_clean(detail_screen->current_view_container);
 
 		// Re-apply container styling after clean (clean removes styling)
@@ -1475,10 +1478,10 @@ static void power_monitor_destroy_current_view(void)
 		lv_obj_set_style_radius(detail_screen->current_view_container, 4, 0);
 		lv_obj_clear_flag(detail_screen->current_view_container, LV_OBJ_FLAG_SCROLLABLE);
 	} else {
-		ESP_LOGW(TAG, "No detail screen container to clean");
+		printf("[W] power_monitor: No detail screen container to clean\n");
 	}
 
-	ESP_LOGI(TAG, "Current view objects destroyed for index %d", view_index);
+	printf("[I] power_monitor: Current view objects destroyed for index %d, view_index\n");
 }
 
 // =============================================================================
@@ -1490,7 +1493,7 @@ static void power_monitor_destroy_current_view(void)
  */
 static void power_monitor_module_init(void)
 {
-	ESP_LOGI(TAG, "Power monitor module initializing via standardized interface");
+	printf("[I] power_monitor: Power monitor module initializing via standardized interface\n");
 	power_monitor_init_with_default_view(POWER_MONITOR_VIEW_BAR_GRAPH);
 }
 
@@ -1504,7 +1507,7 @@ static void power_monitor_module_update(void)
 {
 	// Skip data updates during view cycling to prevent crashes
 	if (s_detail_view_needs_refresh) {
-		ESP_LOGD(TAG, "Skipping data updates during view cycling");
+		printf("[D] power_monitor: Skipping data updates during view cycling\n");
 	} else {
 		// Update data only - no UI creation/destruction
 		power_monitor_update_data_only();
@@ -1516,26 +1519,26 @@ static void power_monitor_module_update(void)
 		if (screen_navigation_get_current_screen() == SCREEN_DETAIL_VIEW) {
 			extern detail_screen_t* detail_screen;
 			if (detail_screen && detail_screen->current_view_container) {
-			ESP_LOGI(TAG, "Performing delayed re-render of detail view after cycle");
+			printf("[I] power_monitor: Performing delayed re-render of detail view after cycle\n");
 
 			// DESTROY: Properly destroy the current view object
-			ESP_LOGI(TAG, "Destroying current view object");
+			printf("[I] power_monitor: Destroying current view object\n");
 			power_monitor_destroy_current_view();
 
 			// Ensure layout is calculated on parent container before creating new view
 			lv_obj_update_layout(detail_screen->left_column);
 			lv_obj_update_layout(detail_screen->current_view_container); // Also update the current view container itself
-			ESP_LOGI(TAG, "Container size after parent layout update: %dx%d",
+			printf("[I] power_monitor: Container size after parent layout update: %dx%d\n",
 				lv_obj_get_width(detail_screen->current_view_container),
 				lv_obj_get_height(detail_screen->current_view_container));
 
 			// CREATE: Create new view object with updated index
 			int current_index = power_monitor_get_view_index();
-			ESP_LOGI(TAG, "Creating new view object for index %d", current_index);
+			printf("[I] power_monitor: Creating new view object for index %d, current_index\n");
 
 			// Force a final layout update on the container before creating content
 			lv_obj_update_layout(detail_screen->current_view_container);
-			ESP_LOGI(TAG, "Final container size before content creation: %dx%d",
+			printf("[I] power_monitor: Final container size before content creation: %dx%d\n",
 				lv_obj_get_width(detail_screen->current_view_container),
 				lv_obj_get_height(detail_screen->current_view_container));
 
@@ -1555,7 +1558,7 @@ static void power_monitor_module_update(void)
  */
 static void power_monitor_module_cleanup(void)
 {
-	ESP_LOGI(TAG, "Power monitor module cleaning up via standardized interface");
+	printf("[I] power_monitor: Power monitor module cleaning up via standardized interface\n");
 	power_monitor_cleanup();
 }
 

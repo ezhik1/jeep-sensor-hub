@@ -6,7 +6,8 @@
 #ifndef LVGL_PORT_PI_H
 #define LVGL_PORT_PI_H
 
-#include "esp_compat.h"
+#include <stdio.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <lvgl.h>
@@ -38,6 +39,10 @@ lv_display_t* lvgl_port_get_display(void);
 
 // Force all screens to use the correct dimensions
 void lvgl_port_force_screen_dimensions(lv_obj_t *screen);
+
+// Thread synchronization functions
+bool lvgl_port_lock(uint32_t timeout_ms);
+void lvgl_port_unlock(void);
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,6 @@
+#include <stdio.h>
 #include "module_interface.h"
-#include "../../esp_compat.h"
+
 
 static const char *TAG = "module_interface";
 
@@ -16,19 +17,19 @@ static const display_module_t* registered_modules[] = {
 
 void display_modules_init_all(void)
 {
-	ESP_LOGI(TAG, "Initializing %d display modules", NUM_MODULES);
+		printf("[I] module_interface: Initializing %d display modules\n", NUM_MODULES);
 
 	for (size_t i = 0; i < NUM_MODULES; i++) {
 		const display_module_t* module = registered_modules[i];
 		if (module && module->init) {
-			ESP_LOGI(TAG, "Initializing module: %s", module->name);
+			printf("[I] module_interface: Initializing module: %s\n", module->name);
 			module->init();
 		} else {
-			ESP_LOGW(TAG, "Module %zu has no init function", i);
+			printf("[W] module_interface: Module %zu has no init function\n", i);
 		}
 	}
 
-	ESP_LOGI(TAG, "All display modules initialized");
+	printf("[I] module_interface: All display modules initialized\n");
 }
 
 void display_modules_update_all(void)
@@ -43,15 +44,15 @@ void display_modules_update_all(void)
 
 void display_modules_cleanup_all(void)
 {
-	ESP_LOGI(TAG, "Cleaning up %d display modules", NUM_MODULES);
+		printf("[I] module_interface: Cleaning up %d display modules\n", NUM_MODULES);
 
 	for (size_t i = 0; i < NUM_MODULES; i++) {
 		const display_module_t* module = registered_modules[i];
 		if (module && module->cleanup) {
-			ESP_LOGI(TAG, "Cleaning up module: %s", module->name);
+			printf("[I] module_interface: Cleaning up module: %s\n", module->name);
 			module->cleanup();
 		}
 	}
 
-	ESP_LOGI(TAG, "All display modules cleaned up");
+	printf("[I] module_interface: All display modules cleaned up\n");
 }

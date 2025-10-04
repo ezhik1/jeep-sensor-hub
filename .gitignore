@@ -57,3 +57,6 @@ pi-ui/node_modules
 # hardware UI app build and executable
 pi-ui/build
 pi_ui
+
+# Environment configuration
+.env

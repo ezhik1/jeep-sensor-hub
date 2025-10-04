@@ -1,8 +1,10 @@
+#include <stdio.h>
+#include <time.h>
 #include "screen_manager.h"
 #include "home_screen/home_screen.h"
 #include "../displayModules/power-monitor/power-monitor.h"
 #include "../lvgl_port_pi.h"
-#include "esp_compat.h"
+
 #include <string.h>
 
 static const char *TAG = "screen_manager";
@@ -69,11 +71,11 @@ static const screen_definition_t* find_screen_definition(screen_type_t screen_ty
 static void destroy_current_screen(void)
 {
 	if (current_screen_type == SCREEN_NONE) {
-		ESP_LOGD(TAG, "No current screen to destroy");
+		printf("[D] screen_manager: No current screen to destroy\n");
 		return;
 	}
 
-	ESP_LOGI(TAG, "Destroying current screen: type=%d, module=%s",
+	printf("[I] screen_manager: Destroying current screen: type=%d, module=%s\n",
 			 current_screen_type, current_module_name[0] ? current_module_name : "none");
 
 	// Find the current screen definition
@@ -81,11 +83,11 @@ static void destroy_current_screen(void)
 														   current_module_name[0] ? current_module_name : NULL);
 
 	if (def && def->destroy_func) {
-		ESP_LOGI(TAG, "Calling destroy function for screen type %d", current_screen_type);
+		printf("[I] screen_manager: Calling destroy function for screen type %d\n", current_screen_type);
 		def->destroy_func();
-		ESP_LOGI(TAG, "Screen destroyed successfully");
+		printf("[I] screen_manager: Screen destroyed successfully\n");
 	} else {
-		ESP_LOGW(TAG, "No destroy function found for screen type %d", current_screen_type);
+		printf("[W] screen_manager: No destroy function found for screen type %d\n", current_screen_type);
 	}
 
 	// Clear current screen state
@@ -98,20 +100,20 @@ static void destroy_current_screen(void)
  */
 static void create_and_show_screen(screen_type_t screen_type, const char *module_name)
 {
-	ESP_LOGI(TAG, "Creating new screen: type=%d, module=%s",
+	printf("[I] screen_manager: Creating new screen: type=%d, module=%s\n",
 			 screen_type, module_name ? module_name : "none");
 
 	// Find the screen definition
 	const screen_definition_t *def = find_screen_definition(screen_type, module_name);
 
 	if (!def) {
-		ESP_LOGE(TAG, "No screen definition found for type %d, module %s",
+		printf("[E] screen_manager: No screen definition found for type %d, module %s\n",
 				 screen_type, module_name ? module_name : "none");
 		return;
 	}
 
 	if (!def->create_func) {
-		ESP_LOGE(TAG, "No create function found for screen type %d", screen_type);
+		printf("[E] screen_manager: No create function found for screen type %d\n", screen_type);
 		return;
 	}
 
@@ -125,9 +127,9 @@ static void create_and_show_screen(screen_type_t screen_type, const char *module
 	}
 
 	// Create the new screen
-	ESP_LOGI(TAG, "Calling create function for screen type %d", screen_type);
+		printf("[I] screen_manager: Calling create function for screen type %d\n", screen_type);
 	def->create_func();
-	ESP_LOGI(TAG, "Screen created successfully");
+	printf("[I] screen_manager: Screen created successfully\n");
 
 	// Update global device state to match
 	screen_navigation_set_current_screen(screen_type, module_name);
@@ -135,7 +137,7 @@ static void create_and_show_screen(screen_type_t screen_type, const char *module
 
 void screen_manager_init(void)
 {
-	ESP_LOGI(TAG, "Initializing screen manager");
+	printf("[I] screen_manager: Initializing screen manager\n");
 
 	// Initialize state
 	current_screen_type = SCREEN_NONE;
@@ -146,13 +148,13 @@ void screen_manager_init(void)
 	screen_type_t initial_screen = screen_navigation_get_current_screen();
 	const char *initial_module = screen_navigation_get_current_module();
 
-	ESP_LOGI(TAG, "Initial screen from state: type=%d, module=%s",
+	printf("[I] screen_manager: Initial screen from state: type=%d, module=%s\n",
 			 initial_screen, initial_module ? initial_module : "none");
 
 	// Show the initial screen
 	create_and_show_screen(initial_screen, initial_module);
 
-	ESP_LOGI(TAG, "Screen manager initialized");
+	printf("[I] screen_manager: Screen manager initialized\n");
 }
 
 void screen_manager_update(void)
@@ -163,19 +165,21 @@ void screen_manager_update(void)
 	}
 
 	// Check transition rate limiting
-		uint32_t current_time = xTaskGetTickCount() * 1;
+		struct timespec ts;
+		clock_gettime(CLOCK_MONOTONIC, &ts);
+		uint32_t current_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 		if (current_time - last_transition_time < MIN_TRANSITION_INTERVAL_MS) {
-		ESP_LOGD(TAG, "Transition rate limited, skipping");
+		printf("[D] screen_manager: Transition rate limited, skipping\n");
 			return;
 		}
 
-	ESP_LOGI(TAG, "Processing screen transition");
+	printf("[I] screen_manager: Processing screen transition\n");
 
 	// Get the requested screen
 		screen_type_t requested_screen = screen_navigation_get_requested_screen();
 	const char *requested_module = screen_navigation_get_requested_module();
 
-	ESP_LOGI(TAG, "Requested transition: type=%d, module=%s",
+	printf("[I] screen_manager: Requested transition: type=%d, module=%s\n",
 			 requested_screen, requested_module ? requested_module : "none");
 
 	// Store module name locally before processing transitions (which may clear it)
@@ -195,15 +199,15 @@ void screen_manager_update(void)
 		// Update transition time
 	last_transition_time = current_time;
 
-	ESP_LOGI(TAG, "Screen transition completed");
+	printf("[I] screen_manager: Screen transition completed\n");
 }
 
 void screen_manager_show_screen(screen_type_t screen_type, const char *module_name)
 {
-	ESP_LOGI(TAG, "=== SCREEN TRANSITION START ===");
-	ESP_LOGI(TAG, "From: type=%d, module=%s", current_screen_type,
+	printf("[I] screen_manager: === SCREEN TRANSITION START ===\n");
+	printf("[I] screen_manager: From: type=%d, module=%s\n", current_screen_type,
 			 current_module_name[0] ? current_module_name : "none");
-	ESP_LOGI(TAG, "To: type=%d, module=%s", screen_type, module_name ? module_name : "none");
+	printf("[I] screen_manager: To: type=%d, module=%s\n", screen_type, module_name ? module_name : "none");
 
 	// Check if this is actually a different screen
 	bool same_screen = (current_screen_type == screen_type);
@@ -217,13 +221,13 @@ void screen_manager_show_screen(screen_type_t screen_type, const char *module_na
 	}
 
 	if (same_screen && same_module) {
-		ESP_LOGI(TAG, "Same screen requested, no transition needed");
+		printf("[I] screen_manager: Same screen requested, no transition needed\n");
 		return;
 	}
 
 	// Lock LVGL for the entire transition
 	if (!lvgl_port_lock(100)) { // 100ms timeout
-		ESP_LOGE(TAG, "Failed to lock LVGL for screen transition");
+		printf("[E] screen_manager: Failed to lock LVGL for screen transition\n");
 		return;
 	}
 
@@ -236,17 +240,17 @@ void screen_manager_show_screen(screen_type_t screen_type, const char *module_na
 	// Unlock LVGL
 	lvgl_port_unlock();
 
-	ESP_LOGI(TAG, "=== SCREEN TRANSITION COMPLETE ===");
+	printf("[I] screen_manager: === SCREEN TRANSITION COMPLETE ===\n");
 }
 
 void screen_manager_cleanup(void)
 {
-	ESP_LOGI(TAG, "Cleaning up screen manager");
+	printf("[I] screen_manager: Cleaning up screen manager\n");
 
 	// Destroy current screen
 	destroy_current_screen();
 
-	ESP_LOGI(TAG, "Screen manager cleanup complete");
+	printf("[I] screen_manager: Screen manager cleanup complete\n");
 }
 
 screen_type_t screen_manager_get_current_screen(void)

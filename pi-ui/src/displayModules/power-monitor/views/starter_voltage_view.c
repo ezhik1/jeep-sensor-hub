@@ -1,10 +1,11 @@
+#include <stdio.h>
 #include "starter_voltage_view.h"
 #include "../power-monitor.h"
 #include "../../shared/gauges/bar_graph_gauge.h"
 #include "../../../state/device_state.h"
 #include "../../../data/lerp_data/lerp_data.h"
 #include "../../../fonts/lv_font_zector_72.h"
-#include "esp_compat.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -19,25 +20,25 @@ static lv_obj_t* s_voltage_title_label = NULL;
 
 void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 {
-	ESP_LOGI(TAG, "=== STARTER VOLTAGE VIEW RENDER START ===");
-	ESP_LOGI(TAG, "Container: %p", container);
+	printf("[I] starter_voltage_view: === STARTER VOLTAGE VIEW RENDER START ===\n");
+		printf("[I] starter_voltage_view: Container: %p\n", container);
 
 	if (!container) {
-		ESP_LOGE(TAG, "Container is NULL");
+		printf("[E] starter_voltage_view: Container is NULL\n");
 		return;
 	}
 
 	if (!lv_obj_is_valid(container)) {
-		ESP_LOGE(TAG, "Container is not valid");
+		printf("[E] starter_voltage_view: Container is not valid\n");
 		return;
 	}
 
-	ESP_LOGI(TAG, "Container validation passed");
+	printf("[I] starter_voltage_view: Container validation passed\n");
 
 	// Always create fresh content
-	ESP_LOGI(TAG, "Creating fresh starter voltage view content");
+	printf("[I] starter_voltage_view: Creating fresh starter voltage view content\n");
 
-	ESP_LOGI(TAG, "Creating starter voltage view in container: %p", container);
+		printf("[I] starter_voltage_view: Creating starter voltage view in container: %p\n", container);
 
 	// Always create fresh gauge
 
@@ -53,20 +54,20 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 	lv_coord_t container_width = lv_obj_get_width(container);
 	lv_coord_t container_height = lv_obj_get_height(container);
 
-	ESP_LOGI(TAG, "Starter voltage view container dimensions: %dx%d", container_width, container_height);
+		printf("[I] starter_voltage_view: Starter voltage view container dimensions: %dx%d\n", container_width, container_height);
 
 	// If container is still 0x0 after layout updates, this indicates a problem
 	if (container_width == 0 || container_height == 0) {
-		ESP_LOGE(TAG, "Container has invalid dimensions %dx%d - layout calculation failed", container_width, container_height);
+		printf("[E] starter_voltage_view: Container has invalid dimensions %dx%d - layout calculation failed\n", container_width, container_height);
 		// Force a layout update and try again
 		lv_obj_update_layout(container);
 		container_width = lv_obj_get_width(container);
 		container_height = lv_obj_get_height(container);
-		ESP_LOGI(TAG, "After forced layout update: %dx%d", container_width, container_height);
+		printf("[I] starter_voltage_view: After forced layout update: %dx%d\n", container_width, container_height);
 
 		// If still invalid, use fallback but log as error
 		if (container_width == 0 || container_height == 0) {
-			ESP_LOGE(TAG, "Layout calculation completely failed, using fallback dimensions");
+			printf("[E] starter_voltage_view: Layout calculation completely failed, using fallback dimensions\n");
 			container_width = 238;  // Same as home screen module
 			container_height = 189; // Same as home screen module
 			lv_obj_set_size(container, container_width, container_height);
@@ -83,7 +84,7 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 	int voltage_height = container_height / 3;
 	int gauge_height = container_height - voltage_height;
 
-	ESP_LOGI(TAG, "Layout: voltage_height=%d, gauge_height=%d", voltage_height, gauge_height);
+		printf("[I] starter_voltage_view: Layout: voltage_height=%d, gauge_height=%d\n", voltage_height, gauge_height);
 
 	s_voltage_title_label = lv_label_create(container);
 	if (s_voltage_title_label) {
@@ -107,7 +108,7 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 		lv_coord_t top_offset = 15; // Fixed 15px from top for consistent positioning
 
 		lv_obj_align(s_voltage_value_label, LV_ALIGN_TOP_RIGHT, -10, top_offset);
-		ESP_LOGI(TAG, "Positioned numeric value at fixed top_offset=%d (container_height=%d)", top_offset, container_height);
+		printf("[I] starter_voltage_view: Positioned numeric value at fixed top_offset=%d (container_height=%d)\n", top_offset, container_height);
 
 		lv_obj_clear_flag(s_voltage_value_label, LV_OBJ_FLAG_CLICKABLE);
 		lv_obj_add_flag(s_voltage_value_label, LV_OBJ_FLAG_EVENT_BUBBLE);
@@ -127,21 +128,21 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 
 		// Clean up any existing gauge first
 		if (s_voltage_gauge.initialized) {
-			ESP_LOGI(TAG, "Cleaning up existing gauge before reinitializing");
+			printf("[I] starter_voltage_view: Cleaning up existing gauge before reinitializing\n");
 			bar_graph_gauge_cleanup(&s_voltage_gauge);
 			memset(&s_voltage_gauge, 0, sizeof(bar_graph_gauge_t));
 		}
 
 	// Initialize the bar graph gauge with full container size (flexbox will handle layout)
-	ESP_LOGI(TAG, "Initializing bar graph gauge in container: %p", gauge_container);
-	ESP_LOGI(TAG, "About to call bar_graph_gauge_init...");
+		printf("[I] starter_voltage_view: Initializing bar graph gauge in container: %p\n", gauge_container);
+	printf("[I] starter_voltage_view: About to call bar_graph_gauge_init...\n");
 	bar_graph_gauge_init(&s_voltage_gauge, gauge_container,
 		0, 0, container_width, gauge_height);
-	ESP_LOGI(TAG, "bar_graph_gauge_init completed");
+	printf("[I] starter_voltage_view: bar_graph_gauge_init completed\n");
 
 		// Check if gauge was initialized successfully
 		if (!s_voltage_gauge.initialized) {
-			ESP_LOGE(TAG, "Failed to initialize bar graph gauge");
+			printf("[E] starter_voltage_view: Failed to initialize bar graph gauge\n");
 			return;
 		}
 
@@ -150,7 +151,7 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 		float starter_min = device_state_get_starter_min_voltage_v();
 		float starter_max = device_state_get_starter_max_voltage_v();
 
-		ESP_LOGI(TAG, "Configuring gauge: baseline=%.1f, min=%.1f, max=%.1f", starter_baseline, starter_min, starter_max);
+		printf("[I] starter_voltage_view: Configuring gauge: baseline=%.1f, min=%.1f, max=%.1f\n", starter_baseline, starter_min, starter_max);
 		bar_graph_gauge_configure_advanced(&s_voltage_gauge,
 			BAR_GRAPH_MODE_BIPOLAR, starter_baseline, starter_min, starter_max,
 			"", "", "", 0x00FF00, false, true, false); // No labels, just bars and scale, no border for current view
@@ -165,14 +166,14 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 		// Update labels and ticks
 		bar_graph_gauge_update_labels_and_ticks(&s_voltage_gauge);
 
-		ESP_LOGI(TAG, "Bar gauge initialized: container=%dx%d", container_width - 10, gauge_height - 10);
+		printf("[I] starter_voltage_view: Bar gauge initialized: container=%dx%d\n", container_width - 10, gauge_height - 10);
 	}
 
 	// View content created successfully
 
 	// View rendered successfully
-	ESP_LOGI(TAG, "Starter voltage view rendered successfully");
-	ESP_LOGI(TAG, "=== STARTER VOLTAGE VIEW RENDER COMPLETE ===");
+	printf("[I] starter_voltage_view: Starter voltage view rendered successfully\n");
+	printf("[I] starter_voltage_view: === STARTER VOLTAGE VIEW RENDER COMPLETE ===\n");
 
 	// Log memory usage
 	FILE* meminfo = fopen("/proc/self/status", "r");
@@ -180,7 +181,7 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 		char line[256];
 		while (fgets(line, sizeof(line), meminfo)) {
 			if (strncmp(line, "VmRSS:", 6) == 0) {
-				ESP_LOGI(TAG, "Memory usage: %s", line);
+				printf("[I] starter_voltage_view: Memory usage: %s\n", line);
 				break;
 			}
 		}
@@ -219,7 +220,7 @@ const char* power_monitor_starter_voltage_view_get_title(void)
 
 void power_monitor_reset_starter_voltage_static_gauge(void)
 {
-	ESP_LOGI(TAG, "=== RESETTING STARTER VOLTAGE STATIC GAUGE ===");
+	printf("[I] starter_voltage_view: === RESETTING STARTER VOLTAGE STATIC GAUGE ===\n");
 
 	// Reset static gauge variable to prevent memory conflicts
 	memset(&s_voltage_gauge, 0, sizeof(bar_graph_gauge_t));
@@ -228,7 +229,7 @@ void power_monitor_reset_starter_voltage_static_gauge(void)
 	s_voltage_value_label = NULL;
 	s_voltage_title_label = NULL;
 
-	ESP_LOGI(TAG, "Starter voltage static gauge reset complete");
+	printf("[I] starter_voltage_view: Starter voltage static gauge reset complete\n");
 }
 
 void power_monitor_starter_voltage_view_apply_alert_flashing(const power_monitor_data_t* data,

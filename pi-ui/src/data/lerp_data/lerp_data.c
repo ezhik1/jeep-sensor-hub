@@ -1,5 +1,7 @@
+#include <stdio.h>
+#include <time.h>
 #include "lerp_data.h"
-#include "../../esp_compat.h"
+
 #include <string.h>
 #include <math.h>
 #include "../../displayModules/power-monitor/power-monitor.h"
@@ -14,11 +16,11 @@ static bool g_lerp_initialized = false;
 void lerp_data_init(void)
 {
 	if (g_lerp_initialized) {
-		ESP_LOGW(TAG, "LERP data already initialized");
+		printf("[W] lerp_data: LERP data already initialized\n");
 		return;
 	}
 
-	ESP_LOGI(TAG, "Initializing LERP data system");
+	printf("[I] lerp_data: Initializing LERP data system\n");
 
 	// Initialize all LERP values to 0
 	lerp_value_init(&g_lerp_data.starter_voltage, 0.0f);
@@ -29,14 +31,14 @@ void lerp_data_init(void)
 	lerp_value_init(&g_lerp_data.solar_current, 0.0f);
 
 	g_lerp_initialized = true;
-	ESP_LOGI(TAG, "LERP data system initialized");
+	printf("[I] lerp_data: LERP data system initialized\n");
 }
 
 // Update all LERP values (call this every frame)
 void lerp_data_update(void)
 {
 	if (!g_lerp_initialized) {
-		ESP_LOGW(TAG, "LERP data not initialized");
+		printf("[W] lerp_data: LERP data not initialized\n");
 		return;
 	}
 
@@ -53,7 +55,7 @@ void lerp_data_update(void)
 void lerp_data_set_targets(const void* raw_data)
 {
 	if (!g_lerp_initialized) {
-		ESP_LOGW(TAG, "LERP data not initialized");
+		printf("[W] lerp_data: LERP data not initialized\n");
 		return;
 	}
 
@@ -73,7 +75,7 @@ void lerp_data_set_targets(const void* raw_data)
 void lerp_data_get_current(lerp_power_monitor_data_t* output)
 {
 	if (!g_lerp_initialized || !output) {
-		ESP_LOGW(TAG, "LERP data not initialized or output is NULL");
+		printf("[W] lerp_data: LERP data not initialized or output is NULL\n");
 		return;
 	}
 
@@ -93,7 +95,7 @@ void lerp_data_cleanup(void)
 		return;
 	}
 
-	ESP_LOGI(TAG, "Cleaning up LERP data system");
+	printf("[I] lerp_data: Cleaning up LERP data system\n");
 	memset(&g_lerp_data, 0, sizeof(g_lerp_data));
 	g_lerp_initialized = false;
 }
@@ -102,7 +104,7 @@ void lerp_data_cleanup(void)
 void lerp_value_init(lerp_value_t* lerp_val, float initial_value)
 {
 	if (!lerp_val) {
-		ESP_LOGE(TAG, "LERP value pointer is NULL");
+		printf("[E] lerp_data: LERP value pointer is NULL\n");
 		return;
 	}
 
@@ -117,7 +119,7 @@ void lerp_value_init(lerp_value_t* lerp_val, float initial_value)
 void lerp_value_set_target(lerp_value_t* lerp_val, float target_value)
 {
 	if (!lerp_val) {
-		ESP_LOGE(TAG, "LERP value pointer is NULL");
+		printf("[E] lerp_data: LERP value pointer is NULL\n");
 		return;
 	}
 
@@ -149,14 +151,16 @@ void lerp_value_update(lerp_value_t* lerp_val)
 		lerp_val->is_interpolating = false;
 	}
 
-	lerp_val->last_update_ms = xTaskGetTickCount() * 1;
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	lerp_val->last_update_ms = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
 // Get raw value (always current sensor reading)
 float lerp_value_get_raw(const lerp_value_t* lerp_val)
 {
 	if (!lerp_val) {
-		ESP_LOGE(TAG, "LERP value pointer is NULL");
+		printf("[E] lerp_data: LERP value pointer is NULL\n");
 		return 0.0f;
 	}
 
@@ -167,7 +171,7 @@ float lerp_value_get_raw(const lerp_value_t* lerp_val)
 float lerp_value_get_display(const lerp_value_t* lerp_val)
 {
 	if (!lerp_val) {
-		ESP_LOGE(TAG, "LERP value pointer is NULL");
+		printf("[E] lerp_data: LERP value pointer is NULL\n");
 		return 0.0f;
 	}
 

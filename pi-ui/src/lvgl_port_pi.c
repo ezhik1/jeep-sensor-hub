@@ -14,9 +14,13 @@
 
 static const char *TAG = "lv_port_pi";
 
-// Display dimensions (match your display)
-#define DISP_HOR_RES 480
-#define DISP_VER_RES 800
+// Logical resolution for LVGL (portrait)
+#define LVGL_HOR_RES 480
+#define LVGL_VER_RES 800
+
+// Physical display resolution (landscape)
+#define DISP_HOR_RES 800
+#define DISP_VER_RES 480
 
 // Global flag to control main loop
 static volatile bool running = true;
@@ -35,8 +39,8 @@ static void fps_timer_cb(lv_timer_t *timer)
 
 	// Update FPS every second
 	if (current_time - last_fps_time >= 1000) {
+
 		current_fps = (float)frame_count * 1000.0f / (current_time - last_fps_time);
-		printf("FPS: %.1f (frames: %d, time: %dms)\n", current_fps, frame_count, (int)(current_time - last_fps_time));
 		frame_count = 0;
 		last_fps_time = current_time;
 	}
@@ -80,11 +84,11 @@ static void update_fps_display(void)
 	lv_label_set_text(fps_label, fps_text);
 	lv_obj_move_foreground(fps_label); // Ensure it stays on top
 }
-#define DISP_BUF_SIZE (DISP_HOR_RES * DISP_VER_RES)
+#define DISP_BUF_SIZE (LVGL_HOR_RES * LVGL_VER_RES)
 
 // Global display dimensions
-static uint32_t g_display_width = DISP_HOR_RES;
-static uint32_t g_display_height = DISP_VER_RES;
+static uint32_t g_display_width = LVGL_HOR_RES;
+static uint32_t g_display_height = LVGL_VER_RES;
 
 // Buffers
 static lv_color_t buf_1[DISP_BUF_SIZE];
@@ -104,29 +108,53 @@ static int32_t mouse_x = 0;
 static int32_t mouse_y = 0;
 static bool mouse_pressed = false;
 
-// Display flush callback
+
+// Display flush callback + Software Rotation
 static void disp_flush(lv_display_t * disp, const lv_area_t * area, uint8_t * px_map)
 {
-	// Count frames for FPS calculation (moved to separate timer for performance)
 	frame_count++;
 
-	// Convert LVGL area to SDL rect
-	SDL_Rect rect;
-	rect.x = area->x1;
-	rect.y = area->y1;
-	rect.w = area->x2 - area->x1 + 1;
-	rect.h = area->y2 - area->y1 + 1;
+	// Update the entire LVGL portrait texture (480x800)
+	// Pitch = width in pixels * sizeof(lv_color_t) = 480 * 2 bytes for RGB565
+	if (SDL_UpdateTexture(texture, NULL, px_map, LVGL_HOR_RES * 2) != 0) {
 
-	// Update SDL texture - LVGL uses 16-bit RGB565, so 2 bytes per pixel
-	SDL_UpdateTexture(texture, &rect, px_map, rect.w * 2);
+		printf("SDL_UpdateTexture failed: %s\n", SDL_GetError());
+	}
 
-	// Full screen rendering for stability
-	SDL_Rect full_rect = {0, 0, DISP_HOR_RES, DISP_VER_RES};
-	SDL_RenderCopy(renderer, texture, &full_rect, &full_rect);
+	SDL_RenderClear(renderer);
+
+	// Destination rectangle: width and height swapped relative to the texture
+	// to account for 90° clockwise rotation
+	SDL_Rect destinantion_rectangle = { 0, 0, DISP_VER_RES, DISP_HOR_RES}; // 800x480
+
+
+	// Need dynamic offsets based on actual texture size vs renderer output size:
+	int renderer_output_width, renderer_output_height;
+
+	SDL_GetRendererOutputSize( renderer, &renderer_output_width, &renderer_output_height );
+
+	// Center the texture in the renderer output
+
+	// SDL_RenderCopyEx rotates the texture around the center of destination_rectangle.
+	// That means if destinantion_rectangle.x=0 and destinantion_rectangle.y=0,
+	// the rotated texture is pushed down and to the right because the center pivot moves
+	// the top-left corner. To center it in the renderer, you offset destination_rectangle
+	//  so that after rotation, it aligns perfectly:
+
+	destinantion_rectangle.x = ( renderer_output_width - destinantion_rectangle.w ) / 2;
+	destinantion_rectangle.y = ( renderer_output_height - destinantion_rectangle.h ) / 2;
+
+	// Rotate the texture 90° clockwise to fill the physical screen
+	if( SDL_RenderCopyEx( renderer, texture, NULL, &destinantion_rectangle, 90, NULL, SDL_FLIP_NONE ) != 0 ){
+
+		//  rotation failed
+		printf("SDL_RenderCopyEx failed: %s\n", SDL_GetError());
+	}
+
 	SDL_RenderPresent(renderer);
 
-	// Tell LVGL that flushing is done
-	lv_display_flush_ready(disp);
+	// Tell LVGL we're done flushing
+	lv_display_flush_ready( disp );
 }
 
 // Input device read callback
@@ -140,7 +168,9 @@ static void indev_read(lv_indev_t * indev, lv_indev_data_t * data)
 // Initialize LVGL for Raspberry Pi
 int lvgl_port_init(void)
 {
-	printf("Initializing LVGL for Raspberry Pi...\n");
+
+	printf("Initializing LVGL for Raspberry Pi (logical %dx%d -> physical %dx%d)...\n",
+		LVGL_HOR_RES, LVGL_VER_RES, DISP_HOR_RES, DISP_VER_RES);
 
 	// Initialize SDL
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -148,11 +178,11 @@ int lvgl_port_init(void)
 		return -1;
 	}
 
-	// Create SDL window
+	// Create SDL window - MUST match framebuffer dimensions (800x480) for kernel rotation
 	window = SDL_CreateWindow("Jeep Sensor Hub - Raspberry Pi",
 							  SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 							  DISP_HOR_RES, DISP_VER_RES,
-							  SDL_WINDOW_FULLSCREEN | SDL_WINDOW_SHOWN);
+							  SDL_WINDOW_SHOWN);
 	if (!window) {
 		printf("Failed to create SDL window: %s\n", SDL_GetError());
 		return -1;
@@ -165,6 +195,8 @@ int lvgl_port_init(void)
 		return -1;
 	}
 
+	SDL_SetHint(SDL_HINT_VIDEODRIVER, "KMSDRM");
+	SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 	// Optimize SDL renderer for maximum performance
 	SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE); // Disable blending for speed
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0"); // Nearest neighbor scaling for speed
@@ -173,10 +205,15 @@ int lvgl_port_init(void)
 	SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "1"); // Enable framebuffer acceleration
 	SDL_SetHint(SDL_HINT_RENDER_OPENGL_SHADERS, "1"); // Enable OpenGL shaders
 
-	// Create SDL texture - match LVGL's 16-bit RGB565 format
-	texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB565,
-								SDL_TEXTUREACCESS_STREAMING,
-								DISP_HOR_RES, DISP_VER_RES);
+	// Create SDL texture - MUST match framebuffer dimensions (800x480) for kernel rotation
+	texture = SDL_CreateTexture(
+		renderer, SDL_PIXELFORMAT_RGB565,
+		SDL_TEXTUREACCESS_STREAMING,
+		DISP_VER_RES, DISP_HOR_RES
+	);
+
+	printf("Texture created: %dx%d\n", LVGL_HOR_RES, LVGL_VER_RES);
+
 	if (!texture) {
 		printf("Failed to create SDL texture: %s\n", SDL_GetError());
 		return -1;
@@ -186,7 +223,7 @@ int lvgl_port_init(void)
 	lv_init();
 
 	// Create display
-	disp = lv_display_create(DISP_HOR_RES, DISP_VER_RES);
+	disp = lv_display_create(LVGL_HOR_RES, LVGL_VER_RES);
 	lv_display_set_flush_cb(disp, disp_flush);
 	lv_display_set_buffers(disp, buf_1, buf_2, sizeof(buf_1), LV_DISPLAY_RENDER_MODE_FULL);
 	lv_display_set_default(disp);
@@ -212,7 +249,8 @@ int lvgl_port_init(void)
 	printf("Touch input device enabled\n");
 
 
-	printf("LVGL initialized successfully\n");
+	printf("LVGL initialized successfully (logical %dx%d -> texture %dx%d)\n",
+		LVGL_HOR_RES, LVGL_VER_RES, LVGL_HOR_RES, LVGL_VER_RES);
 	return 0;
 }
 
@@ -325,4 +363,19 @@ void lvgl_port_force_screen_dimensions(lv_obj_t *screen)
 	if (screen) {
 		lv_obj_set_size(screen, g_display_width, g_display_height);
 	}
+}
+
+// Thread synchronization functions
+static pthread_mutex_t lvgl_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+bool lvgl_port_lock(uint32_t timeout_ms)
+{
+	// For simplicity, just try to lock immediately
+	// In a real implementation, you might want to use pthread_mutex_timedlock
+	return pthread_mutex_trylock(&lvgl_mutex) == 0;
+}
+
+void lvgl_port_unlock(void)
+{
+	pthread_mutex_unlock(&lvgl_mutex);
 }

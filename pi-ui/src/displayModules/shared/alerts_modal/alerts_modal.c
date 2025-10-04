@@ -1,5 +1,6 @@
+#include <stdio.h>
 #include "alerts_modal.h"
-#include "../../../esp_compat.h"
+
 #include "../../../state/device_state.h"
 #include "../../../fonts/lv_font_noplato_24.h"
 #include <stdlib.h>
@@ -91,7 +92,7 @@ static void tap_outside_numberpad_cb(lv_event_t *e)
 		modal->current_battery = -1;
 		modal->current_field = -1;
 
-		ESP_LOGI(TAG, "Value saved from tap outside numberpad");
+		printf("[I] alerts_modal: Value saved from tap outside numberpad\n");
 	}
 }
 
@@ -107,7 +108,7 @@ static void reset_current_field(alerts_modal_t* modal)
 	// Clear any highlights
 	clear_field_highlights(modal);
 
-	ESP_LOGI(TAG, "Current field reset");
+	printf("[I] alerts_modal: Current field reset\n");
 }
 
 static void field_button_cb(lv_event_t *e)
@@ -121,12 +122,12 @@ static void field_button_cb(lv_event_t *e)
 	for (int battery = 0; battery < BATTERY_COUNT; battery++) {
 		for (int field = 0; field < FIELD_COUNT_PER_BATTERY; field++) {
 			if (modal->field_buttons[battery][field] == button) {
-				ESP_LOGI(TAG, "Field clicked: battery=%d, field=%d", battery, field);
+				printf("[I] alerts_modal: Field clicked: battery=%d, field=%d\n", battery, field);
 
 				// If switching to a different field, restore colors first
 				if (modal->current_battery != -1 && modal->current_field != -1 &&
 					(modal->current_battery != battery || modal->current_field != field)) {
-					ESP_LOGI(TAG, "Switching fields - restoring colors first");
+					printf("[I] alerts_modal: Switching fields - restoring colors first\n");
 					alerts_modal_restore_colors(modal);
 				}
 
@@ -397,7 +398,7 @@ static void load_values_from_device_state(alerts_modal_t* modal)
 		}
 	}
 
-	ESP_LOGI(TAG, "Loaded threshold values from device state");
+	printf("[I] alerts_modal: Loaded threshold values from device state\n");
 }
 
 // Save values to device state
@@ -405,7 +406,7 @@ static void save_values_to_device_state(alerts_modal_t* modal)
 {
 	if (!modal) return;
 
-	ESP_LOGI(TAG, "Saving threshold values to device state");
+	printf("[I] alerts_modal: Saving threshold values to device state\n");
 
 	// Save alert thresholds to device state
 	device_state_set_starter_alert_low_voltage_v((int)modal->field_values[BATTERY_STARTER][FIELD_ALERT_LOW]);
@@ -431,13 +432,13 @@ static void save_values_to_device_state(alerts_modal_t* modal)
 
 	// Log the saved values
 	for (int battery = 0; battery < BATTERY_COUNT; battery++) {
-		ESP_LOGI(TAG, "%s values:", battery_names[battery]);
+		printf("[I] alerts_modal: %s values:\n", battery_names[battery]);
 		for (int field = 0; field < FIELD_COUNT_PER_BATTERY; field++) {
-			ESP_LOGI(TAG, "  %s: %.1f", field_names[field], modal->field_values[battery][field]);
+			printf("[I] alerts_modal:   %s: %.1f\n", field_names[field], modal->field_values[battery][field]);
 		}
 	}
 
-	ESP_LOGI(TAG, "Threshold values saved to device state");
+	printf("[I] alerts_modal: Threshold values saved to device state\n");
 }
 
 // Highlight current field
@@ -497,11 +498,11 @@ static void numberpad_clear(void* user_data)
 // Public API functions
 alerts_modal_t* alerts_modal_create(void (*on_close_callback)(void))
 {
-	ESP_LOGI(TAG, "Creating enhanced alerts modal");
+	printf("[I] alerts_modal: Creating enhanced alerts modal\n");
 
 	alerts_modal_t* modal = malloc(sizeof(alerts_modal_t));
 	if (!modal) {
-		ESP_LOGE(TAG, "Failed to allocate memory for alerts modal");
+		printf("[E] alerts_modal: Failed to allocate memory for alerts modal\n");
 		return NULL;
 	}
 
@@ -590,19 +591,19 @@ alerts_modal_t* alerts_modal_create(void (*on_close_callback)(void))
 	lv_obj_add_flag(modal->background, LV_OBJ_FLAG_HIDDEN);
 	modal->is_visible = false;
 
-	ESP_LOGI(TAG, "Enhanced alerts modal created");
+	printf("[I] alerts_modal: Enhanced alerts modal created\n");
 	return modal;
 }
 
 void alerts_modal_show(alerts_modal_t* modal)
 {
 	if (!modal) {
-		ESP_LOGW(TAG, "Cannot show NULL modal");
+		printf("[W] alerts_modal: Cannot show NULL modal\n");
 		return;
 	}
 
 	if (!modal->is_visible) {
-		ESP_LOGI(TAG, "Showing enhanced alerts modal");
+		printf("[I] alerts_modal: Showing enhanced alerts modal\n");
 		lv_obj_remove_flag(modal->background, LV_OBJ_FLAG_HIDDEN);
 		modal->is_visible = true;
 	}
@@ -611,12 +612,12 @@ void alerts_modal_show(alerts_modal_t* modal)
 void alerts_modal_hide(alerts_modal_t* modal)
 {
 	if (!modal) {
-		ESP_LOGW(TAG, "Cannot hide NULL modal");
+		printf("[W] alerts_modal: Cannot hide NULL modal\n");
 		return;
 	}
 
 	if (modal->is_visible) {
-		ESP_LOGI(TAG, "Hiding enhanced alerts modal");
+		printf("[I] alerts_modal: Hiding enhanced alerts modal\n");
 		lv_obj_add_flag(modal->background, LV_OBJ_FLAG_HIDDEN);
 		modal->is_visible = false;
 
@@ -632,11 +633,11 @@ void alerts_modal_hide(alerts_modal_t* modal)
 void alerts_modal_destroy(alerts_modal_t* modal)
 {
 	if (!modal) {
-		ESP_LOGW(TAG, "Cannot destroy NULL modal");
+		printf("[W] alerts_modal: Cannot destroy NULL modal\n");
 		return;
 	}
 
-	ESP_LOGI(TAG, "Destroying enhanced alerts modal");
+	printf("[I] alerts_modal: Destroying enhanced alerts modal\n");
 
 	if (modal->numberpad) {
 		numberpad_destroy(modal->numberpad);
@@ -678,7 +679,7 @@ void alerts_modal_show_numberpad(alerts_modal_t* modal, battery_type_t battery, 
 	// Show numberpad
 	numberpad_show(modal->numberpad, modal->field_buttons[battery][field]);
 
-	ESP_LOGI(TAG, "Showing numberpad for %s %s", battery_names[battery], field_names[field]);
+		printf("[I] alerts_modal: Showing numberpad for %s %s\n", battery_names[battery], field_names[field]);
 }
 
 void alerts_modal_hide_numberpad(alerts_modal_t* modal)
@@ -810,7 +811,7 @@ void alerts_modal_dim_for_focus(alerts_modal_t* modal, battery_type_t battery, f
 		}
 	}
 
-	ESP_LOGI(TAG, "Modal dimmed for focus on battery=%d, field=%d", battery, field);
+		printf("[I] alerts_modal: Modal dimmed for focus on battery=%d, field=%d\n", battery, field);
 }
 
 void alerts_modal_restore_colors(alerts_modal_t* modal)
@@ -868,7 +869,7 @@ void alerts_modal_restore_colors(alerts_modal_t* modal)
 		}
 	}
 
-	ESP_LOGI(TAG, "Modal colors restored");
+	printf("[I] alerts_modal: Modal colors restored\n");
 }
 
 // Task data structure for border revert
@@ -915,11 +916,11 @@ static void validate_and_apply_value_with_feedback(alerts_modal_t* modal, batter
 	if (value < min_val) {
 		final_value = min_val;
 		is_out_of_range = true;
-		ESP_LOGI(TAG, "Value %.1f below minimum %.1f, clamping to %.1f", value, min_val, min_val);
+		printf("[I] alerts_modal: Value %.1f below minimum %.1f, clamping to %.1f\n", value, min_val, min_val);
 	} else if (value > max_val) {
 		final_value = max_val;
 		is_out_of_range = true;
-		ESP_LOGI(TAG, "Value %.1f above maximum %.1f, clamping to %.1f", value, max_val, max_val);
+		printf("[I] alerts_modal: Value %.1f above maximum %.1f, clamping to %.1f\n", value, max_val, max_val);
 	}
 
 	// Apply the final value

@@ -10,8 +10,10 @@
 #include "data/mock_data/mock_data.h"
 #include "data/real_data/real_data.h"
 
-#include "esp_compat.h"
+#include <stdio.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <time.h>
 
 static const char *TAG = "main";
 
@@ -57,7 +59,7 @@ static void data_task(void *arg)
 		// (optional) lv_async_call(some_lightweight_cb, user_data);
 
 		// Minimal throttling for maximum performance
-		esp_vTaskDelay(20); // 20ms delay for maximum responsiveness
+		usleep(20000); // 20ms delay for maximum responsiveness
 	}
 }
 
@@ -66,15 +68,15 @@ static void data_task(void *arg)
    ========================= */
 void app_main(void)
 {
-	ESP_LOGI(TAG, "Starting Jeep Sensor Hub UI");
+	printf("[I] main: Starting Jeep Sensor Hub UI\n");
 
 	// 1) Init LVGL port for Pi (starts LVGL tasks & tick internally)
 	int ret = lvgl_port_init();
 	if (ret != 0) {
-		ESP_LOGE(TAG, "Failed to initialize LVGL display: %s", esp_err_to_name(ret));
+		printf("[E] main: Failed to initialize LVGL display: %d\n", ret);
 		return;
 	}
-	ESP_LOGI(TAG, "LVGL display initialized successfully");
+	printf("[I] main: LVGL display initialized successfully\n");
 
 
 	// 2) Device/data init
@@ -87,25 +89,25 @@ void app_main(void)
 	if (data_config_get_source() == DATA_SOURCE_MOCK) {
 		mock_data_init();
 		mock_data_enable(true);  // Enable mock data updates
-		ESP_LOGI(TAG, "Mock data component initialized");
+		printf("[I] main: Mock data component initialized\n");
 	} else {
 		real_data_init();
-		ESP_LOGI(TAG, "Real data component initialized");
+		printf("[I] main: Real data component initialized\n");
 	}
 
 	// 3) Display modules (create LVGL objs → lock per call)
-	ESP_LOGI(TAG, "Initializing display modules");
+	printf("[I] main: Initializing display modules\n");
 
 	// Initialize all display modules via standardized interface
 	display_modules_init_all();
 
-	ESP_LOGI(TAG, "Display modules initialized");
+	printf("[I] main: Display modules initialized\n");
 
 	// 4) Display ready (no backlight control needed for SDL)
-	ESP_LOGI(TAG, "Display ready");
+	printf("[I] main: Display ready\n");
 
 	// 5) Boot screen
-	ESP_LOGI(TAG, "Initializing screens and boot screen");
+	printf("[I] main: Initializing screens and boot screen\n");
 
 	boot_screen_init();
 	boot_screen_update_progress(100);
@@ -113,15 +115,17 @@ void app_main(void)
 
 	// 6) Init screen manager (creates Home/Detail etc.)
 	screen_manager_init();
-	ESP_LOGI(TAG, "Screens initialized successfully");
+	printf("[I] main: Screens initialized successfully\n");
 
 	// 7) Create LVGL UI update timer (runs in LVGL context)
 	lv_timer_t *ui_timer = lv_timer_create(ui_update_timer_callback, 8, NULL); // 8ms (120 FPS) for maximum performance
 	lv_timer_set_repeat_count(ui_timer, -1);
-	ESP_LOGI(TAG, "UI update timer created");
+	printf("[I] main: UI update timer created\n");
 
 	// 8) Start data producer task (no LVGL calls inside)
-	esp_xTaskCreatePinnedToCore(data_task, "data_task", 8192, NULL, 3, NULL, 0);
+	pthread_t data_thread;
+	pthread_create(&data_thread, NULL, (void*)data_task, NULL);
+	pthread_detach(data_thread);
 
 	// app_main can return, or sleep forever if you prefer:
 	// esp_vTaskDelete(NULL);

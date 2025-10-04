@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "power_grid_view.h"
 #include "../power-monitor.h"
 #include "../../shared/gauges/bar_graph_gauge.h"
@@ -6,7 +7,7 @@
 // Using multiple fonts for comparison
 #include "../../../fonts/lv_font_noplato_24.h"
 // Montserrat fonts are already included globally
-#include "esp_compat.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -54,7 +55,7 @@ static void create_gauge_row(
 	// Track container for cleanup
 	if (row_index >= 0 && row_index < 3) {
 		s_row_containers[row_index] = row_container;
-		ESP_LOGI(TAG, "Tracking row container %d: %p", row_index, row_container);
+		printf("[I] power_grid_view: Tracking row container %d: %p, row_index, row_container\n");
 	}
 	lv_obj_set_style_radius(row_container, 0, 0); // No border radius
 	lv_obj_set_style_pad_all(row_container, 0, 0);
@@ -166,14 +167,14 @@ static int s_current_editing_gauge = -1; // -1 = none, 0 = starter, 1 = house, 2
 
 void power_monitor_power_grid_view_render(lv_obj_t *container)
 {
-	ESP_LOGI(TAG, "=== POWER GRID VIEW RENDER START ===");
+	printf("[I] power_grid_view: === POWER GRID VIEW RENDER START ===\n");
 	if (!container) {
-		ESP_LOGE(TAG, "Container is NULL");
+		printf("[E] power_grid_view: Container is NULL\n");
 		return;
 	}
 
 	// Always create fresh content
-	ESP_LOGI(TAG, "Creating fresh power grid view content");
+	printf("[I] power_grid_view: Creating fresh power grid view content\n");
 
 	// Reset view state
 	s_view_initialized = false;
@@ -186,7 +187,7 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 	lv_coord_t container_height = lv_obj_get_height(container);
 
 	if (container_width == 0 || container_height == 0) {
-		ESP_LOGW(TAG, "Container has invalid dimensions %dx%d, forcing to 238x189 (1/8 grid)", container_width, container_height);
+		printf("[W] power_grid_view: Container has invalid dimensions %dx%d, forcing to 238x189 (1/8 grid)\n", container_width, container_height);
 		lv_obj_set_size(container, 238, 189);
 		lv_obj_update_layout(container);
 		container_width = lv_obj_get_width(container);
@@ -204,16 +205,16 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 	lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
 
 		// Use the corrected container dimensions
-	ESP_LOGI(TAG, "Power grid container dimensions: %dx%d", container_width, container_height);
+	printf("[I] power_grid_view: Power grid container dimensions: %dx%d, container_width, container_height\n");
 
 	// Use the container as-is - don't resize it!
-	ESP_LOGI(TAG, "Using container dimensions as-is: %dx%d", container_width, container_height);
+	printf("[I] power_grid_view: Using container dimensions as-is: %dx%d, container_width, container_height\n");
 
 	// Always create the power grid view content
 	{
 
-		ESP_LOGI(TAG, "Initializing power grid view with bar graph gauges...");
-		ESP_LOGI(TAG, "Container size: %dx%d", container_width, container_height);
+		printf("[I] power_grid_view: Initializing power grid view with bar graph gauges...\n");
+		printf("[I] power_grid_view: Container size: %dx%d, container_width, container_height\n");
 
 		// Set up flexbox for the main container (vertical stack)
 		lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
@@ -224,7 +225,7 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 		// Calculate gauge dimensions using configuration
 		int gauge_height = (container_height - CONTAINER_PADDING_PX) / 3;
 
-		ESP_LOGI(TAG, "Gauge dimensions: height=%d (20:80 split layout, container padding: %d)",
+		printf("[I] power_grid_view: Gauge dimensions: height=%d (20:80 split layout, container padding: %d)\n",
 			gauge_height, CONTAINER_PADDING_PX);
 
 		// Read actual gauge configuration values from device state
@@ -253,7 +254,7 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 		BAR_GRAPH_MODE_BIPOLAR, &lv_font_noplato_24, 0);
 
 	if (!s_starter_voltage_gauge.initialized) {
-		ESP_LOGE(TAG, "Failed to initialize starter voltage gauge");
+		printf("[E] power_grid_view: Failed to initialize starter voltage gauge\n");
 		return;
 	}
 
@@ -266,7 +267,7 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 		BAR_GRAPH_MODE_BIPOLAR, &lv_font_noplato_24, 1);
 
 	if (!s_house_voltage_gauge.initialized) {
-		ESP_LOGE(TAG, "Failed to initialize house voltage gauge");
+		printf("[E] power_grid_view: Failed to initialize house voltage gauge\n");
 		return;
 	}
 
@@ -279,7 +280,7 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 			BAR_GRAPH_MODE_POSITIVE_ONLY, &lv_font_noplato_24, 2);
 
 		if (!s_solar_voltage_gauge.initialized) {
-			ESP_LOGE(TAG, "Failed to initialize solar voltage gauge");
+			printf("[E] power_grid_view: Failed to initialize solar voltage gauge\n");
 			return;
 		}
 
@@ -332,7 +333,7 @@ void power_monitor_power_grid_view_update_data(void)
 		if (s_starter_voltage_gauge.container && lv_obj_is_valid(s_starter_voltage_gauge.container)) {
 			bar_graph_gauge_add_data_point(&s_starter_voltage_gauge, starter_voltage);
 		} else {
-			ESP_LOGW(TAG, "Starter voltage gauge container is invalid, skipping data update");
+			printf("[W] power_grid_view: Starter voltage gauge container is invalid, skipping data update\n");
 		}
 
 		// Update numeric value label with current value
@@ -348,7 +349,7 @@ void power_monitor_power_grid_view_update_data(void)
 		if (s_house_voltage_gauge.container && lv_obj_is_valid(s_house_voltage_gauge.container)) {
 			bar_graph_gauge_add_data_point(&s_house_voltage_gauge, house_voltage);
 		} else {
-			ESP_LOGW(TAG, "House voltage gauge container is invalid, skipping data update");
+			printf("[W] power_grid_view: House voltage gauge container is invalid, skipping data update\n");
 		}
 
 		// Update numeric value label with current value
@@ -364,7 +365,7 @@ void power_monitor_power_grid_view_update_data(void)
 		if (s_solar_voltage_gauge.container && lv_obj_is_valid(s_solar_voltage_gauge.container)) {
 			bar_graph_gauge_add_data_point(&s_solar_voltage_gauge, solar_voltage);
 		} else {
-			ESP_LOGW(TAG, "Solar voltage gauge container is invalid, skipping data update");
+			printf("[W] power_grid_view: Solar voltage gauge container is invalid, skipping data update\n");
 		}
 
 		// Update numeric value label with current value
@@ -377,7 +378,7 @@ void power_monitor_power_grid_view_update_data(void)
 
 	// Mark view as initialized for proper cleanup
 	s_view_initialized = true;
-	// ESP_LOGI(TAG, "Power grid view render complete, view initialized");
+	// printf("[I] power_grid_view: Power grid view render complete, view initialized\n");
 }
 
 
@@ -388,19 +389,19 @@ const char* power_monitor_power_grid_view_get_title(void)
 
 void power_monitor_reset_static_gauges(void)
 {
-	ESP_LOGI(TAG, "=== RESETTING STATIC GAUGES ===");
+	printf("[I] power_grid_view: === RESETTING STATIC GAUGES ===\n");
 
 	// Properly cleanup all bar graph gauges to free canvas buffers
 	if (s_starter_voltage_gauge.initialized) {
-		ESP_LOGI(TAG, "Cleaning up starter voltage gauge canvas buffer");
+		printf("[I] power_grid_view: Cleaning up starter voltage gauge canvas buffer\n");
 		bar_graph_gauge_cleanup(&s_starter_voltage_gauge);
 	}
 	if (s_house_voltage_gauge.initialized) {
-		ESP_LOGI(TAG, "Cleaning up house voltage gauge canvas buffer");
+		printf("[I] power_grid_view: Cleaning up house voltage gauge canvas buffer\n");
 		bar_graph_gauge_cleanup(&s_house_voltage_gauge);
 	}
 	if (s_solar_voltage_gauge.initialized) {
-		ESP_LOGI(TAG, "Cleaning up solar voltage gauge canvas buffer");
+		printf("[I] power_grid_view: Cleaning up solar voltage gauge canvas buffer\n");
 		bar_graph_gauge_cleanup(&s_solar_voltage_gauge);
 	}
 
@@ -426,7 +427,7 @@ void power_monitor_reset_static_gauges(void)
 	s_solar_value_label = NULL;
 	s_solar_title_label = NULL;
 
-	ESP_LOGI(TAG, "Static gauges reset complete");
+	printf("[I] power_grid_view: Static gauges reset complete\n");
 }
 
 // Apply alert flashing to current view values
@@ -492,7 +493,7 @@ void power_monitor_power_grid_view_update_configuration(void)
 {
 	if (!s_view_initialized) return;
 
-	ESP_LOGI(TAG, "Updating power grid view gauge configuration...");
+	printf("[I] power_grid_view: Updating power grid view gauge configuration...\n");
 
 	// Read actual gauge configuration values from device state
 	float starter_baseline = device_state_get_starter_baseline_voltage_v();

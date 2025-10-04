@@ -1,5 +1,6 @@
+#include <stdio.h>
 #include "numberpad.h"
-#include "../../../esp_compat.h"
+
 #include <string.h>
 #include <stdlib.h>
 
@@ -123,7 +124,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 	lv_obj_add_flag(numpad->background, LV_OBJ_FLAG_HIDDEN);
 	numpad->is_visible = false;
 
-	ESP_LOGI(TAG, "Numberpad created with size %dx%d", numpad_width, numpad_height);
+		printf("[I] numberpad: Numberpad created with size %dx%d\n", numpad_width, numpad_height);
 	return numpad;
 }
 
@@ -150,7 +151,7 @@ void numberpad_show(numberpad_t* numpad, lv_obj_t* target_field) {
 	numpad->is_visible = true;
 	numpad->is_first_digit = true; // First digit input will clear current value
 
-	ESP_LOGI(TAG, "Numberpad shown for target field");
+	printf("[I] numberpad: Numberpad shown for target field\n");
 }
 
 void numberpad_show_with_first_digit_flag(numberpad_t* numpad, lv_obj_t* target_field, bool is_first_digit) {
@@ -162,7 +163,7 @@ void numberpad_show_with_first_digit_flag(numberpad_t* numpad, lv_obj_t* target_
 	numpad->is_visible = true;
 	numpad->is_first_digit = is_first_digit; // Use provided flag
 
-	ESP_LOGI(TAG, "Numberpad shown for target field (first_digit=%s)", is_first_digit ? "true" : "false");
+		printf("[I] numberpad: Numberpad shown for target field (first_digit=%s)\n", is_first_digit ? "true" : "false");
 }
 
 void numberpad_hide(numberpad_t* numpad) {
@@ -176,7 +177,7 @@ void numberpad_hide(numberpad_t* numpad) {
 	numpad->is_first_digit = false;
 	numpad->digit_count = 0;
 
-	ESP_LOGI(TAG, "Numberpad hidden");
+	printf("[I] numberpad: Numberpad hidden\n");
 }
 
 void numberpad_set_callbacks(numberpad_t* numpad,
@@ -253,7 +254,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 		best_y >= screen_margin &&
 		best_y + pad_height <= screen_height - screen_margin) {
 		found_position = true;
-		ESP_LOGI(TAG, "Positioned numberpad below field");
+		printf("[I] numberpad: Positioned numberpad below field\n");
 	}
 
 	// Strategy 2: Position above field
@@ -266,7 +267,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 			best_y >= screen_margin &&
 			best_y + pad_height <= screen_height - screen_margin) {
 			found_position = true;
-			ESP_LOGI(TAG, "Positioned numberpad above field");
+			printf("[I] numberpad: Positioned numberpad above field\n");
 		}
 	}
 
@@ -280,7 +281,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 			best_y >= screen_margin &&
 			best_y + pad_height <= screen_height - screen_margin) {
 			found_position = true;
-			ESP_LOGI(TAG, "Positioned numberpad to the right of field");
+			printf("[I] numberpad: Positioned numberpad to the right of field\n");
 		}
 	}
 
@@ -294,7 +295,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 			best_y >= screen_margin &&
 			best_y + pad_height <= screen_height - screen_margin) {
 			found_position = true;
-			ESP_LOGI(TAG, "Positioned numberpad to the left of field");
+			printf("[I] numberpad: Positioned numberpad to the left of field\n");
 		}
 	}
 
@@ -307,7 +308,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 		if (best_x + pad_width <= field_coords.x1 - min_gap ||
 			best_y + pad_height <= field_coords.y1 - min_gap) {
 			found_position = true;
-			ESP_LOGI(TAG, "Positioned numberpad in top-left area");
+			printf("[I] numberpad: Positioned numberpad in top-left area\n");
 		}
 	}
 
@@ -319,7 +320,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 		if (best_x >= field_coords.x2 + min_gap ||
 			best_y + pad_height <= field_coords.y1 - min_gap) {
 			found_position = true;
-			ESP_LOGI(TAG, "Positioned numberpad in top-right area");
+			printf("[I] numberpad: Positioned numberpad in top-right area\n");
 		}
 	}
 
@@ -331,7 +332,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 		if (best_x + pad_width <= field_coords.x1 - min_gap ||
 			best_y >= field_coords.y2 + min_gap) {
 			found_position = true;
-			ESP_LOGI(TAG, "Positioned numberpad in bottom-left area");
+			printf("[I] numberpad: Positioned numberpad in bottom-left area\n");
 		}
 	}
 
@@ -343,7 +344,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 		if (best_x >= field_coords.x2 + min_gap ||
 			best_y >= field_coords.y2 + min_gap) {
 			found_position = true;
-			ESP_LOGI(TAG, "Positioned numberpad in bottom-right area");
+			printf("[I] numberpad: Positioned numberpad in bottom-right area\n");
 		}
 	}
 
@@ -351,7 +352,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 	if (!found_position) {
 		best_x = (screen_width - pad_width) / 2;
 		best_y = (screen_height - pad_height) / 2;
-		ESP_LOGI(TAG, "Positioned numberpad at center (fallback)");
+		printf("[I] numberpad: Positioned numberpad at center (fallback)\n");
 	}
 
 	// Ensure final position is within screen bounds
@@ -363,7 +364,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 	// Apply the position
 	lv_obj_set_pos(numpad->background, best_x, best_y);
 
-	ESP_LOGI(TAG, "Numberpad positioned at (%d, %d) for field at (%d, %d)",
+		printf("[I] numberpad: Numberpad positioned at (%d, %d) for field at (%d, %d)\n",
 			 best_x, best_y, field_coords.x1, field_coords.y1);
 }
 
@@ -394,12 +395,12 @@ static void numberpad_button_cb(lv_event_t* e) {
 static void add_digit(numberpad_t* numpad, char digit) {
 	if (!numpad) return;
 
-	ESP_LOGI(TAG, "add_digit: digit='%c', is_first_digit=%s, current='%s'",
+	printf("[I] numberpad: add_digit: digit='%c', is_first_digit=%s, current='%s'\n",
 			 digit, numpad->is_first_digit ? "true" : "false", numpad->value_buffer);
 
 	// If this is the first digit input, clear current value and start fresh
 	if (numpad->is_first_digit) {
-		ESP_LOGI(TAG, "First digit: clearing current value and starting fresh");
+		printf("[I] numberpad: First digit: clearing current value and starting fresh\n");
 		// Clear current value and start fresh
 		numpad->value_buffer[0] = '\0';
 		numpad->current_length = 0;
@@ -429,10 +430,10 @@ static void add_digit(numberpad_t* numpad, char digit) {
 		snprintf(numpad->value_buffer, numpad->buffer_size, "0.%c", digit);
 		numpad->current_length = 3;
 		numpad->digit_count = 1;
-		ESP_LOGI(TAG, "Started over and populated first number: '%s'", numpad->value_buffer);
+		printf("[I] numberpad: Started over and populated first number: '%s'\n", numpad->value_buffer);
 	}
 
-	ESP_LOGI(TAG, "Result: '%s'", numpad->value_buffer);
+		printf("[I] numberpad: Result: '%s'\n", numpad->value_buffer);
 
 	update_target_field(numpad);
 

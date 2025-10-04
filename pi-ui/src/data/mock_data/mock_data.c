@@ -1,5 +1,7 @@
+#include <stdio.h>
+#include <time.h>
 #include "mock_data.h"
-#include "../../esp_compat.h"
+
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
@@ -30,10 +32,12 @@ static void update_compressor_controller_mock_data(void);
 
 void mock_data_init(void)
 {
-	ESP_LOGI(TAG, "Initializing mock data component");
+		printf("[I] mock_data: Initializing mock data component\n");
 
 	// Initialize random seed
-	g_random_seed = (uint32_t)esp_timer_get_time();
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	g_random_seed = (uint32_t)(ts.tv_sec * 1000000 + ts.tv_nsec / 1000);
 	srand(g_random_seed);
 
 	// Initialize all data structures
@@ -115,7 +119,7 @@ void mock_data_init(void)
 	g_mock_data.sweep_cycle_count = 0;
 	g_mock_data.mock_data_enabled = true;
 
-	ESP_LOGI(TAG, "Mock data component initialized successfully");
+		printf("[I] mock_data: Mock data component initialized successfully\n");
 }
 
 void mock_data_update(void)
@@ -124,7 +128,9 @@ void mock_data_update(void)
 		return;
 	}
 
-	uint32_t current_time = (uint32_t)esp_timer_get_time() / 1000; // Convert to milliseconds
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	uint32_t current_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000; // Convert to milliseconds
 
 	// Update every interval
 	if (current_time - g_mock_data.last_update_time < g_update_interval_ms) {
@@ -168,13 +174,13 @@ void mock_data_update(void)
 void mock_data_enable(bool enable)
 {
 	g_mock_data.mock_data_enabled = enable;
-	ESP_LOGI(TAG, "Mock data %s", enable ? "enabled" : "disabled");
+		printf("[I] mock_data: Mock data %s\n", enable ? "enabled" : "disabled");
 }
 
 void mock_data_set_update_interval(uint32_t interval_ms)
 {
 	g_update_interval_ms = interval_ms;
-	ESP_LOGI(TAG, "Mock data update interval set to %lu ms", interval_ms);
+		printf("[I] mock_data: Mock data update interval set to %lu ms\n", interval_ms);
 }
 
 // Data getter functions
@@ -227,7 +233,9 @@ float mock_data_random_float(float min, float max)
 
 float mock_data_sweep_float(float min, float max, uint32_t cycle_count, uint32_t sweep_duration_ms)
 {
-	uint32_t current_time = (uint32_t)esp_timer_get_time() / 1000;
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	uint32_t current_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 	float sweep_progress = (float)(current_time % sweep_duration_ms) / (float)sweep_duration_ms;
 
 	// Create a smooth sine wave sweep
@@ -459,7 +467,9 @@ void mock_data_write_to_state_objects(void)
 
 	// Rate limiting - only update every 100ms for more responsive updates
 	static uint32_t last_write_time = 0;
-	uint32_t current_time = esp_timer_get_time() / 1000;
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	uint32_t current_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 	if (current_time - last_write_time < 100) {
 		return;
 	}
@@ -468,13 +478,13 @@ void mock_data_write_to_state_objects(void)
 	// Write power monitor data to state
 	power_monitor_data_t *power_data = power_monitor_get_data();
 	if (!power_data) {
-		ESP_LOGW(TAG, "power_data is NULL, skipping state write");
+		printf("[W] mock_data: power_data is NULL, skipping state write\n");
 		return;
 	}
 
 	mock_power_monitor_data_t *mock_power = mock_data_get_power_monitor();
 	if (!mock_power) {
-		ESP_LOGW(TAG, "mock_power is NULL, skipping state write");
+		printf("[W] mock_data: mock_power is NULL, skipping state write\n");
 		return;
 	}
 
@@ -482,7 +492,7 @@ void mock_data_write_to_state_objects(void)
 	power_data->current_amps = mock_power->current_amps;
 	power_data->is_connected = mock_power->starter_battery_connected || mock_power->house_battery_connected;
 	power_data->is_active = true;
-	power_data->last_update_ms = esp_timer_get_time() / 1000;
+	power_data->last_update_ms = current_time;
 
 	// Update battery data with bounds checking
 	power_data->starter_battery.voltage = mock_power->starter_battery_voltage;
@@ -503,5 +513,5 @@ void mock_data_write_to_state_objects(void)
 	power_data->ignition_on = mock_power->ignition_on;
 
 	// Debug logging to verify data updates
-	// ESP_LOGD(TAG, "Mock data written to power monitor: %.1fA, %.1fV", power_data->current_amps, power_data->starter_battery.voltage);
+	// printf("[D] TAG: "Mock data written to power monitor: %.1fA, %.1fV", power_data->current_amps, power_data->starter_battery.voltage\n");
 }
