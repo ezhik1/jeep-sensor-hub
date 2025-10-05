@@ -27,22 +27,22 @@ static volatile bool running = true;
 
 // FPS tracking variables
 static uint32_t frame_count = 0;
-static uint32_t last_fps_time = 0;
 static float current_fps = 0.0f;
 static bool show_fps = true;
 static lv_obj_t *fps_label = NULL;
+uint32_t last_tick;
 
 // FPS calculation timer callback
 static void fps_timer_cb(lv_timer_t *timer)
 {
-	uint32_t current_time = SDL_GetTicks();
+	uint32_t now = SDL_GetTicks();
 
 	// Update FPS every second
-	if (current_time - last_fps_time >= 1000) {
+	if (now - last_tick >= 1000) {
 
-		current_fps = (float)frame_count * 1000.0f / (current_time - last_fps_time);
+		current_fps = (float)frame_count * 1000.0f / (now - last_tick);
 		frame_count = 0;
-		last_fps_time = current_time;
+		last_tick = now;
 	}
 }
 
@@ -263,9 +263,6 @@ void lvgl_port_main_loop(void)
 	signal(SIGINT, signal_handler);   // Ctrl+C
 	signal(SIGTERM, signal_handler);  // kill command
 
-	// Initialize FPS tracking
-	last_fps_time = SDL_GetTicks();
-
 	// Create FPS calculation timer (runs every 10ms for maximum responsiveness)
 	lv_timer_t *fps_timer = lv_timer_create(fps_timer_cb, 10, NULL);
 	lv_timer_set_repeat_count(fps_timer, -1);
@@ -276,6 +273,12 @@ void lvgl_port_main_loop(void)
 	printf("FPS HUD enabled! Press 'F' to toggle FPS display, 'ESC' to exit\n");
 
 	while (running) {
+
+		// Calculate elapsed ms since last iteration
+		uint32_t now = SDL_GetTicks();
+		uint32_t elapsed = now - last_tick;
+		last_tick = now;
+
 		// Handle SDL events (including keyboard input)
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
@@ -304,16 +307,14 @@ void lvgl_port_main_loop(void)
 			}
 		}
 
-		// Increment LVGL tick (standard tick system) - use 2ms for maximum performance
-		lv_tick_inc(2);
+		// Increment LVGL tick by the actual time elapsed
+		lv_tick_inc(elapsed);
 
 		// Handle LVGL tasks
 		lv_timer_handler();
 
 		// Update FPS display on screen
 		update_fps_display();
-
-		// No artificial delay - let LVGL control the timing
 	}
 
 	printf("Main loop exiting gracefully...\n");
@@ -365,17 +366,3 @@ void lvgl_port_force_screen_dimensions(lv_obj_t *screen)
 	}
 }
 
-// Thread synchronization functions
-static pthread_mutex_t lvgl_mutex = PTHREAD_MUTEX_INITIALIZER;
-
-bool lvgl_port_lock(uint32_t timeout_ms)
-{
-	// For simplicity, just try to lock immediately
-	// In a real implementation, you might want to use pthread_mutex_timedlock
-	return pthread_mutex_trylock(&lvgl_mutex) == 0;
-}
-
-void lvgl_port_unlock(void)
-{
-	pthread_mutex_unlock(&lvgl_mutex);
-}

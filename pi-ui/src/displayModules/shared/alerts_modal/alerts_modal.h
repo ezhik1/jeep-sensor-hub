@@ -9,12 +9,12 @@
 extern "C" {
 #endif
 
-// Number of editable fields per battery type
-#define FIELD_COUNT_PER_BATTERY 5
-#define BATTERY_COUNT 3
-#define TOTAL_FIELD_COUNT (FIELD_COUNT_PER_BATTERY * BATTERY_COUNT)
+// Number of editable fields per Gauge type
+#define FIELD_COUNT_PER_GAUGE 5
+#define GAUGE_COUNT 3
+#define TOTAL_FIELD_COUNT (FIELD_COUNT_PER_GAUGE * GAUGE_COUNT)
 
-// Field types for each battery
+// Field types for each Gauge
 typedef enum {
 	FIELD_ALERT_LOW = 0,
 	FIELD_ALERT_HIGH = 1,
@@ -23,40 +23,82 @@ typedef enum {
 	FIELD_GAUGE_HIGH = 4
 } field_type_t;
 
-// Battery types
+// Group types
 typedef enum {
-	BATTERY_STARTER = 0,
-	BATTERY_HOUSE = 1,
-	BATTERY_SOLAR = 2
-} battery_type_t;
+	GROUP_ALERTS = 0,
+	GROUP_GAUGE = 1
+} group_type_t;
+
+// Gauge types
+typedef enum {
+	GAUGE_STARTER = 0,
+	GAUGE_HOUSE = 1,
+	GAUGE_SOLAR = 2
+} gauge_type_t;
+
+// Field UI structure - only for UI layout and objects
+typedef struct {
+	lv_obj_t* button;           // The UI button
+	lv_obj_t* label;            // The value label
+} field_ui_t;
+
+// Field data structure - complete state management for each field
+typedef struct {
+	// Value data
+	float current_value;        // Current value
+	float original_value;       // Value when modal opened
+	float min_value;            // Minimum allowed value
+	float max_value;            // Maximum allowed value
+	float default_value;        // Default value
+
+	// State flags
+	bool is_being_edited;       // Currently being edited
+	bool has_changed;           // Changed from original
+	bool is_out_of_range;       // Currently out of range
+
+	// Field identification
+	int gauge_index;          // Which Gauge this belongs to (0-2)
+	int field_index;            // Which field type this is (0-4)
+	int group_type;             // Which group it belongs to (ALERTS=0, GAUGE=1)
+
+	// UI state
+	lv_color_t border_color;    // Current border color
+	int border_width;           // Current border width
+	lv_color_t text_color;      // Current text color
+} field_data_t;
 
 /**
  * @brief Enhanced Alerts Modal Structure
  *
  * An interactive modal that displays and allows editing of voltage alert thresholds
- * and gauge configuration settings for all battery types.
+ * and gauge configuration settings for all Gauge types.
  */
 typedef struct {
 	lv_obj_t* background;           // Modal background
 	lv_obj_t* content_container;    // Main content container
-	lv_obj_t* scroll_container;     // Scrollable content container
 	lv_obj_t* title_label;          // Modal title
 	lv_obj_t* close_button;         // Close button
 
-	// Battery sections
-	lv_obj_t* battery_sections[BATTERY_COUNT];      // Battery section containers
-	lv_obj_t* alert_groups[BATTERY_COUNT];          // Alert group containers
-	lv_obj_t* gauge_groups[BATTERY_COUNT];          // Gauge group containers
+	// Gauge sections
+	lv_obj_t* gauge_sections[GAUGE_COUNT];      // Gauge section containers
+	lv_obj_t* alert_groups[GAUGE_COUNT];          // Alert group containers
+	lv_obj_t* gauge_groups[GAUGE_COUNT];          // Gauge group containers
 
-	// Editable fields - organized as [battery][field_type]
-	lv_obj_t* field_buttons[BATTERY_COUNT][FIELD_COUNT_PER_BATTERY];
-	float field_values[BATTERY_COUNT][FIELD_COUNT_PER_BATTERY];
-	bool field_opened_before[BATTERY_COUNT][FIELD_COUNT_PER_BATTERY]; // Track if field was opened before
+	// Title labels for caching
+	lv_obj_t* gauge_titles[GAUGE_COUNT];         // Gauge section titles
+	lv_obj_t* alert_titles[GAUGE_COUNT];         // Alert group titles
+	lv_obj_t* gauge_group_titles[GAUGE_COUNT];   // Gauge group titles
+
+	// Field UI objects - 1D array for UI layout
+	field_ui_t field_ui[GAUGE_COUNT * FIELD_COUNT_PER_GAUGE];
+
+	// Field data - 1D array for data and state management
+	field_data_t field_data[GAUGE_COUNT * FIELD_COUNT_PER_GAUGE];
+
+	int current_field_id;              // Currently editing field ID (-1 = none)
 
 	// Shared numberpad component
 	numberpad_t* numberpad;
-	int current_battery;               // Currently editing battery (-1 = none)
-	int current_field;                 // Currently editing field (-1 = none)
 
 	void (*on_close)(void);         // Close callback
 	bool is_visible;                // Visibility state
@@ -98,10 +140,10 @@ bool alerts_modal_is_visible(alerts_modal_t* modal);
 /**
  * @brief Show the numberpad for editing a field
  * @param modal Pointer to the modal
- * @param battery Battery type being edited
+ * @param Gauge Gauge type being edited
  * @param field Field type being edited
  */
-void alerts_modal_show_numberpad(alerts_modal_t* modal, battery_type_t battery, field_type_t field);
+void alerts_modal_show_numberpad(alerts_modal_t* modal, gauge_type_t Gauge, field_type_t field);
 
 /**
  * @brief Hide the numberpad
@@ -110,7 +152,7 @@ void alerts_modal_show_numberpad(alerts_modal_t* modal, battery_type_t battery, 
 void alerts_modal_hide_numberpad(alerts_modal_t* modal);
 
 // Dim all elements except the target field
-void alerts_modal_dim_for_focus(alerts_modal_t* modal, battery_type_t battery, field_type_t field);
+void alerts_modal_dim_for_focus(alerts_modal_t* modal, gauge_type_t Gauge, field_type_t field);
 
 // Restore all elements to normal colors
 void alerts_modal_restore_colors(alerts_modal_t* modal);
@@ -118,20 +160,20 @@ void alerts_modal_restore_colors(alerts_modal_t* modal);
 /**
  * @brief Get the current value of a field
  * @param modal Pointer to the modal
- * @param battery Battery type
+ * @param Gauge Gauge type
  * @param field Field type
  * @return Current field value
  */
-float alerts_modal_get_field_value(alerts_modal_t* modal, battery_type_t battery, field_type_t field);
+float alerts_modal_get_field_value(alerts_modal_t* modal, gauge_type_t Gauge, field_type_t field);
 
 /**
  * @brief Set the value of a field
  * @param modal Pointer to the modal
- * @param battery Battery type
+ * @param Gauge Gauge type
  * @param field Field type
  * @param value New value to set
  */
-void alerts_modal_set_field_value(alerts_modal_t* modal, battery_type_t battery, field_type_t field, float value);
+void alerts_modal_set_field_value(alerts_modal_t* modal, gauge_type_t Gauge, field_type_t field, float value);
 
 #ifdef __cplusplus
 }

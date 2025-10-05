@@ -22,11 +22,18 @@ const numberpad_config_t NUMBERPAD_DEFAULT_CONFIG = {
 
 // Forward declarations
 static void numberpad_button_cb(lv_event_t* e);
-static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_field);
+static void set_numberpad_smart(numberpad_t* numpad, lv_obj_t* target_field);
+static void set_numberpad_smart_outside_container(numberpad_t* numpad, lv_obj_t* target_field, lv_obj_t* container);
 static void update_target_field(numberpad_t* numpad);
 static void add_digit(numberpad_t* numpad, char digit);
 static void clear_value(numberpad_t* numpad);
 static void enter_value(numberpad_t* numpad);
+static void toggle_negative(numberpad_t* numpad);
+static void reset_negative_state(numberpad_t* numpad);
+static void reset_negative_state_silent(numberpad_t* numpad);
+static void set_value_for_fresh_input(numberpad_t* numpad, const char* value);
+static void cancel_value(numberpad_t* numpad);
+static void update_display_value(numberpad_t* numpad);
 
 // Enhanced positioning algorithm - ensures no obscuring and always fits screen
 
@@ -54,9 +61,13 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 	lv_obj_set_style_pad_all(numpad->background, 0, 0);
 	lv_obj_clear_flag(numpad->background, LV_OBJ_FLAG_SCROLLABLE);
 
-	// Calculate numberpad size - CLEAR button is 2 units wide
+	// Make sure the background can receive touch events
+	lv_obj_clear_flag(numpad->background, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_flag(numpad->background, LV_OBJ_FLAG_CLICKABLE);
+
+	// Calculate numberpad size - now 5 rows with negative and cancel buttons
 	lv_coord_t numpad_width = (config->button_width * 3) + (config->button_gap * 2);
-	lv_coord_t numpad_height = (config->button_height * 4) + (config->button_gap * 3);
+	lv_coord_t numpad_height = (config->button_height * 5) + (config->button_gap * 4);
 	lv_obj_set_size(numpad->background, numpad_width, numpad_height);
 
 	// Create number buttons (1-9)
@@ -118,6 +129,40 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 	lv_obj_center(clear_label);
 	lv_obj_add_event_cb(numpad->buttons[10], numberpad_button_cb, LV_EVENT_CLICKED, numpad);
 
+	// Create NEGATIVE button (below 0)
+	numpad->buttons[11] = lv_button_create(numpad->background);
+	lv_obj_set_size(numpad->buttons[11], config->button_width, config->button_height);
+	lv_obj_set_pos(numpad->buttons[11], 0, 4 * (config->button_height + config->button_gap));
+
+	lv_obj_set_style_bg_color(numpad->buttons[11], lv_color_hex(0x556b2f), 0); // Dark olive green
+	lv_obj_set_style_border_width(numpad->buttons[11], 0, 0); // Remove border
+	lv_obj_set_style_radius(numpad->buttons[11], 3, 0);
+
+	lv_obj_t* negative_label = lv_label_create(numpad->buttons[11]);
+	lv_label_set_text(negative_label, "±");
+	lv_obj_set_style_text_color(negative_label, config->text_color, 0);
+	lv_obj_set_style_text_font(negative_label, &lv_font_montserrat_20, 0);
+	lv_obj_center(negative_label);
+	lv_obj_add_event_cb(numpad->buttons[11], numberpad_button_cb, LV_EVENT_CLICKED, numpad);
+
+	// Create CANCEL button (next to negative, same size as clear)
+	numpad->buttons[12] = lv_button_create(numpad->background);
+	lv_obj_set_size(numpad->buttons[12], (config->button_width * 2) + config->button_gap, config->button_height);
+	lv_obj_set_pos(numpad->buttons[12],
+				  config->button_width + config->button_gap,
+				  4 * (config->button_height + config->button_gap));
+
+	lv_obj_set_style_bg_color(numpad->buttons[12], lv_color_hex(0x87CEEB), 0); // Light blue
+	lv_obj_set_style_border_width(numpad->buttons[12], 0, 0); // Remove border
+	lv_obj_set_style_radius(numpad->buttons[12], 3, 0);
+
+	lv_obj_t* cancel_label = lv_label_create(numpad->buttons[12]);
+	lv_label_set_text(cancel_label, "CANCEL");
+	lv_obj_set_style_text_color(cancel_label, config->text_color, 0);
+	lv_obj_set_style_text_font(cancel_label, &lv_font_montserrat_16, 0);
+	lv_obj_center(cancel_label);
+	lv_obj_add_event_cb(numpad->buttons[12], numberpad_button_cb, LV_EVENT_CLICKED, numpad);
+
 	// No ENTER button - save on close
 
 	// Initially hidden
@@ -146,22 +191,37 @@ void numberpad_show(numberpad_t* numpad, lv_obj_t* target_field) {
 	if (!numpad || !target_field) return;
 
 	numpad->target_field = target_field;
-	position_numberpad_smartly(numpad, target_field);
+	set_numberpad_smart(numpad, target_field);
 	lv_obj_clear_flag(numpad->background, LV_OBJ_FLAG_HIDDEN);
 	numpad->is_visible = true;
 	numpad->is_first_digit = true; // First digit input will clear current value
+	numpad->is_negative = false; // Initialize negative flag
 
 	printf("[I] numberpad: Numberpad shown for target field\n");
+}
+
+void numberpad_show_outside_container(numberpad_t* numpad, lv_obj_t* target_field, lv_obj_t* container) {
+	if (!numpad || !target_field || !container) return;
+
+	numpad->target_field = target_field;
+	set_numberpad_smart_outside_container(numpad, target_field, container);
+	lv_obj_clear_flag(numpad->background, LV_OBJ_FLAG_HIDDEN);
+	numpad->is_visible = true;
+	numpad->is_first_digit = true; // First digit input will clear current value
+	numpad->is_negative = false; // Initialize negative flag
+
+	printf("[I] numberpad: Numberpad shown outside container, aligned to field\n");
 }
 
 void numberpad_show_with_first_digit_flag(numberpad_t* numpad, lv_obj_t* target_field, bool is_first_digit) {
 	if (!numpad || !target_field) return;
 
 	numpad->target_field = target_field;
-	position_numberpad_smartly(numpad, target_field);
+	set_numberpad_smart(numpad, target_field);
 	lv_obj_clear_flag(numpad->background, LV_OBJ_FLAG_HIDDEN);
 	numpad->is_visible = true;
 	numpad->is_first_digit = is_first_digit; // Use provided flag
+	numpad->is_negative = false; // Initialize negative flag
 
 		printf("[I] numberpad: Numberpad shown for target field (first_digit=%s)\n", is_first_digit ? "true" : "false");
 }
@@ -177,19 +237,52 @@ void numberpad_hide(numberpad_t* numpad) {
 	numpad->is_first_digit = false;
 	numpad->digit_count = 0;
 
-	printf("[I] numberpad: Numberpad hidden\n");
+	// Reset all button colors to default
+	for (int i = 0; i < 11; i++) {
+		if (numpad->buttons[i]) {
+			// Reset button state to remove any pressed/highlighted appearance
+			lv_obj_clear_state(numpad->buttons[i], LV_STATE_PRESSED);
+			lv_obj_clear_state(numpad->buttons[i], LV_STATE_FOCUSED);
+			lv_obj_clear_state(numpad->buttons[i], LV_STATE_FOCUS_KEY);
+
+			// Reset to default colors
+			if (i < 10) {
+				// Number buttons (0-9): dark olive green background, white text
+				lv_obj_set_style_bg_color(numpad->buttons[i], lv_color_hex(0x556b2f), 0);
+				lv_obj_set_style_bg_color(numpad->buttons[i], lv_color_hex(0x556b2f), LV_STATE_PRESSED);
+				lv_obj_set_style_bg_color(numpad->buttons[i], lv_color_hex(0x556b2f), LV_STATE_FOCUSED);
+			} else {
+				// CLEAR button: red background, white text
+				lv_obj_set_style_bg_color(numpad->buttons[i], lv_color_hex(0xba3232), 0);
+				lv_obj_set_style_bg_color(numpad->buttons[i], lv_color_hex(0xba3232), LV_STATE_PRESSED);
+				lv_obj_set_style_bg_color(numpad->buttons[i], lv_color_hex(0xba3232), LV_STATE_FOCUSED);
+			}
+
+			// Reset text color to white for all buttons
+			lv_obj_t* label = lv_obj_get_child(numpad->buttons[i], 0);
+			if (label) {
+				lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
+				lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), LV_STATE_PRESSED);
+				lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), LV_STATE_FOCUSED);
+			}
+		}
+	}
+
+	printf("[I] numberpad: Numberpad hidden and button colors reset\n");
 }
 
 void numberpad_set_callbacks(numberpad_t* numpad,
 							void (*on_value_changed)(const char* value, void* user_data),
 							void (*on_clear)(void* user_data),
 							void (*on_enter)(const char* value, void* user_data),
+							void (*on_cancel)(void* user_data),
 							void* user_data) {
 	if (!numpad) return;
 
 	numpad->on_value_changed = on_value_changed;
 	numpad->on_clear = on_clear;
 	numpad->on_enter = on_enter;
+	numpad->on_cancel = on_cancel;
 	numpad->user_data = user_data;
 }
 
@@ -214,7 +307,7 @@ bool numberpad_is_visible(numberpad_t* numpad) {
 }
 
 // Enhanced smart positioning algorithm - ensures no obscuring and always fits screen
-static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_field) {
+static void set_numberpad_smart(numberpad_t* numpad, lv_obj_t* target_field) {
 	if (!numpad || !target_field) return;
 
 	// Ensure layout is updated before getting coordinates
@@ -254,6 +347,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 		best_y >= screen_margin &&
 		best_y + pad_height <= screen_height - screen_margin) {
 		found_position = true;
+		numpad->position = NUMBERPAD_POSITION_BELOW;
 		printf("[I] numberpad: Positioned numberpad below field\n");
 	}
 
@@ -267,6 +361,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 			best_y >= screen_margin &&
 			best_y + pad_height <= screen_height - screen_margin) {
 			found_position = true;
+			numpad->position = NUMBERPAD_POSITION_ABOVE;
 			printf("[I] numberpad: Positioned numberpad above field\n");
 		}
 	}
@@ -281,6 +376,7 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 			best_y >= screen_margin &&
 			best_y + pad_height <= screen_height - screen_margin) {
 			found_position = true;
+			numpad->position = NUMBERPAD_POSITION_RIGHT;
 			printf("[I] numberpad: Positioned numberpad to the right of field\n");
 		}
 	}
@@ -295,63 +391,76 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 			best_y >= screen_margin &&
 			best_y + pad_height <= screen_height - screen_margin) {
 			found_position = true;
+			numpad->position = NUMBERPAD_POSITION_LEFT;
 			printf("[I] numberpad: Positioned numberpad to the left of field\n");
 		}
 	}
 
-	// Strategy 5: Position in available space (avoiding field area)
+	// Strategy 5: Try to position below field, but adjust if it goes off screen
 	if (!found_position) {
-		// Try top-left area
-		best_x = screen_margin;
-		best_y = screen_margin;
+		best_x = field_center_x - pad_width / 2;
+		best_y = field_coords.y2 + min_gap;
 
-		if (best_x + pad_width <= field_coords.x1 - min_gap ||
-			best_y + pad_height <= field_coords.y1 - min_gap) {
-			found_position = true;
-			printf("[I] numberpad: Positioned numberpad in top-left area\n");
-		}
+		// Adjust if it goes off screen
+		if (best_x < screen_margin) best_x = screen_margin;
+		if (best_x + pad_width > screen_width - screen_margin) best_x = screen_width - pad_width - screen_margin;
+		if (best_y + pad_height > screen_height - screen_margin) best_y = screen_height - pad_height - screen_margin;
+
+		found_position = true;
+		numpad->position = NUMBERPAD_POSITION_BELOW;
+		printf("[I] numberpad: Positioned numberpad below field (adjusted for screen)\n");
 	}
 
-	// Strategy 6: Position in top-right area
+	// Strategy 6: Try to position above field, but adjust if it goes off screen
 	if (!found_position) {
-		best_x = screen_width - pad_width - screen_margin;
-		best_y = screen_margin;
+		best_x = field_center_x - pad_width / 2;
+		best_y = field_coords.y1 - pad_height - min_gap;
 
-		if (best_x >= field_coords.x2 + min_gap ||
-			best_y + pad_height <= field_coords.y1 - min_gap) {
-			found_position = true;
-			printf("[I] numberpad: Positioned numberpad in top-right area\n");
-		}
+		// Adjust if it goes off screen
+		if (best_x < screen_margin) best_x = screen_margin;
+		if (best_x + pad_width > screen_width - screen_margin) best_x = screen_width - pad_width - screen_margin;
+		if (best_y < screen_margin) best_y = screen_margin;
+
+		found_position = true;
+		numpad->position = NUMBERPAD_POSITION_ABOVE;
+		printf("[I] numberpad: Positioned numberpad above field (adjusted for screen)\n");
 	}
 
-	// Strategy 7: Position in bottom-left area
+	// Strategy 7: Try to position right of field, but adjust if it goes off screen
 	if (!found_position) {
-		best_x = screen_margin;
-		best_y = screen_height - pad_height - screen_margin;
+		best_x = field_coords.x2 + min_gap;
+		best_y = field_center_y - pad_height / 2;
 
-		if (best_x + pad_width <= field_coords.x1 - min_gap ||
-			best_y >= field_coords.y2 + min_gap) {
-			found_position = true;
-			printf("[I] numberpad: Positioned numberpad in bottom-left area\n");
-		}
+		// Adjust if it goes off screen
+		if (best_x + pad_width > screen_width - screen_margin) best_x = screen_width - pad_width - screen_margin;
+		if (best_y < screen_margin) best_y = screen_margin;
+		if (best_y + pad_height > screen_height - screen_margin) best_y = screen_height - pad_height - screen_margin;
+
+		found_position = true;
+		numpad->position = NUMBERPAD_POSITION_RIGHT;
+		printf("[I] numberpad: Positioned numberpad right of field (adjusted for screen)\n");
 	}
 
-	// Strategy 8: Position in bottom-right area
+	// Strategy 8: Try to position left of field, but adjust if it goes off screen
 	if (!found_position) {
-		best_x = screen_width - pad_width - screen_margin;
-		best_y = screen_height - pad_height - screen_margin;
+		best_x = field_coords.x1 - pad_width - min_gap;
+		best_y = field_center_y - pad_height / 2;
 
-		if (best_x >= field_coords.x2 + min_gap ||
-			best_y >= field_coords.y2 + min_gap) {
-			found_position = true;
-			printf("[I] numberpad: Positioned numberpad in bottom-right area\n");
-		}
+		// Adjust if it goes off screen
+		if (best_x < screen_margin) best_x = screen_margin;
+		if (best_y < screen_margin) best_y = screen_margin;
+		if (best_y + pad_height > screen_height - screen_margin) best_y = screen_height - pad_height - screen_margin;
+
+		found_position = true;
+		numpad->position = NUMBERPAD_POSITION_LEFT;
+		printf("[I] numberpad: Positioned numberpad left of field (adjusted for screen)\n");
 	}
 
 	// Strategy 9: Center positioning as last resort
 	if (!found_position) {
 		best_x = (screen_width - pad_width) / 2;
 		best_y = (screen_height - pad_height) / 2;
+		numpad->position = NUMBERPAD_POSITION_OTHER;
 		printf("[I] numberpad: Positioned numberpad at center (fallback)\n");
 	}
 
@@ -368,6 +477,142 @@ static void position_numberpad_smartly(numberpad_t* numpad, lv_obj_t* target_fie
 			 best_x, best_y, field_coords.x1, field_coords.y1);
 }
 
+// Enhanced smart positioning algorithm - aligns to field but positions outside container
+static void set_numberpad_smart_outside_container(numberpad_t* numpad, lv_obj_t* target_field, lv_obj_t* container) {
+	if (!numpad || !target_field || !container) return;
+
+	// Ensure layout is updated before getting coordinates
+	lv_obj_update_layout(target_field);
+	lv_obj_update_layout(container);
+
+	// Get target field coordinates (for alignment)
+	lv_area_t field_coords;
+	lv_obj_get_coords(target_field, &field_coords);
+
+	// Get container coordinates (for boundary checking)
+	lv_area_t container_coords;
+	lv_obj_get_coords(container, &container_coords);
+
+	// Get screen dimensions
+	lv_coord_t screen_width = lv_obj_get_width(lv_screen_active());
+	lv_coord_t screen_height = lv_obj_get_height(lv_screen_active());
+
+	// Get numberpad dimensions
+	lv_coord_t pad_width = lv_obj_get_width(numpad->background);
+	lv_coord_t pad_height = lv_obj_get_height(numpad->background);
+
+	// Minimum gap between numberpad and field/container
+	const lv_coord_t min_gap = 10;
+	// Screen margins
+	const lv_coord_t screen_margin = 5;
+
+	// Calculate field center (for alignment)
+	lv_coord_t field_center_x = field_coords.x1 + lv_area_get_width(&field_coords) / 2;
+	lv_coord_t field_center_y = field_coords.y1 + lv_area_get_height(&field_coords) / 2;
+
+	// Step 1: Determine optimal X position (left-right) that fits on screen and avoids container collision
+	lv_coord_t best_x = 0;
+	bool x_found = false;
+
+	// Try to center on field first
+	best_x = field_center_x - pad_width / 2;
+
+	// Check if centered position fits on screen and doesn't collide with container
+	if (best_x >= screen_margin &&
+		best_x + pad_width <= screen_width - screen_margin &&
+		!(best_x < container_coords.x2 && best_x + pad_width > container_coords.x1)) {
+		x_found = true;
+		printf("[I] numberpad: Centered X position works\n");
+	}
+
+	// If centered doesn't work, try to the right of container
+	if (!x_found) {
+		best_x = container_coords.x2 + min_gap;
+		if (best_x >= screen_margin && best_x + pad_width <= screen_width - screen_margin) {
+			x_found = true;
+			printf("[I] numberpad: Positioned X to the right of container\n");
+		}
+	}
+
+	// If right doesn't work, try to the left of container
+	if (!x_found) {
+		best_x = container_coords.x1 - pad_width - min_gap;
+		if (best_x >= screen_margin && best_x + pad_width <= screen_width - screen_margin) {
+			x_found = true;
+			printf("[I] numberpad: Positioned X to the left of container\n");
+		}
+	}
+
+	// If still no X position, force it to screen boundaries
+	if (!x_found) {
+		best_x = field_center_x - pad_width / 2;
+		if (best_x < screen_margin) best_x = screen_margin;
+		if (best_x + pad_width > screen_width - screen_margin) best_x = screen_width - pad_width - screen_margin;
+		printf("[I] numberpad: Forced X to screen boundaries\n");
+	}
+
+	// Step 2: Determine optimal Y position (top-bottom) that fits on screen and avoids container collision
+	lv_coord_t best_y = 0;
+	bool found_position = false;
+
+	// Strategy 1: Try below container (preferred)
+	best_y = container_coords.y2 + min_gap;
+	if (best_y >= screen_margin && best_y + pad_height <= screen_height - screen_margin &&
+		!(best_y < container_coords.y2 && best_y + pad_height > container_coords.y1)) {
+		found_position = true;
+		numpad->position = NUMBERPAD_POSITION_BELOW;
+		printf("[I] numberpad: Positioned below container\n");
+	}
+
+	// Strategy 2: Try above container
+	if (!found_position) {
+		best_y = container_coords.y1 - pad_height - min_gap;
+		if (best_y >= screen_margin && best_y + pad_height <= screen_height - screen_margin &&
+			!(best_y < container_coords.y2 && best_y + pad_height > container_coords.y1)) {
+			found_position = true;
+			numpad->position = NUMBERPAD_POSITION_ABOVE;
+			printf("[I] numberpad: Positioned above container\n");
+		}
+	}
+
+	// Strategy 3: Try to the right of container (if X allows)
+	if (!found_position && best_x >= container_coords.x2 + min_gap) {
+		best_y = field_center_y - pad_height / 2;
+		if (best_y >= screen_margin && best_y + pad_height <= screen_height - screen_margin) {
+			found_position = true;
+			numpad->position = NUMBERPAD_POSITION_RIGHT;
+			printf("[I] numberpad: Positioned to the right of container\n");
+		}
+	}
+
+	// Strategy 4: Try to the left of container (if X allows)
+	if (!found_position && best_x + pad_width <= container_coords.x1 - min_gap) {
+		best_y = field_center_y - pad_height / 2;
+		if (best_y >= screen_margin && best_y + pad_height <= screen_height - screen_margin) {
+			found_position = true;
+			numpad->position = NUMBERPAD_POSITION_LEFT;
+			printf("[I] numberpad: Positioned to the left of container\n");
+		}
+	}
+
+	// Strategy 5: Fallback - force below container with screen adjustments
+	if (!found_position) {
+		best_y = container_coords.y2 + min_gap;
+		if (best_y + pad_height > screen_height - screen_margin) {
+			best_y = screen_height - pad_height - screen_margin;
+		}
+		found_position = true;
+		numpad->position = NUMBERPAD_POSITION_BELOW;
+		printf("[I] numberpad: Fallback - forced below container with screen adjustments\n");
+	}
+
+	// Set the final position
+	lv_obj_set_pos(numpad->background, best_x, best_y);
+
+	printf("[I] numberpad: Numberpad positioned at (%d, %d) for field at (%d, %d), container at (%d, %d)\n",
+		 best_x, best_y, field_coords.x1, field_coords.y1, container_coords.x1, container_coords.y1);
+}
+
 static void numberpad_button_cb(lv_event_t* e) {
 	lv_obj_t* btn = lv_event_get_target(e);
 	numberpad_t* numpad = lv_event_get_user_data(e);
@@ -375,7 +620,7 @@ static void numberpad_button_cb(lv_event_t* e) {
 	if (!numpad) return;
 
 	// Find which button was clicked
-	for (int i = 0; i < 11; i++) {
+	for (int i = 0; i < 13; i++) {
 		if (numpad->buttons[i] == btn) {
 			if (i < 9) {
 				// Number buttons 1-9
@@ -386,6 +631,12 @@ static void numberpad_button_cb(lv_event_t* e) {
 			} else if (i == 10) {
 				// CLEAR button
 				clear_value(numpad);
+			} else if (i == 11) {
+				// NEGATIVE button
+				toggle_negative(numpad);
+			} else if (i == 12) {
+				// CANCEL button
+				cancel_value(numpad);
 			}
 			break;
 		}
@@ -406,29 +657,50 @@ static void add_digit(numberpad_t* numpad, char digit) {
 		numpad->current_length = 0;
 		numpad->is_first_digit = false;
 		numpad->digit_count = 0;
+		numpad->is_negative = false; // Reset negative flag on first digit
 	}
 
 	// Just add digits and place decimal to left of rightmost
 	if (numpad->current_length == 0) {
-		// First digit: start with "0.X"
-		snprintf(numpad->value_buffer, numpad->buffer_size, "0.%c", digit);
-		numpad->current_length = 3;
+		// First digit: start with "0.X" or "-0.X" based on negative flag
+		if (numpad->is_negative) {
+			snprintf(numpad->value_buffer, numpad->buffer_size, "-0.%c", digit);
+			numpad->current_length = 4;
+		} else {
+			snprintf(numpad->value_buffer, numpad->buffer_size, "0.%c", digit);
+			numpad->current_length = 3;
+		}
 		numpad->digit_count = 1;
-	} else if (numpad->current_length == 3 && numpad->digit_count == 1) {
-		// Second digit: "0.2" → "2.3" (remove leading zero and add new digit)
-		snprintf(numpad->value_buffer, numpad->buffer_size, "%c.%c", numpad->value_buffer[2], digit);
-		numpad->current_length = 3;
+	} else if ((numpad->current_length == 3 && !numpad->is_negative && numpad->digit_count == 1) || (numpad->current_length == 4 && numpad->is_negative && numpad->digit_count == 1)) {
+		// Second digit: "0.2" → "2.3" or "-0.2" → "-2.3" (remove leading zero and add new digit)
+		if (numpad->is_negative) {
+			snprintf(numpad->value_buffer, numpad->buffer_size, "-%c.%c", numpad->value_buffer[2], digit);
+			numpad->current_length = 4;
+		} else {
+			snprintf(numpad->value_buffer, numpad->buffer_size, "%c.%c", numpad->value_buffer[2], digit);
+			numpad->current_length = 3;
+		}
 		numpad->digit_count = 2;
-	} else if (numpad->current_length == 3 && numpad->digit_count == 2) {
-		// Third digit: "2.3" → "23.4" (add new digit to left side)
-		snprintf(numpad->value_buffer, numpad->buffer_size, "%c%c.%c", numpad->value_buffer[0], numpad->value_buffer[2], digit);
-		numpad->current_length = 5;
+	} else if ((numpad->current_length == 3 && !numpad->is_negative && numpad->digit_count == 2) || (numpad->current_length == 4 && numpad->is_negative && numpad->digit_count == 2)) {
+		// Third digit: "2.3" → "23.4" or "-2.3" → "-23.4" (add new digit to left side)
+		if (numpad->is_negative) {
+			snprintf(numpad->value_buffer, numpad->buffer_size, "-%c%c.%c", numpad->value_buffer[1], numpad->value_buffer[3], digit);
+			numpad->current_length = 6;
+		} else {
+			snprintf(numpad->value_buffer, numpad->buffer_size, "%c%c.%c", numpad->value_buffer[0], numpad->value_buffer[2], digit);
+			numpad->current_length = 5;
+		}
 		numpad->digit_count = 3;
-	} else if (numpad->current_length == 5) {
+	} else if ((numpad->current_length == 5 && !numpad->is_negative) || (numpad->current_length == 6 && numpad->is_negative)) {
 		// After 3 digits, next input should start over and populate first number
-		// Start over and populate first number as "0.X"
-		snprintf(numpad->value_buffer, numpad->buffer_size, "0.%c", digit);
-		numpad->current_length = 3;
+		// Start over and populate first number as "0.X" or "-0.X"
+		if (numpad->is_negative) {
+			snprintf(numpad->value_buffer, numpad->buffer_size, "-0.%c", digit);
+			numpad->current_length = 4;
+		} else {
+			snprintf(numpad->value_buffer, numpad->buffer_size, "0.%c", digit);
+			numpad->current_length = 3;
+		}
 		numpad->digit_count = 1;
 		printf("[I] numberpad: Started over and populated first number: '%s'\n", numpad->value_buffer);
 	}
@@ -476,4 +748,104 @@ static void update_target_field(numberpad_t* numpad) {
 	if (label && lv_obj_check_type(label, &lv_label_class)) {
 		lv_label_set_text(label, numpad->value_buffer);
 	}
+}
+
+// Toggle negative sign
+static void toggle_negative(numberpad_t* numpad) {
+	if (!numpad) return;
+
+	numpad->is_negative = !numpad->is_negative;
+	update_display_value(numpad);
+
+	if (numpad->on_value_changed) {
+		numpad->on_value_changed(numpad->value_buffer, numpad->user_data);
+	}
+}
+
+// Reset negative state to positive (used when value triggers a clamp)
+static void reset_negative_state(numberpad_t* numpad) {
+	if (!numpad) return;
+
+	numpad->is_negative = false;
+	update_display_value(numpad);
+
+	if (numpad->on_value_changed) {
+		numpad->on_value_changed(numpad->value_buffer, numpad->user_data);
+	}
+}
+
+// Public function to reset negative state
+void numberpad_reset_negative_state(numberpad_t* numpad) {
+	reset_negative_state(numpad);
+}
+
+// Reset negative state silently (without triggering value changed callback)
+static void reset_negative_state_silent(numberpad_t* numpad) {
+	if (!numpad) return;
+
+	numpad->is_negative = false;
+	update_display_value(numpad);
+	// Don't call on_value_changed callback to avoid infinite loops
+}
+
+// Set value and prepare for fresh input (next digit will clear and start fresh)
+static void set_value_for_fresh_input(numberpad_t* numpad, const char* value) {
+	if (!numpad || !value) return;
+
+	strncpy(numpad->value_buffer, value, numpad->buffer_size - 1);
+	numpad->value_buffer[numpad->buffer_size - 1] = '\0';
+	numpad->current_length = strlen(numpad->value_buffer);
+
+	// Set flag so next digit input will clear and start fresh
+	numpad->is_first_digit = true;
+
+	update_target_field(numpad);
+}
+
+// Public function to set value for fresh input
+void numberpad_set_value_for_fresh_input(numberpad_t* numpad, const char* value) {
+	set_value_for_fresh_input(numpad, value);
+}
+
+// Cancel value and close numberpad
+static void cancel_value(numberpad_t* numpad) {
+	if (!numpad) return;
+
+	if (numpad->on_cancel) {
+		numpad->on_cancel(numpad->user_data);
+	}
+
+	numberpad_hide(numpad);
+}
+
+// Update display value with proper negative sign
+static void update_display_value(numberpad_t* numpad) {
+	if (!numpad) return;
+
+	// Get the numeric value without sign
+	const char* numeric_value = numpad->value_buffer;
+	if (numeric_value[0] == '-') {
+		numeric_value++; // Skip the minus sign
+	}
+
+	// Create new display value with proper sign
+	char display_value[32];
+	if (numpad->is_negative) {
+		snprintf(display_value, sizeof(display_value), "-%s", numeric_value);
+	} else {
+		snprintf(display_value, sizeof(display_value), "%s", numeric_value);
+	}
+
+	// Update the buffer
+	strncpy(numpad->value_buffer, display_value, numpad->buffer_size - 1);
+	numpad->value_buffer[numpad->buffer_size - 1] = '\0';
+	numpad->current_length = strlen(numpad->value_buffer);
+
+	// Update the target field display
+	update_target_field(numpad);
+}
+
+// Get numberpad position relative to target field
+numberpad_position_t numberpad_get_position(numberpad_t* numpad) {
+	return numpad ? numpad->position : NUMBERPAD_POSITION_OTHER;
 }

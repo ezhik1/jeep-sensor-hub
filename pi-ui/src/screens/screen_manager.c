@@ -225,20 +225,11 @@ void screen_manager_show_screen(screen_type_t screen_type, const char *module_na
 		return;
 	}
 
-	// Lock LVGL for the entire transition
-	if (!lvgl_port_lock(100)) { // 100ms timeout
-		printf("[E] screen_manager: Failed to lock LVGL for screen transition\n");
-		return;
-	}
-
 	// Step 1: Destroy current screen
 	destroy_current_screen();
 
 	// Step 2: Create new screen
 	create_and_show_screen(screen_type, module_name);
-
-	// Unlock LVGL
-	lvgl_port_unlock();
 
 	printf("[I] screen_manager: === SCREEN TRANSITION COMPLETE ===\n");
 }

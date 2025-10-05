@@ -127,8 +127,6 @@ void app_main(void)
 	pthread_create(&data_thread, NULL, (void*)data_task, NULL);
 	pthread_detach(data_thread);
 
-	// app_main can return, or sleep forever if you prefer:
-	// esp_vTaskDelete(NULL);
 }
 
 /* =========================

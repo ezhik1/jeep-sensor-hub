@@ -7,6 +7,15 @@
 extern "C" {
 #endif
 
+// Numberpad position relative to target field
+typedef enum {
+	NUMBERPAD_POSITION_BELOW,
+	NUMBERPAD_POSITION_ABOVE,
+	NUMBERPAD_POSITION_RIGHT,
+	NUMBERPAD_POSITION_LEFT,
+	NUMBERPAD_POSITION_OTHER
+} numberpad_position_t;
+
 // Numberpad configuration
 typedef struct {
 	int max_digits;           // Maximum number of digits allowed
@@ -24,7 +33,7 @@ typedef struct {
 // Numberpad instance
 typedef struct {
 	lv_obj_t* background;
-	lv_obj_t* buttons[11];    // 0-9, CLEAR (no ENTER button)
+	lv_obj_t* buttons[13];    // 0-9, CLEAR, NEGATIVE, CANCEL
 	lv_obj_t* target_field;   // Field being edited
 	char* value_buffer;       // Current input value
 	int buffer_size;
@@ -33,10 +42,13 @@ typedef struct {
 	void (*on_value_changed)(const char* value, void* user_data);
 	void (*on_clear)(void* user_data);
 	void (*on_enter)(const char* value, void* user_data);
+	void (*on_cancel)(void* user_data);
 	void* user_data;
 	bool is_visible;
 	bool is_first_digit;      // True when first digit input after opening numberpad
 	int digit_count;          // Number of digits entered
+	numberpad_position_t position; // Position relative to target field
+	bool is_negative;         // True if current value is negative
 } numberpad_t;
 
 // Default configuration
@@ -51,6 +63,9 @@ void numberpad_destroy(numberpad_t* numpad);
 // Show numberpad positioned relative to target field
 void numberpad_show(numberpad_t* numpad, lv_obj_t* target_field);
 
+// Show numberpad aligned to field but positioned outside container
+void numberpad_show_outside_container(numberpad_t* numpad, lv_obj_t* target_field, lv_obj_t* container);
+
 // Show numberpad with first digit flag
 void numberpad_show_with_first_digit_flag(numberpad_t* numpad, lv_obj_t* target_field, bool is_first_digit);
 
@@ -58,11 +73,13 @@ void numberpad_show_with_first_digit_flag(numberpad_t* numpad, lv_obj_t* target_
 void numberpad_hide(numberpad_t* numpad);
 
 // Set callbacks
-void numberpad_set_callbacks(numberpad_t* numpad,
-							void (*on_value_changed)(const char* value, void* user_data),
-							void (*on_clear)(void* user_data),
-							void (*on_enter)(const char* value, void* user_data),
-							void* user_data);
+void numberpad_set_callbacks(
+	numberpad_t* numpad,
+	void (*on_value_changed)(const char* value, void* user_data),
+	void (*on_clear)(void* user_data),
+	void (*on_enter)(const char* value, void* user_data),
+	void (*on_cancel)(void* user_data),
+	void* user_data);
 
 // Get current value
 const char* numberpad_get_value(numberpad_t* numpad);
@@ -72,6 +89,15 @@ void numberpad_set_value(numberpad_t* numpad, const char* value);
 
 // Check if numberpad is visible
 bool numberpad_is_visible(numberpad_t* numpad);
+
+// Get numberpad position relative to target field
+numberpad_position_t numberpad_get_position(numberpad_t* numpad);
+
+// Reset negative state to positive (used when value triggers a clamp)
+void numberpad_reset_negative_state(numberpad_t* numpad);
+
+// Set value and prepare for fresh input (next digit will clear and start fresh)
+void numberpad_set_value_for_fresh_input(numberpad_t* numpad, const char* value);
 
 #ifdef __cplusplus
 }
