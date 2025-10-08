@@ -4,12 +4,101 @@
 #include "../../../state/device_state.h"
 #include "../../../fonts/lv_font_noplato_24.h"
 #include "../numberpad/numberpad.h"
+#include "../gauges/bar_graph_gauge.h"
+#include "../../../screens/detail_screen/detail_screen.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
 
 static const char *TAG = "alerts_modal";
+
+// Color Palette
+#define PALETTE_WHITE lv_color_hex(0xFFFFFF)
+#define PALETTE_BLACK lv_color_hex(0x000000)
+#define PALETTE_GRAY lv_color_hex(0x8c8c8c)
+#define PALETTE_YELLOW lv_color_hex(0xFFD700)
+#define PALETTE_RED lv_color_hex(0xff0000)
+#define PALETTE_GREEN lv_color_hex(0x00ff00)
+#define PALETTE_BLUE lv_color_hex(0x004557)
+#define PALETTE_CYAN lv_color_hex(0x00FFFF)
+#define PALETTE_DARK_GRAY lv_color_hex(0x3F3F3F)
+#define PALETTE_BROWN lv_color_hex(0x793100)
+
+// Shared Colors
+#define BORDER_COLOR PALETTE_WHITE
+#define TEXT_COLOR_LIGHT PALETTE_WHITE
+#define TEXT_COLOR_DARK PALETTE_DARK_GRAY
+#define BACKGROUND_COLOR PALETTE_BLACK
+
+// #### Default State Colors ####
+
+#define DEFAULT_WARNING_BORDER_COLOR PALETTE_YELLOW
+#define DEFAULT_WARNING_TEXT_COLOR PALETTE_YELLOW
+
+// Gauge Container
+#define DEFAULT_GAUGE_CONTAINER_BORDER_COLOR PALETTE_GRAY
+#define DEFAULT_GAUGE_TITLE_BACKGROUND_COLOR PALETTE_BLUE
+#define DEFAULT_GAUGE_TITLE_TEXT_COLOR PALETTE_WHITE
+
+// Group
+#define DEFAULT_GROUP_CONTAINER_BORDER_COLOR PALETTE_GRAY
+#define DEFAULT_FIELD_ALERT_GROUP_TITLE_BACKGROUND_COLOR PALETTE_YELLOW
+#define DEFAULT_FIELD_ALERT_GROUP_TITLE_TEXT_COLOR PALETTE_BLACK
+#define DEFAULT_FIELD_GAUGE_GROUP_TITLE_BACKGROUND_COLOR PALETTE_BROWN
+#define DEFAULT_FIELD_GAUGE_GROUP_TITLE_TEXT_COLOR PALETTE_WHITE
+
+// Field Value
+#define DEFAULT_FIELD_VALUE_TEXT_COLOR PALETTE_WHITE
+#define DEFAULT_FIELD_VALUE_TITLE_COLOR PALETTE_WHITE
+#define DEFAULT_FIELD_VALUE_TITLE_BACKGROUND_COLOR PALETTE_BLACK
+
+#define DEFAULT_FIELD_VALUE_CONTAINER_BACKGROUND_COLOR PALETTE_BLACK
+#define DEFAULT_FIELD_VALUE_CONTAINER_BORDER_COLOR PALETTE_WHITE
+#define FIELD_VALUE_TITLE_BACKGROUND_COLOR PALETTE_BLACK
+
+
+
+// #### Edit State - Current Value ( Highlighted ) ####
+
+#define IS_EDITING_VALUE_BORDER_COLOR PALETTE_CYAN
+#define IS_EDITING_VALUE_TEXT_COLOR PALETTE_WHITE
+
+// #### Edit State - All other Containers, Borders, and Text Colors ( Dimmed ) ####
+
+// Field Value
+#define DIM_FIELD_VALUE_COLOR PALETTE_DARK_GRAY
+
+#define DIM_FIELD_VALUE_CONTAINER_BACKGROUND_COLOR PALETTE_BLACK
+#define DIM_FIELD_VALUE_CONTAINER_BORDER_COLOR PALETTE_DARK_GRAY
+
+#define DIM_FIELD_VALUE_TITLE_COLOR PALETTE_BLACK
+#define DIM_FIELD_VALUE_TITLE_BACKGROUND_COLOR PALETTE_DARK_GRAY
+
+
+// Group Container
+#define DIM_GROUP_BORDER_COLOR PALETTE_DARK_GRAY
+#define DIM_GAUGE_BORDER_COLOR PALETTE_DARK_GRAY
+
+// Gauge Container
+#define DIM_FIELD_GAUGE_GROUP_TITLE_TEXT_COLOR PALETTE_BLACK
+#define DIM_FIELD_GAUGE_GROUP_TITLE_BACKGROUND_COLOR PALETTE_DARK_GRAY
+#define DIM_FIELD_ALERT_GROUP_TITLE_TEXT_COLOR PALETTE_BLACK
+#define DIM_FIELD_ALERT_GROUP_TITLE_BACKGROUND_COLOR PALETTE_DARK_GRAY
+
+#define DIM_FIELD_GAUGE_TITLE_BACKGROUND_COLOR PALETTE_DARK_GRAY
+#define DIM_FIELD_GAUGE_TITLE_TEXT_COLOR PALETTE_BLACK
+
+// Edit State - Out of Range
+#define IS_OUT_OF_RANGE_BORDER_COLOR PALETTE_RED
+#define IS_OUT_OF_RANGE_TEXT_COLOR PALETTE_WHITE
+#define IS_OUT_OF_RANGE_BACKGROUND_COLOR PALETTE_BLACK
+
+// Changed Value State
+#define HAS_CHANGED_BORDER_COLOR PALETTE_GREEN
+#define HAS_CHANGED_TEXT_COLOR PALETTE_WHITE
+#define HAS_CHANGED_BACKGROUND_COLOR PALETTE_BLACK
+
 
 // Field validation ranges (min, max, default)
 static const float field_ranges[FIELD_COUNT_PER_GAUGE][3] = {
@@ -33,7 +122,7 @@ typedef struct {
 	bool is_baseline_warning;  // Whether this is a baseline warning
 } warning_data_t;
 
-static warning_data_t g_warning_data[GAUGE_COUNT * FIELD_COUNT_PER_GAUGE];
+static warning_data_t g_warning_data[GAUGE_COUNT * FIELD_COUNT_PER_GAUGE] = {0};
 
 // gauge names and field names for UI
 static const char* gauge_names[] = {"STARTER (V)", "HOUSE (V)", "SOLAR (W)"};
@@ -42,6 +131,7 @@ static const char* group_names[] = {"ALERTS", "GAUGE"};
 
 // Forward declarations
 static void close_button_cb(lv_event_t *e);
+static void cancel_button_cb(lv_event_t *e);
 static void field_click_handler(lv_event_t *e);
 static void initialize_field_data(field_data_t* field_data, int gauge, int field_type);
 static void update_field_display(alerts_modal_t* modal, int field_id);
@@ -84,9 +174,10 @@ static void initialize_field_data(field_data_t* field_data, int gauge, int field
 	field_data->is_out_of_range = false;
 
 	// Initialize UI state
-	field_data->border_color = lv_color_hex(0xffffff);  // White border
+	field_data->border_color = PALETTE_WHITE;  // White border
 	field_data->border_width = 2;                       // Default border width
-	field_data->text_color = lv_color_hex(0xffffff);    // White text
+	field_data->text_color = PALETTE_WHITE;    // White text
+	field_data->text_background_color = PALETTE_BLACK;  // Black text background
 }
 
 // Update field display value using field ID
@@ -121,20 +212,20 @@ static void update_field_border(alerts_modal_t* modal, int field_id)
 	// Update state in field_data only - UI updates are handled by update_all_field_borders
 	if (data->is_out_of_range) {
 		// Red border for out of range
-		data->border_color = lv_color_hex(0xff0000);
+		data->border_color = PALETTE_RED;
 		data->border_width = 2;
 	} else if (data->has_changed) {
 		// Green border for changed values
-		data->border_color = lv_color_hex(0x00ff00);
+		data->border_color = PALETTE_GREEN;
 		data->border_width = 2;
 	} else {
 		// White border for default
-		data->border_color = lv_color_hex(0xffffff);
+		data->border_color = PALETTE_WHITE;
 		data->border_width = 1;
 	}
 
 	// Always reset text color to white
-	data->text_color = lv_color_hex(0xffffff);
+	data->text_color = PALETTE_WHITE;
 }
 
 // Check if field value equals original value
@@ -222,6 +313,7 @@ static void update_all_field_borders(alerts_modal_t* modal)
 {
 	if (!modal) return;
 
+
 	printf("[I] alerts_modal: update_all_field_borders called (current_field_id=%d)\n", modal->current_field_id);
 
 	// Cache references to the gauge containers and group type containers
@@ -238,6 +330,7 @@ static void update_all_field_borders(alerts_modal_t* modal)
 
 	// Populate cache with all containers
 	for (int gauge = 0; gauge < GAUGE_COUNT; gauge++) {
+
 		// Gauge section container
 		container_cache[cache_index].container = modal->gauge_sections[gauge];
 		container_cache[cache_index].title_label = modal->gauge_titles[gauge];
@@ -256,7 +349,7 @@ static void update_all_field_borders(alerts_modal_t* modal)
 
 		// Gauge group container
 		container_cache[cache_index].container = modal->gauge_groups[gauge];
-		container_cache[cache_index].title_label = modal->gauge_group_titles[gauge];
+		container_cache[cache_index].title_label = modal->gauge_group_title[gauge];
 		container_cache[cache_index].has_active_field = false;
 		container_cache[cache_index].gauge_index = gauge;
 		container_cache[cache_index].group_type = GROUP_GAUGE;
@@ -276,80 +369,186 @@ static void update_all_field_borders(alerts_modal_t* modal)
 
 		if (!ui->button || !ui->label) continue;
 
-		// Reset field to default state (white borders, white text)
-		data->border_color = lv_color_hex(0xffffff);
+		// Reset field to default state
+		data->border_color = DEFAULT_FIELD_VALUE_CONTAINER_BORDER_COLOR;
+		data->button_background_color = DEFAULT_FIELD_VALUE_CONTAINER_BACKGROUND_COLOR;
 		data->border_width = 1;
-		data->text_color = lv_color_hex(0xffffff);
+		data->text_color = DEFAULT_FIELD_VALUE_TEXT_COLOR;
+		data->text_background_color = FIELD_VALUE_TITLE_BACKGROUND_COLOR;
+		data->title_color = DEFAULT_FIELD_VALUE_TITLE_COLOR;
+		data->title_background_color = DEFAULT_FIELD_VALUE_TITLE_BACKGROUND_COLOR;
 
-		if( data->is_out_of_range ){ // Red border for out of range takes overall priority
+		bool value_should_dim = does_modal_have_active_field && !data->is_being_edited;
 
-			data->border_color = lv_color_hex(0xff0000);
+		if( data->is_being_edited ){ // Active field being edited
+
+			data->border_color = IS_EDITING_VALUE_BORDER_COLOR;
+			data->border_width = 2;
+			data->button_background_color = DIM_FIELD_VALUE_CONTAINER_BACKGROUND_COLOR;
+
+			data->title_color = DEFAULT_FIELD_VALUE_TITLE_COLOR;
+			data->title_background_color = DEFAULT_FIELD_VALUE_TITLE_BACKGROUND_COLOR;
+		} else if( does_modal_have_active_field ){  // field should be dimmed gray since there is an active one somewhere
+
+			data->text_color = DIM_FIELD_VALUE_COLOR;
+			data->text_background_color = DIM_FIELD_VALUE_TITLE_BACKGROUND_COLOR;
+
+			data->border_color = DIM_FIELD_VALUE_CONTAINER_BORDER_COLOR;
+			data->button_background_color = DIM_FIELD_VALUE_CONTAINER_BACKGROUND_COLOR;
+
+			data->title_color = DIM_FIELD_VALUE_TITLE_COLOR;
+			data->title_background_color = DIM_FIELD_VALUE_TITLE_BACKGROUND_COLOR;
+		} else if( data->is_out_of_range ){ // Out of range
+
+			data->border_color = IS_OUT_OF_RANGE_BORDER_COLOR;
 			data->border_width = 2;
 		} else if( data->has_changed ){ // Green border for changed values
 
-			data->border_color = lv_color_hex(0x00ff00);
+			data->border_color = HAS_CHANGED_BORDER_COLOR;
 			data->border_width = 2;
-		} else if( data->is_being_edited ){ // Cyan border for active field being edited
-
-			data->border_color = lv_color_hex(0x00ffff);
-			data->border_width = 2;
-		} else if( does_modal_have_active_field ){  // field should be dimmed gray since there is an active one somewhere
-
-			data->text_color = lv_color_hex(0x292929);
-			data->border_color = lv_color_hex(0x292929);
 		}
 
 		// Apply the highlighting to field UI
-		lv_obj_set_style_text_color(ui->label, data->text_color, 0);
-		lv_obj_set_style_border_color(ui->button, data->border_color, 0);
-		lv_obj_set_style_bg_color(ui->button, lv_color_hex(0x0F0F0F), 0);
+		lv_obj_set_style_text_color( ui->label, data->text_color, 0 );
+		lv_obj_set_style_border_color( ui->button, data->border_color, 0 );
+		lv_obj_set_style_bg_color( ui->button, data->button_background_color, 0 );
 		lv_obj_set_style_border_width(ui->button, data->border_width, 0);
 
+		// Apply dimming to title label as well
+		if (ui->title) {
+			lv_obj_set_style_text_color( ui->title, data->title_color, 0 );
+			lv_obj_set_style_bg_color( ui->title, data->title_background_color, 0);
+		}
+
 		// Track which containers have active fields
+		int gauge_index = data->gauge_index;
+
 		if (data->is_being_edited) {
-			int gauge_index = data->gauge_index;
+
 			// Mark gauge section as having active field
 			for (int i = 0; i < GAUGE_COUNT * 3; i++) {
+
 				if (container_cache[i].gauge_index == gauge_index && container_cache[i].group_type == -1) {
+
 					container_cache[i].has_active_field = true;
 				}
 			}
+
 			// Mark appropriate group as having active field
 			for (int i = 0; i < GAUGE_COUNT * 3; i++) {
+
 				if (container_cache[i].gauge_index == gauge_index && container_cache[i].group_type == data->group_type) {
+
 					container_cache[i].has_active_field = true;
 				}
 			}
 		}
-	}
 
+	}
 
 	// Step 3: Style the cached containers based on whether they contain active fields
 	for (int i = 0; i < GAUGE_COUNT * 3; i++) {
-		lv_obj_t* container = container_cache[i].container;
-		lv_obj_t* title_label = container_cache[i].title_label;
-		bool has_active_field = container_cache[i].has_active_field;
+
+		lv_obj_t* container = container_cache[ i ].container;
+		lv_obj_t* title_label = container_cache[ i ].title_label;
+		bool has_active_field = container_cache[ i ].has_active_field;
 
 		// Determine if this container should be dimmed
 		// Dim only if there's an active field somewhere else (not in this container)
 		bool should_dim = does_modal_have_active_field && !has_active_field;
 
 		if (has_active_field) {
+
 			// White border for containers with active fields
-			lv_obj_set_style_border_color(container, lv_color_hex(0xffffff), 0);
-			lv_obj_set_style_border_width(container, 2, 0);
+			lv_obj_set_style_border_color(container, BORDER_COLOR, 0);
+			// lv_obj_set_style_border_width(container, 2, 0);
 		} else {
-			// Gray border for containers without active fields (only when there's an active field elsewhere)
-			lv_obj_set_style_border_color(container, should_dim ? lv_color_hex(0x444444) : lv_color_hex(0xffffff), 0);
-			lv_obj_set_style_border_width(container, should_dim ? 1 : 2, 0);
+
+			// Dimmed border for containers without active fields
+			lv_color_t container_border_color = should_dim ? DIM_GROUP_BORDER_COLOR : DEFAULT_GROUP_CONTAINER_BORDER_COLOR;
+			lv_obj_set_style_border_color(container, container_border_color, 0);
+			// lv_obj_set_style_border_width(container, should_dim ? 1 : 2, 0);
 		}
 
 		// Update text color for the cached title label
 		if (title_label) {
-			lv_obj_set_style_text_color(
-				title_label,
-				should_dim ? lv_color_hex(0x444444) : lv_color_hex(0xffffff), 0
-			);
+
+			lv_color_t title_background_color;
+			lv_color_t title_text_color;
+
+			if( should_dim ){
+
+				title_background_color = DIM_FIELD_VALUE_TITLE_BACKGROUND_COLOR;
+
+				// Use group-specific dim text colors
+				if (container_cache[i].group_type == GROUP_ALERTS) {
+
+					title_text_color = DIM_FIELD_ALERT_GROUP_TITLE_TEXT_COLOR;
+					title_background_color = DIM_FIELD_ALERT_GROUP_TITLE_BACKGROUND_COLOR;
+
+				} else if (container_cache[i].group_type == GROUP_GAUGE) {
+
+					title_text_color = DIM_FIELD_GAUGE_GROUP_TITLE_TEXT_COLOR;
+					title_background_color = DIM_FIELD_ALERT_GROUP_TITLE_BACKGROUND_COLOR;
+				} else if (container_cache[i].group_type == -1) {
+
+					// Gauge section title
+					title_text_color = DIM_FIELD_GAUGE_TITLE_TEXT_COLOR;
+					title_background_color = DIM_FIELD_GAUGE_TITLE_BACKGROUND_COLOR;
+				} else {
+
+					title_text_color = DIM_FIELD_VALUE_TITLE_COLOR;
+					title_background_color = DIM_FIELD_VALUE_TITLE_BACKGROUND_COLOR;
+				}
+			}else{
+
+				// todo: this is not DRY
+				// Use group-specific colors when field is being edited, default when not
+				if (has_active_field) {
+					// Field is being edited in this group - use group-specific colors
+					if (container_cache[i].group_type == GROUP_ALERTS) {
+
+						title_background_color = DEFAULT_FIELD_ALERT_GROUP_TITLE_BACKGROUND_COLOR;
+						title_text_color = DEFAULT_FIELD_ALERT_GROUP_TITLE_TEXT_COLOR;
+					} else if (container_cache[i].group_type == GROUP_GAUGE) {
+
+						title_background_color = DEFAULT_FIELD_GAUGE_GROUP_TITLE_BACKGROUND_COLOR;
+						title_text_color = DEFAULT_FIELD_GAUGE_GROUP_TITLE_TEXT_COLOR;
+					} else if (container_cache[i].group_type == -1) {
+
+						// Gauge section title - use default gauge title colors
+						title_background_color = DEFAULT_GAUGE_TITLE_BACKGROUND_COLOR;
+						title_text_color = DEFAULT_GAUGE_TITLE_TEXT_COLOR;
+					} else {
+
+						title_background_color = FIELD_VALUE_TITLE_BACKGROUND_COLOR;
+						title_text_color = TEXT_COLOR_LIGHT;
+					}
+				} else {
+					// No field being edited - use group-specific default colors
+					if (container_cache[i].group_type == GROUP_ALERTS) {
+
+						title_background_color = DEFAULT_FIELD_ALERT_GROUP_TITLE_BACKGROUND_COLOR;
+						title_text_color = DEFAULT_FIELD_ALERT_GROUP_TITLE_TEXT_COLOR;
+					} else if (container_cache[i].group_type == GROUP_GAUGE) {
+
+						title_background_color = DEFAULT_FIELD_GAUGE_GROUP_TITLE_BACKGROUND_COLOR;
+						title_text_color = DEFAULT_FIELD_GAUGE_GROUP_TITLE_TEXT_COLOR;
+					} else if (container_cache[i].group_type == -1) {
+
+						// Gauge section title - use default gauge title colors
+						title_background_color = DEFAULT_GAUGE_TITLE_BACKGROUND_COLOR;
+						title_text_color = DEFAULT_GAUGE_TITLE_TEXT_COLOR;
+					} else {
+
+						title_background_color = FIELD_VALUE_TITLE_BACKGROUND_COLOR;
+						title_text_color = TEXT_COLOR_LIGHT;
+					}
+				}
+			}
+
+			lv_obj_set_style_text_color( title_label, title_text_color, 0 );
+			lv_obj_set_style_bg_color(title_label, title_background_color, 0);
 		}
 	}
 }
@@ -367,20 +566,20 @@ static void update_current_field_border(alerts_modal_t* modal)
 	// Update state based on current conditions
 	if (data->is_out_of_range) {
 		// Red border for out of range
-		data->border_color = lv_color_hex(0xff0000);
+		data->border_color = IS_OUT_OF_RANGE_BORDER_COLOR;
 		data->border_width = 2;
 	} else if (data->has_changed) {
 		// Green border for changed values
-		data->border_color = lv_color_hex(0x00ff00);
+		data->border_color = HAS_CHANGED_BORDER_COLOR;
 		data->border_width = 2;
 	} else {
-		// White border for default
-		data->border_color = lv_color_hex(0xffffff);
+		// Green border for editing state
+		data->border_color = IS_EDITING_VALUE_BORDER_COLOR;
 		data->border_width = 2;
 	}
 
-	// Always reset text color to white
-	data->text_color = lv_color_hex(0xffffff);
+	// Always reset text color to white for active field
+	data->text_color = IS_EDITING_VALUE_TEXT_COLOR;
 
 	// Apply the state to UI
 	lv_obj_set_style_text_color(ui->label, data->text_color, 0);
@@ -396,9 +595,9 @@ static void highlight_field_for_warning(alerts_modal_t* modal, int field_id)
 	if (!ui->button || !ui->label) return;
 
 	// Set warning color border and text (warm yellow)
-	lv_obj_set_style_border_color(ui->button, lv_color_hex(0xFFD700), 0);
+	lv_obj_set_style_border_color(ui->button, DEFAULT_WARNING_BORDER_COLOR, 0);
 	lv_obj_set_style_border_width(ui->button, 3, 0);
-	lv_obj_set_style_text_color(ui->label, lv_color_hex(0xFFD700), 0);
+	lv_obj_set_style_text_color(ui->label, DEFAULT_WARNING_TEXT_COLOR, 0);
 
 	printf("[I] alerts_modal: Highlighted field %d for warning (border and text)\n", field_id);
 }
@@ -489,6 +688,7 @@ static void field_click_handler(lv_event_t *e)
 
 		// Check if the target is the numberpad background container
 		if (modal->numberpad && modal->numberpad->is_visible && target == modal->numberpad->background) {
+
 			printf("[I] alerts_modal: Click is on numberpad background, letting numberpad handle it\n");
 			return; // This is a numberpad container click, let numberpad handle it
 		}
@@ -498,16 +698,15 @@ static void field_click_handler(lv_event_t *e)
 		close_current_field(modal);
 
 		// If the click was on another field, continue to open it
-		if (field_id < 0) {
+		if( field_id < 0 ){
+
 			printf("[I] alerts_modal: Click not on a field button, ignoring\n");
 			return;
 		}
-	} else {
+	} else if( field_id < 0 ){
+
 		// No field is being edited, check if this is a field click
-		if (field_id < 0) {
-			printf("[I] alerts_modal: Click not on a field button, ignoring\n");
-			return;
-		}
+		return;
 	}
 
 	field_data_t* data = &modal->field_data[field_id];
@@ -522,26 +721,30 @@ static void field_click_handler(lv_event_t *e)
 	data->is_being_edited = true;
 
 	// Show numberpad
-	if (!modal->numberpad) {
-	numberpad_config_t numpad_config = NUMBERPAD_DEFAULT_CONFIG;
-	numpad_config.max_digits = 4;
-	numpad_config.decimal_places = 1;
-	numpad_config.auto_decimal = true;
-	modal->numberpad = numberpad_create(&numpad_config, modal->background);
+	if( !modal->numberpad ){
 
-	if (modal->numberpad) {
+		numberpad_config_t numpad_config = NUMBERPAD_DEFAULT_CONFIG;
+		numpad_config.max_digits = 4;
+		numpad_config.decimal_places = 1;
+		numpad_config.auto_decimal = true;
+		modal->numberpad = numberpad_create(&numpad_config, modal->background);
+
+		// todo: probably dont need the conditional
+		if( modal->numberpad ){
+
 			numberpad_set_callbacks(
 				modal->numberpad,
-							   numberpad_value_changed,
-							   numberpad_clear,
+				numberpad_value_changed,
+				numberpad_clear,
 				numberpad_enter,
 				numberpad_cancel,
 				modal
 			);
-		}
+			}
 	}
 
 	if (modal->numberpad) {
+
 		// Set current value in numberpad
 		char value_str[16];
 		snprintf(value_str, sizeof(value_str), "%.1f", data->current_value);
@@ -559,10 +762,60 @@ static void field_click_handler(lv_event_t *e)
 static void close_button_cb(lv_event_t *e)
 {
 	alerts_modal_t* modal = (alerts_modal_t*)lv_event_get_user_data(e);
+
 	if (!modal) return;
 
 	close_current_field(modal);
 
+	// Refresh gauges and alerts after saving changes
+	alerts_modal_refresh_gauges_and_alerts();
+
+	if (modal->on_close) {
+
+		modal->on_close();
+	}
+}
+
+// Cancel button callback - reverts all changes and closes modal
+static void cancel_button_cb(lv_event_t *e)
+{
+	alerts_modal_t* modal = (alerts_modal_t*)lv_event_get_user_data(e);
+
+	if (!modal) return;
+
+	// Close any currently editing field first
+	close_current_field(modal);
+
+	// Revert all field values to their original values
+	for (int field_id = 0; field_id < GAUGE_COUNT * FIELD_COUNT_PER_GAUGE; field_id++) {
+		field_data_t* data = &modal->field_data[field_id];
+
+		// Restore original value
+		data->current_value = data->original_value;
+		data->has_changed = false;
+		data->is_out_of_range = false;
+
+		// Update display and border
+		update_field_display(modal, field_id);
+		update_field_border(modal, field_id);
+	}
+
+	// Update all field borders to reflect the reverted state
+	update_all_field_borders(modal);
+
+	// Save the reverted values to device state
+	for (int field_id = 0; field_id < GAUGE_COUNT * FIELD_COUNT_PER_GAUGE; field_id++) {
+		field_data_t* data = &modal->field_data[field_id];
+		set_device_state_value(data->gauge_index, data->field_index, data->current_value);
+	}
+	device_state_save();
+
+	printf("[I] alerts_modal: Cancel button pressed - reverted all changes\n");
+
+	// Refresh gauges and alerts after reverting changes
+	alerts_modal_refresh_gauges_and_alerts();
+
+	// Close the modal
 	if (modal->on_close) {
 		modal->on_close();
 	}
@@ -584,9 +837,11 @@ static void numberpad_value_changed(const char* value, void* user_data)
 	bool is_out_of_range = (new_value < data->min_value || new_value > data->max_value);
 
 	if (is_out_of_range) {
+
 		// Show warning for out-of-range value
 		show_out_of_range_warning(modal, modal->current_field_id, new_value);
 	} else {
+
 		// Hide any existing warning
 		hide_out_of_range_warning(modal->current_field_id);
 	}
@@ -622,34 +877,50 @@ static void numberpad_cancel(void* user_data)
 {
 	// Cancel without saving - restore original value and close
 	alerts_modal_t* modal = (alerts_modal_t*)user_data;
-	if (modal) {
-		// Restore original value if we have it
-		if (modal->current_field_id >= 0 && modal->current_field_id < GAUGE_COUNT * FIELD_COUNT_PER_GAUGE) {
-			field_data_t* data = &modal->field_data[modal->current_field_id];
-			if (data->original_value >= 0) {
-				// Restore original value to the field data
-				data->current_value = data->original_value;
 
-				// Update the field display to show the original value
-				update_field_display(modal, modal->current_field_id);
+	// Bail early if we don't have a valid modal
+	if( !modal ){ return; }
 
-				// Clear any out-of-range state
-				data->is_out_of_range = false;
+	// Restore original value if we have it
+	bool found_original_value = (
+		modal->current_field_id >= 0 &&
+		modal->current_field_id < GAUGE_COUNT * FIELD_COUNT_PER_GAUGE
+	);
 
-				// Hide any existing warning for this field
-				hide_out_of_range_warning(modal->current_field_id);
-			}
-		}
-		close_current_field(modal);
+	if( found_original_value ){
+
+		field_data_t* data = &modal->field_data[modal->current_field_id];
+
+		// Bail early if we don't have a valid field data
+		if( data->original_value < 0  ){ return; }
+
+		// Restore original value to the field data
+		data->current_value = data->original_value;
+
+		// Update the field display to show the original value
+		update_field_display(modal, modal->current_field_id);
+
+		// Clear any out-of-range state
+		data->is_out_of_range = false;
+
+		// Hide any existing warning for this field
+		hide_out_of_range_warning(modal->current_field_id);
+
 	}
+
+	close_current_field(modal);
+
 }
 
 // Warning system implementation
 static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float out_of_range_value)
 {
+	// Bail early if we don't have a valid modal or field ID
 	if (!modal || field_id < 0 || field_id >= GAUGE_COUNT * FIELD_COUNT_PER_GAUGE) return;
 
 	field_ui_t* ui = &modal->field_ui[field_id];
+
+	// Bail early if we don't have a valid UI button
 	if (!ui->button) return;
 
 	// Check if warning already exists for this field
@@ -664,11 +935,16 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 	// Get field data and clamp the value immediately
 	field_data_t* data = &modal->field_data[field_id];
 	float clamped_value;
+
+
 	if (out_of_range_value > data->max_value) {
+
 		clamped_value = data->max_value;
 	} else if (out_of_range_value < data->min_value) {
+
 		clamped_value = data->min_value;
 	} else {
+
 		clamped_value = out_of_range_value; // Shouldn't happen
 	}
 
@@ -681,14 +957,17 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 
 	// Create warning text label (for "OVER"/"UNDER"/"MAX"/"MIN")
 	g_warning_data[field_id].text_label = lv_label_create(modal->background);
-	lv_obj_set_style_text_color(g_warning_data[field_id].text_label, lv_color_hex(0xFFD700), 0); // Warm yellow
+	lv_label_set_text(g_warning_data[field_id].text_label, ""); // Initialize with empty text
+	lv_obj_set_style_text_color(g_warning_data[field_id].text_label, PALETTE_YELLOW, 0); // Warm yellow
 	lv_obj_set_style_text_font(g_warning_data[field_id].text_label, &lv_font_montserrat_20, 0); // Modal font, bigger
 	lv_obj_set_style_text_align(g_warning_data[field_id].text_label, LV_TEXT_ALIGN_CENTER, 0); // Center align
-	lv_obj_set_style_bg_color(g_warning_data[field_id].text_label, lv_color_hex(0x000000), 0);
+	lv_obj_set_style_bg_color(g_warning_data[field_id].text_label, PALETTE_BLACK, 0);
 	lv_obj_set_style_bg_opa(g_warning_data[field_id].text_label, LV_OPA_COVER, 0);
 	lv_obj_set_style_pad_all(g_warning_data[field_id].text_label, 4, 0);
 	lv_obj_clear_flag(g_warning_data[field_id].text_label, LV_OBJ_FLAG_SCROLLABLE);
 	lv_obj_set_style_radius(g_warning_data[field_id].text_label, 4, 0);
+	// Hide the label initially until it has proper text
+	lv_obj_add_flag(g_warning_data[field_id].text_label, LV_OBJ_FLAG_HIDDEN);
 
 	// Create warning value label and container (for numeric values in max/min warnings)
 	g_warning_data[field_id].value_label = NULL; // Will be created only for max/min warnings
@@ -722,29 +1001,36 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 	if (is_baseline_warning) {
 		// Baseline warnings: show "OVER" or "UNDER" only
 		if (is_above_max) {
+
 			lv_label_set_text(g_warning_data[field_id].text_label, "OVER");
 		} else if (is_below_min) {
+
 			lv_label_set_text(g_warning_data[field_id].text_label, "UNDER");
 		} else {
 			// Fallback - shouldn't happen
 			lv_label_set_text(g_warning_data[field_id].text_label, "RANGE");
 		}
+
+		// Show the label now that it has text
+		lv_obj_clear_flag(g_warning_data[field_id].text_label, LV_OBJ_FLAG_HIDDEN);
 	} else {
+
 		// Regular max/min warnings: show "MAX" or "MIN" text + value in single container
-		if (is_above_max) {
+		if (is_above_max)
+		{
 			// Create container that encompasses both text and value
 			g_warning_data[field_id].container = lv_obj_create(modal->background);
-			lv_obj_set_size(g_warning_data[field_id].container, 60, 80); // Larger to fit both text and value
-			lv_obj_set_style_bg_color(g_warning_data[field_id].container, lv_color_hex(0x000000), 0); // Black background
+			lv_obj_set_size(g_warning_data[field_id].container, 63, 80); // Larger to fit both text and value, 3px wider for negative values
+			lv_obj_set_style_bg_color(g_warning_data[field_id].container, PALETTE_BLACK, 0); // Black background
 			lv_obj_set_style_bg_opa(g_warning_data[field_id].container, LV_OPA_COVER, 0);
-			lv_obj_set_style_border_color(g_warning_data[field_id].container, lv_color_hex(0xFFD700), 0); // Yellow border
+			lv_obj_set_style_border_color(g_warning_data[field_id].container, PALETTE_YELLOW, 0); // Yellow border
 			lv_obj_set_style_border_width(g_warning_data[field_id].container, 2, 0);
 			lv_obj_set_style_radius(g_warning_data[field_id].container, 8, 0);
 			lv_obj_clear_flag(g_warning_data[field_id].container, LV_OBJ_FLAG_SCROLLABLE);
 
 			// Create text label inside container
 			g_warning_data[field_id].text_label = lv_label_create(g_warning_data[field_id].container);
-			lv_obj_set_style_text_color(g_warning_data[field_id].text_label, lv_color_hex(0xFFD700), 0);
+			lv_obj_set_style_text_color(g_warning_data[field_id].text_label, PALETTE_YELLOW, 0);
 			lv_obj_set_style_text_font(g_warning_data[field_id].text_label, &lv_font_montserrat_20, 0);
 			lv_obj_set_style_text_align(g_warning_data[field_id].text_label, LV_TEXT_ALIGN_CENTER, 0);
 			lv_label_set_text(g_warning_data[field_id].text_label, "MAX");
@@ -752,7 +1038,7 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 
 			// Create value label inside container
 			g_warning_data[field_id].value_label = lv_label_create(g_warning_data[field_id].container);
-			lv_obj_set_style_text_color(g_warning_data[field_id].value_label, lv_color_hex(0xFFD700), 0);
+			lv_obj_set_style_text_color(g_warning_data[field_id].value_label, PALETTE_YELLOW, 0);
 			lv_obj_set_style_text_font(g_warning_data[field_id].value_label, &lv_font_noplato_24, 0);
 			lv_obj_set_style_text_align(g_warning_data[field_id].value_label, LV_TEXT_ALIGN_CENTER, 0);
 			lv_obj_align(g_warning_data[field_id].value_label, LV_ALIGN_BOTTOM_MID, 0, -22);
@@ -761,19 +1047,20 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 			snprintf(value_text, sizeof(value_text), "%.1f", data->max_value);
 			lv_label_set_text(g_warning_data[field_id].value_label, value_text);
 		} else if (is_below_min) {
+
 			// Create container that encompasses both text and value
 			g_warning_data[field_id].container = lv_obj_create(modal->background);
-			lv_obj_set_size(g_warning_data[field_id].container, 60, 60); // Larger to fit both text and value
-			lv_obj_set_style_bg_color(g_warning_data[field_id].container, lv_color_hex(0x000000), 0); // Black background
+			lv_obj_set_size(g_warning_data[field_id].container, 63, 60); // Larger to fit both text and value, 3px wider for negative values
+			lv_obj_set_style_bg_color(g_warning_data[field_id].container, PALETTE_BLACK, 0); // Black background
 			lv_obj_set_style_bg_opa(g_warning_data[field_id].container, LV_OPA_COVER, 0);
-			lv_obj_set_style_border_color(g_warning_data[field_id].container, lv_color_hex(0xFFD700), 0); // Yellow border
+			lv_obj_set_style_border_color(g_warning_data[field_id].container, PALETTE_YELLOW, 0); // Yellow border
 			lv_obj_set_style_border_width(g_warning_data[field_id].container, 2, 0);
 			lv_obj_set_style_radius(g_warning_data[field_id].container, 8, 0);
 			lv_obj_clear_flag(g_warning_data[field_id].container, LV_OBJ_FLAG_SCROLLABLE);
 
 			// Create text label inside container
 			g_warning_data[field_id].text_label = lv_label_create(g_warning_data[field_id].container);
-			lv_obj_set_style_text_color(g_warning_data[field_id].text_label, lv_color_hex(0xFFD700), 0);
+			lv_obj_set_style_text_color(g_warning_data[field_id].text_label, PALETTE_YELLOW, 0);
 			lv_obj_set_style_text_font(g_warning_data[field_id].text_label, &lv_font_montserrat_20, 0);
 			lv_obj_set_style_text_align(g_warning_data[field_id].text_label, LV_TEXT_ALIGN_CENTER, 0);
 			lv_label_set_text(g_warning_data[field_id].text_label, "MIN");
@@ -781,7 +1068,7 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 
 			// Create value label inside container
 			g_warning_data[field_id].value_label = lv_label_create(g_warning_data[field_id].container);
-			lv_obj_set_style_text_color(g_warning_data[field_id].value_label, lv_color_hex(0xFFD700), 0);
+			lv_obj_set_style_text_color(g_warning_data[field_id].value_label, PALETTE_YELLOW, 0);
 			lv_obj_set_style_text_font(g_warning_data[field_id].value_label, &lv_font_noplato_24, 0);
 			lv_obj_set_style_text_align(g_warning_data[field_id].value_label, LV_TEXT_ALIGN_CENTER, 0);
 			lv_obj_align(g_warning_data[field_id].value_label, LV_ALIGN_BOTTOM_MID, 0, -10);
@@ -790,6 +1077,7 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 			snprintf(value_text, sizeof(value_text), "%.1f", data->min_value);
 			lv_label_set_text(g_warning_data[field_id].value_label, value_text);
 		} else {
+
 			// Fallback - shouldn't happen
 			lv_label_set_text(g_warning_data[field_id].text_label, "ERROR");
 		}
@@ -927,152 +1215,107 @@ static void create_gauge_section(alerts_modal_t* modal, gauge_type_t gauge, lv_o
 {
 	if (!modal || gauge >= GAUGE_COUNT) return;
 
-	// Create gauge section container - much taller and wider to eliminate scroll bars
+	// Gauge section container
 	modal->gauge_sections[gauge] = lv_obj_create(parent);
 	lv_obj_set_size(modal->gauge_sections[gauge], LV_PCT(100), 200);  // Increased from 160 to 200
 	lv_obj_set_pos(modal->gauge_sections[gauge], 0, y_offset);
 	lv_obj_set_style_bg_opa(modal->gauge_sections[gauge], LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(modal->gauge_sections[gauge], 2, 0);
-	lv_obj_set_style_border_color(modal->gauge_sections[gauge], lv_color_hex(0xffffff), 0);
+	lv_obj_set_style_border_color(modal->gauge_sections[gauge], PALETTE_WHITE, 0);
 	lv_obj_set_style_pad_all(modal->gauge_sections[gauge], 1, 0);  // Minimal padding for maximum space
 	lv_obj_clear_flag(modal->gauge_sections[gauge], LV_OBJ_FLAG_SCROLLABLE);
 	lv_obj_add_flag(modal->gauge_sections[gauge], LV_OBJ_FLAG_EVENT_BUBBLE);
 
-	// gauge title - positioned inline with border like detail_screen
+	// Gauge Title - positioned inline with border like detail_screen
 	// Create as child of root modal container so it's not clipped by gauge_sections
 	modal->gauge_titles[gauge] = lv_label_create(modal->content_container);
 	lv_label_set_text(modal->gauge_titles[gauge], gauge_names[gauge]);
-	lv_obj_set_style_text_color(modal->gauge_titles[gauge], lv_color_hex(0xffffff), 0);
+	lv_obj_set_style_text_color(modal->gauge_titles[gauge], DEFAULT_GAUGE_TITLE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_titles[gauge], &lv_font_montserrat_16, 0);
-	lv_obj_set_style_bg_color(modal->gauge_titles[gauge], lv_color_hex(0x000000), 0); // Black background to obscure border
+	lv_obj_set_style_bg_color(modal->gauge_titles[gauge], DEFAULT_GAUGE_TITLE_BACKGROUND_COLOR, 0); // Blue background to obscure border
 	lv_obj_set_style_bg_opa(modal->gauge_titles[gauge], LV_OPA_COVER, 0);
 	lv_obj_set_style_pad_left(modal->gauge_titles[gauge], 8, 0);
 	lv_obj_set_style_pad_right(modal->gauge_titles[gauge], 8, 0);
 	lv_obj_set_style_pad_top(modal->gauge_titles[gauge], 2, 0);
 	lv_obj_set_style_pad_bottom(modal->gauge_titles[gauge], 2, 0);
-	lv_obj_align_to(modal->gauge_titles[gauge], modal->gauge_sections[gauge], LV_ALIGN_OUT_TOP_LEFT, 10, 10);
+	lv_obj_set_style_radius(modal->gauge_titles[gauge], 5, 0);
+	lv_obj_align_to(modal->gauge_titles[gauge], modal->gauge_sections[gauge], LV_ALIGN_OUT_TOP_RIGHT, -10, 10);
 
 	// Create ALERTS group - 2 units wide using flexbox, balanced margins
 	modal->alert_groups[gauge] = lv_obj_create(modal->gauge_sections[gauge]);
+
+	// Layout
 	lv_obj_set_size(modal->alert_groups[gauge], LV_PCT(38), 140);  // Reduced width to make room for GAUGE
 	lv_obj_set_pos(modal->alert_groups[gauge], 8, 32);  // 8px left margin (A), reduced y by 3px
-	lv_obj_set_style_bg_opa(modal->alert_groups[gauge], LV_OPA_TRANSP, 0);
-	lv_obj_set_style_border_width(modal->alert_groups[gauge], 2, 0);
-	lv_obj_set_style_border_color(modal->alert_groups[gauge], lv_color_hex(0xffffff), 0);
-	lv_obj_set_style_radius(modal->alert_groups[gauge], 5, 0);
-	lv_obj_set_style_pad_all(modal->alert_groups[gauge], 0, 0);  // No internal padding for maximum space
-	lv_obj_clear_flag(modal->alert_groups[gauge], LV_OBJ_FLAG_SCROLLABLE);
-	lv_obj_add_flag(modal->alert_groups[gauge], LV_OBJ_FLAG_EVENT_BUBBLE);
-	// Setup flexbox layout for 2-item alerts
+
 	lv_obj_set_layout(modal->alert_groups[gauge], LV_LAYOUT_FLEX);
 	lv_obj_set_flex_flow(modal->alert_groups[gauge], LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(modal->alert_groups[gauge], LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-	// ALERTS group title - positioned inline with border like detail_screen
+	// Style
+	lv_obj_set_style_bg_opa(modal->alert_groups[gauge], LV_OPA_TRANSP, 0);
+	lv_obj_set_style_border_width(modal->alert_groups[gauge], 2, 0);
+	lv_obj_set_style_border_color(modal->alert_groups[gauge], PALETTE_WHITE, 0);
+	lv_obj_set_style_radius(modal->alert_groups[gauge], 5, 0);
+	lv_obj_set_style_pad_all(modal->alert_groups[gauge], 0, 0);  // No internal padding for maximum space
+
+	// Properties
+	lv_obj_clear_flag(modal->alert_groups[gauge], LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_add_flag(modal->alert_groups[gauge], LV_OBJ_FLAG_EVENT_BUBBLE);
+
+
+	// ALERTS group title - positioned inline with border like detail_screen // do not style here
 	modal->alert_titles[gauge] = lv_label_create(modal->gauge_sections[gauge]);
 	lv_label_set_text(modal->alert_titles[gauge], "ALERTS");
-	lv_obj_set_style_text_color(modal->alert_titles[gauge], lv_color_hex(0xffffff), 0);
+	lv_obj_set_style_text_color(modal->alert_titles[gauge], DEFAULT_FIELD_ALERT_GROUP_TITLE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->alert_titles[gauge], &lv_font_montserrat_12, 0);
-	lv_obj_set_style_bg_color(modal->alert_titles[gauge], lv_color_hex(0x000000), 0); // Black background to obscure border
+	lv_obj_set_style_bg_color(modal->alert_titles[gauge], PALETTE_RED, 0); // Black background to obscure border
 	lv_obj_set_style_bg_opa(modal->alert_titles[gauge], LV_OPA_COVER, 0);
 	lv_obj_set_style_pad_left(modal->alert_titles[gauge], 8, 0);
 	lv_obj_set_style_pad_right(modal->alert_titles[gauge], 8, 0);
 	lv_obj_set_style_pad_top(modal->alert_titles[gauge], 2, 0);
 	lv_obj_set_style_pad_bottom(modal->alert_titles[gauge], 2, 0);
+	// lv_obj_set_style_border_width(modal->alert_titles[gauge], 0, 0);
+	lv_obj_set_style_radius(modal->alert_titles[gauge], 3, 0);
+
+
 	lv_obj_align_to(modal->alert_titles[gauge], modal->alert_groups[gauge], LV_ALIGN_OUT_TOP_LEFT, 10, 10);
-
-	// Create field buttons for ALERTS group (LOW, HIGH)
-	for (int i = 0; i < 2; i++) {
-		int field_index = i; // FIELD_ALERT_LOW, FIELD_ALERT_HIGH
-
-		// Create container for button + label (placeholder only)
-		lv_obj_t* field_container = lv_obj_create(modal->alert_groups[gauge]);
-		lv_obj_clear_flag(field_container, LV_OBJ_FLAG_SCROLLABLE);
-		lv_obj_add_flag(field_container, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-		// Update layout
-		lv_obj_update_layout(field_container);
-
-		// Field name label
-		lv_obj_t* name_label = lv_label_create(field_container);
-		lv_label_set_text(name_label, field_names[field_index]);
-		lv_obj_set_style_text_color(name_label, lv_color_hex(0xffffff), 0);
-		lv_obj_set_style_text_font(name_label, &lv_font_montserrat_12, 0);
-		lv_obj_set_style_bg_color(name_label, lv_color_hex(0x000000), 0);
-		lv_obj_set_style_bg_opa(name_label, LV_OPA_COVER, 0);
-		lv_obj_set_style_pad_left(name_label, 8, 0);
-		lv_obj_set_style_pad_right(name_label, 8, 0);
-		lv_obj_set_style_pad_top(name_label, 2, 0);
-		lv_obj_set_style_pad_bottom(name_label, 2, 0);
-		lv_obj_align_to(name_label, field_container, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
-	}
 
 	// Create GAUGE group - 3 units wide using flexbox, positioned to the right of ALERTS
 	modal->gauge_groups[gauge] = lv_obj_create(modal->gauge_sections[gauge]);
-	lv_obj_set_size(modal->gauge_groups[gauge], LV_PCT(58), 140);  // Increased width to fill remaining space
-	// Position to the right of ALERTS group with 8px gap
-	lv_obj_align_to(modal->gauge_groups[gauge], modal->alert_groups[gauge], LV_ALIGN_OUT_RIGHT_MID, 8, 0);
-	lv_obj_set_style_bg_opa(modal->gauge_groups[gauge], LV_OPA_TRANSP, 0);
-	lv_obj_set_style_border_width(modal->gauge_groups[gauge], 2, 0);
-	lv_obj_set_style_border_color(modal->gauge_groups[gauge], lv_color_hex(0xffffff), 0);
-	lv_obj_set_style_radius(modal->gauge_groups[gauge], 5, 0);
-	lv_obj_set_style_pad_all(modal->gauge_groups[gauge], 0, 0);  // No internal padding for maximum space
-	lv_obj_clear_flag(modal->gauge_groups[gauge], LV_OBJ_FLAG_SCROLLABLE);
-	lv_obj_add_flag(modal->gauge_groups[gauge], LV_OBJ_FLAG_EVENT_BUBBLE);
-	// Setup flexbox layout for 3-item gauges
+
+	// Layout
+	lv_obj_set_size(modal->gauge_groups[gauge], LV_PCT(57), 140);  // Increased width to fill remaining space
+	lv_obj_align_to(modal->gauge_groups[gauge], modal->alert_groups[gauge], LV_ALIGN_OUT_RIGHT_MID, 8, 0); // Position to the right of ALERTS group with 8px gap
 	lv_obj_set_layout(modal->gauge_groups[gauge], LV_LAYOUT_FLEX);
 	lv_obj_set_flex_flow(modal->gauge_groups[gauge], LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(modal->gauge_groups[gauge], LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
+	// Style
+	lv_obj_set_style_bg_opa(modal->gauge_groups[gauge], LV_OPA_TRANSP, 0);
+	lv_obj_set_style_border_width(modal->gauge_groups[gauge], 2, 0);
+	lv_obj_set_style_border_color(modal->gauge_groups[gauge], PALETTE_WHITE, 0);
+	lv_obj_set_style_radius(modal->gauge_groups[gauge], 5, 0);
+	lv_obj_set_style_pad_all(modal->gauge_groups[gauge], 0, 0);  // No internal padding for maximum space
+
+	// Properties
+	lv_obj_clear_flag(modal->gauge_groups[gauge], LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_add_flag(modal->gauge_groups[gauge], LV_OBJ_FLAG_EVENT_BUBBLE);
+
+
 	// GAUGE group title - positioned inline with border like detail_screen
-	modal->gauge_group_titles[gauge] = lv_label_create(modal->gauge_sections[gauge]);
-	lv_label_set_text(modal->gauge_group_titles[gauge], "GAUGE");
-	lv_obj_set_style_text_color(modal->gauge_group_titles[gauge], lv_color_hex(0xffffff), 0);
-	lv_obj_set_style_text_font(modal->gauge_group_titles[gauge], &lv_font_montserrat_12, 0);
-	lv_obj_set_style_bg_color(modal->gauge_group_titles[gauge], lv_color_hex(0x000000), 0); // Black background to obscure border
-	lv_obj_set_style_bg_opa(modal->gauge_group_titles[gauge], LV_OPA_COVER, 0);
-	lv_obj_set_style_pad_left(modal->gauge_group_titles[gauge], 8, 0);
-	lv_obj_set_style_pad_right(modal->gauge_group_titles[gauge], 8, 0);
-	lv_obj_set_style_pad_top(modal->gauge_group_titles[gauge], 2, 0);
-	lv_obj_set_style_pad_bottom(modal->gauge_group_titles[gauge], 2, 0);
-	lv_obj_align_to(modal->gauge_group_titles[gauge], modal->gauge_groups[gauge], LV_ALIGN_OUT_TOP_LEFT, 10, 10);
-
-	// Create field buttons for GAUGE group (LOW, BASE-LINE, HIGH)
-	for (int i = 0; i < 3; i++) {
-		int field_index = i + 2; // Start from FIELD_GAUGE_LOW
-		bool should_create_field = true;
-
-		// For SOLAR: skip the middle field (BASE-LINE), create blank instead
-		if (gauge == GAUGE_SOLAR && i == 1) {
-			should_create_field = false;
-		}
-
-		// For SOLAR: map position 2 to HIGH field (field_index 4)
-		if (gauge == GAUGE_SOLAR && i == 2) {
-			field_index = 4; // HIGH field for solar
-		}
-
-		// Create container for button + label
-		lv_obj_t* field_container = lv_obj_create(modal->gauge_groups[gauge]);
-		lv_obj_clear_flag(field_container, LV_OBJ_FLAG_SCROLLABLE);
-		lv_obj_add_flag(field_container, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-		// Update layout
-		lv_obj_update_layout(field_container);
-
-		// Field name label
-		lv_obj_t* name_label = lv_label_create(field_container);
-		lv_label_set_text(name_label, field_names[field_index]);
-		lv_obj_set_style_text_color(name_label, lv_color_hex(0xffffff), 0);
-		lv_obj_set_style_text_font(name_label, &lv_font_montserrat_12, 0);
-		lv_obj_set_style_bg_color(name_label, lv_color_hex(0x000000), 0);
-		lv_obj_set_style_bg_opa(name_label, LV_OPA_COVER, 0);
-		lv_obj_set_style_pad_left(name_label, 8, 0);
-		lv_obj_set_style_pad_right(name_label, 8, 0);
-		lv_obj_set_style_pad_top(name_label, 2, 0);
-		lv_obj_set_style_pad_bottom(name_label, 2, 0);
-		lv_obj_align_to(name_label, field_container, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
-	}
+	modal->gauge_group_title[gauge] = lv_label_create(modal->gauge_sections[gauge]);
+	lv_label_set_text(modal->gauge_group_title[gauge], "GAUGE");
+	lv_obj_set_style_text_color(modal->gauge_group_title[gauge], DEFAULT_FIELD_GAUGE_GROUP_TITLE_TEXT_COLOR, 0);
+	lv_obj_set_style_text_font(modal->gauge_group_title[gauge], &lv_font_montserrat_12, 0);
+	lv_obj_set_style_bg_color(modal->gauge_group_title[gauge], lv_color_hex(0x8F4700), 0); // Black background to obscure border
+	lv_obj_set_style_bg_opa(modal->gauge_group_title[gauge], LV_OPA_COVER, 0);
+	lv_obj_set_style_pad_left(modal->gauge_group_title[gauge], 8, 0);
+	lv_obj_set_style_pad_right(modal->gauge_group_title[gauge], 8, 0);
+	lv_obj_set_style_pad_top(modal->gauge_group_title[gauge], 2, 0);
+	lv_obj_set_style_pad_bottom(modal->gauge_group_title[gauge], 2, 0);
+	lv_obj_set_style_radius(modal->gauge_group_title[gauge], 3, 0);
+	lv_obj_align_to(modal->gauge_group_title[gauge], modal->gauge_groups[gauge], LV_ALIGN_OUT_TOP_LEFT, 10, 10);
 }
 
 
@@ -1089,6 +1332,9 @@ alerts_modal_t* alerts_modal_create(void (*on_close_callback)(void))
 	}
 
 	memset(modal, 0, sizeof(alerts_modal_t));
+
+	// Initialize warning data array to ensure all text_label fields are NULL
+	memset(g_warning_data, 0, sizeof(g_warning_data));
 	modal->on_close = on_close_callback;
 	modal->current_field_id = -1;
 
@@ -1096,7 +1342,7 @@ alerts_modal_t* alerts_modal_create(void (*on_close_callback)(void))
 	modal->background = lv_obj_create(lv_screen_active());
 	lv_obj_set_size(modal->background, LV_PCT(100), LV_PCT(100));
 	lv_obj_set_pos(modal->background, 0, 0);
-	lv_obj_set_style_bg_color(modal->background, lv_color_hex(0x000000), 0);
+	lv_obj_set_style_bg_color(modal->background, PALETTE_BLACK, 0);
 	lv_obj_set_style_bg_opa(modal->background, LV_OPA_80, 0);
 	lv_obj_set_style_border_width(modal->background, 0, 0);
 	lv_obj_set_style_pad_all(modal->background, 0, 0);
@@ -1105,29 +1351,43 @@ alerts_modal_t* alerts_modal_create(void (*on_close_callback)(void))
 	modal->content_container = lv_obj_create(modal->background);
 	lv_obj_set_size(modal->content_container, LV_PCT(100), LV_PCT(100));
 	lv_obj_align(modal->content_container, LV_ALIGN_CENTER, 0, 0);
-	lv_obj_set_style_bg_color(modal->content_container, lv_color_hex(0x000000), 0);
-	lv_obj_set_style_border_color(modal->content_container, lv_color_hex(0xffffff), 0);
-	lv_obj_set_style_border_width(modal->content_container, 1, 0);
-	lv_obj_set_style_pad_all(modal->content_container, 0, 0);
+	lv_obj_set_style_bg_color(modal->content_container, PALETTE_BLACK, 0);
+	lv_obj_set_style_border_color(modal->content_container, PALETTE_BLACK, 0);
+	lv_obj_set_style_border_width(modal->content_container, 0, 0);
+	lv_obj_set_style_pad_all(modal->content_container, 0, 10);
 
 	// Create gauge sections
 	for (int i = 0; i < GAUGE_COUNT; i++) {
 		create_gauge_section(modal, i, modal->content_container, i * 240);  // Increased for better visual separation
 	}
 
-	// Create close button
+	// Create close button - made taller to fit to bottom of last gauge
 	modal->close_button = lv_button_create(modal->content_container);
-	lv_obj_set_size(modal->close_button, 100, 40);
-	lv_obj_align(modal->close_button, LV_ALIGN_BOTTOM_RIGHT, -20, -10);
+	lv_obj_set_size(modal->close_button, 100, 60);  // Increased height from 40 to 60
+	lv_obj_align(modal->close_button, LV_ALIGN_BOTTOM_RIGHT, 0, -10);
 	lv_obj_set_style_bg_color(modal->close_button, lv_color_hex(0x555555), 0);
 
 	lv_obj_t *close_label = lv_label_create(modal->close_button);
 	lv_label_set_text(close_label, "Close");
-	lv_obj_set_style_text_color(close_label, lv_color_hex(0xffffff), 0);
+	lv_obj_set_style_text_color(close_label, PALETTE_WHITE, 0);
 	lv_obj_center(close_label);
 
 	// Add click event to close button
 	lv_obj_add_event_cb(modal->close_button, close_button_cb, LV_EVENT_CLICKED, modal);
+
+	// Create cancel button - same height as close button
+	modal->cancel_button = lv_button_create(modal->content_container);
+	lv_obj_set_size(modal->cancel_button, 100, 60);  // Same height as close button
+	lv_obj_align(modal->cancel_button, LV_ALIGN_BOTTOM_RIGHT, -110, -10);  // Positioned to the left of close button
+	lv_obj_set_style_bg_color(modal->cancel_button, lv_color_hex(0x666666), 0);
+
+	lv_obj_t *cancel_label = lv_label_create(modal->cancel_button);
+	lv_label_set_text(cancel_label, "Cancel");
+	lv_obj_set_style_text_color(cancel_label, PALETTE_WHITE, 0);
+	lv_obj_center(cancel_label);
+
+	// Add click event to cancel button
+	lv_obj_add_event_cb(modal->cancel_button, cancel_button_cb, LV_EVENT_CLICKED, modal);
 
 	// Add field click handler to modal containers to handle all clicks
 	lv_obj_add_event_cb(modal->background, field_click_handler, LV_EVENT_CLICKED, modal);
@@ -1145,46 +1405,87 @@ alerts_modal_t* alerts_modal_create(void (*on_close_callback)(void))
 		}
 	}
 
-	// Populate fields by iterating through field_data once
+	// Create field containers and populate fields
 	for (int field_id = 0; field_id < GAUGE_COUNT * FIELD_COUNT_PER_GAUGE; field_id++) {
 
 		field_data_t* data = &modal->field_data[field_id];
 
-		// Find the field container for this field
+		// Create the field container for this field
 		lv_obj_t* field_container = NULL;
 		if (data->group_type == GROUP_ALERTS) {
-			// For ALERTS group, find the field container by field index
+			// For ALERTS group, create field container
 			if (data->field_index < 2) { // FIELD_ALERT_LOW or FIELD_ALERT_HIGH
-				field_container = lv_obj_get_child(modal->alert_groups[data->gauge_index], data->field_index);
+
+				field_container = lv_obj_create(modal->alert_groups[data->gauge_index]);
 			}
 		} else if (data->group_type == GROUP_GAUGE) {
-			// For GAUGE group, find the field container by field index (offset by 2)
+			// For GAUGE group, create field container
 			if (data->field_index >= 2 && data->field_index < 5) { // FIELD_GAUGE_LOW, FIELD_GAUGE_BASELINE, FIELD_GAUGE_HIGH
-				int gauge_index = data->field_index - 2; // Convert to 0, 1, 2
-				field_container = lv_obj_get_child(modal->gauge_groups[data->gauge_index], gauge_index);
+
+				field_container = lv_obj_create(modal->gauge_groups[data->gauge_index]);
 			}
 		}
 
+		lv_obj_clear_flag(field_container, LV_OBJ_FLAG_SCROLLABLE);
+		lv_obj_add_flag(field_container, LV_OBJ_FLAG_EVENT_BUBBLE);
+
 		if (!field_container) continue;
 
-		// Style the field container itself as the button
-		lv_obj_set_size(field_container, 60, 60);
-		lv_obj_set_style_bg_color(field_container, lv_color_hex(0x2E2E2E), 0);
-		lv_obj_set_style_bg_opa(field_container, LV_OPA_COVER, 0);
-		lv_obj_set_style_border_color(field_container, lv_color_hex(0xffffff), 0);
-		lv_obj_set_style_border_width(field_container, 2, 0);
-		lv_obj_set_style_border_opa(field_container, LV_OPA_COVER, 0);
-		lv_obj_set_style_radius(field_container, 8, 0);
+		// Field Container ( Button and Title)
+		lv_obj_set_size(field_container, 63, 82); // 3px wider for negative values
 
-		// Create field label directly in the field container
-		lv_obj_t* label = lv_label_create(field_container);
-		lv_obj_set_style_text_color(label, lv_color_hex(0xffffff), 0);
-		lv_obj_set_style_text_font(label, &lv_font_noplato_24, 0);
-		lv_obj_center(label);
+		// Layout
+		lv_obj_set_layout(field_container, LV_LAYOUT_FLEX);
+		lv_obj_set_flex_flow(field_container, LV_FLEX_FLOW_COLUMN);
+		lv_obj_set_flex_align(field_container, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+		// Style
+		lv_obj_set_style_bg_opa(field_container, LV_OPA_TRANSP, 0);
+		lv_obj_set_style_border_width(field_container, 0, 0);
+		lv_obj_set_style_border_color(field_container, PALETTE_WHITE, 0);
+		lv_obj_set_style_radius(field_container, 0, 0);
+		lv_obj_set_style_pad_all(field_container, 1, 1);  // Add padding to accommodate child border
+
+		// Field Value (Button)
+		lv_obj_t* field_value_container = lv_obj_create( field_container );
+		lv_obj_set_size(field_value_container, 63, 60); // 3px wider for negative values
+		lv_obj_set_style_border_color(field_value_container, PALETTE_WHITE, 0);
+		lv_obj_set_style_border_width(field_value_container, 2, 0);
+		lv_obj_set_style_border_opa(field_value_container, LV_OPA_COVER, 0);
+		lv_obj_set_style_radius(field_value_container, 8, 0);
+
+		lv_obj_clear_flag(field_value_container, LV_OBJ_FLAG_SCROLLABLE);
+		lv_obj_add_flag(field_value_container, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+		// Numeric Value (Button)
+		lv_obj_t* number_label = lv_label_create(field_value_container);
+		lv_obj_set_style_text_color(number_label, lv_color_hex(0xfffff), 0);
+		lv_obj_set_style_bg_color(number_label, PALETTE_RED, 0);
+		lv_obj_set_style_bg_opa(field_value_container, LV_OPA_COVER, 0);
+		lv_obj_set_style_bg_color(field_value_container, PALETTE_RED, 0);
+		lv_obj_set_style_text_font(number_label, &lv_font_noplato_24, 0);
+		lv_obj_set_style_pad_bottom(number_label, 0, 0);
+		lv_obj_center(number_label);
+
+		// Title
+		lv_obj_t*title_label = lv_label_create( field_container );
+
+		lv_label_set_text(title_label, field_names[data->field_index]);
+		lv_obj_set_style_text_color(title_label, PALETTE_WHITE, 0);
+		lv_obj_set_style_text_font(title_label, &lv_font_montserrat_12, 0);
+		lv_obj_set_style_bg_color(title_label, PALETTE_BLACK, 0);
+		lv_obj_set_style_bg_opa(title_label, LV_OPA_COVER, 0);
+		lv_obj_set_style_pad_left(title_label, 4, 0);
+		lv_obj_set_style_pad_right(title_label, 4, 0);
+		lv_obj_set_style_pad_top(title_label, 0, 0);
+		lv_obj_set_style_pad_bottom(title_label, 2, 0);
+		lv_obj_set_style_margin_top(title_label, -8, 0);
+		lv_obj_set_style_radius(title_label, 3, 0);
 
 		// map field UI values
-		modal->field_ui[field_id].button = field_container;
-		modal->field_ui[field_id].label = label;
+		modal->field_ui[field_id].button = field_value_container;
+		modal->field_ui[field_id].label = number_label;
+		modal->field_ui[field_id].title = title_label;
 
 		// Load value from device state
 		float loaded_value = get_device_state_value(data->gauge_index, data->field_index);
@@ -1263,4 +1564,41 @@ bool alerts_modal_is_visible(alerts_modal_t* modal)
 		return false;
 	}
 	return modal->is_visible;
+}
+
+void alerts_modal_refresh_gauges_and_alerts(void)
+{
+	printf("[I] alerts_modal: Refreshing gauges and alerts after modal changes\n");
+
+	// Update power grid view gauge configuration
+	extern void power_monitor_power_grid_view_update_configuration(void);
+	power_monitor_power_grid_view_update_configuration();
+
+	// Update detail screen gauge ranges
+	extern void power_monitor_update_detail_gauge_ranges(void);
+	power_monitor_update_detail_gauge_ranges();
+
+	// Update all power monitor data and gauges (this includes detail screen gauges)
+	extern void power_monitor_update_data_only(void);
+	power_monitor_update_data_only();
+
+	// Update alert flashing
+	extern void power_monitor_power_grid_view_apply_alert_flashing(const power_monitor_data_t* data, int starter_lo, int starter_hi, int house_lo, int house_hi, int solar_lo, int solar_hi, bool blink_on);
+	extern power_monitor_data_t* power_monitor_get_data(void);
+
+	power_monitor_data_t* data = power_monitor_get_data();
+	if (data) {
+		// Get current alert thresholds from device state
+		int starter_lo = device_state_get_starter_alert_low_voltage_v();
+		int starter_hi = device_state_get_starter_alert_high_voltage_v();
+		int house_lo = device_state_get_house_alert_low_voltage_v();
+		int house_hi = device_state_get_house_alert_high_voltage_v();
+		int solar_lo = device_state_get_solar_alert_low_voltage_v();
+		int solar_hi = device_state_get_solar_alert_high_voltage_v();
+
+		// Apply alert flashing with current thresholds
+		power_monitor_power_grid_view_apply_alert_flashing(data, starter_lo, starter_hi, house_lo, house_hi, solar_lo, solar_hi, false);
+	}
+
+	printf("[I] alerts_modal: Gauge and alert refresh complete\n");
 }

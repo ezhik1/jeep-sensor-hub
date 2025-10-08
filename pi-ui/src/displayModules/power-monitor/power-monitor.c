@@ -593,6 +593,64 @@ power_monitor_data_t* power_monitor_get_data(void)
 	return &power_data;
 }
 
+// Public function to update detail screen gauge ranges
+void power_monitor_update_detail_gauge_ranges(void)
+{
+	// Only update if detail screen exists
+	if (!detail_screen) {
+		return;
+	}
+
+	// Get current gauge range values from device state
+	float starter_baseline = device_state_get_starter_baseline_voltage_v();
+	float starter_min = device_state_get_starter_min_voltage_v();
+	float starter_max = device_state_get_starter_max_voltage_v();
+	float house_baseline = device_state_get_house_baseline_voltage_v();
+	float house_min = device_state_get_house_min_voltage_v();
+	float house_max = device_state_get_house_max_voltage_v();
+	float solar_min = device_state_get_solar_min_voltage_v();
+	float solar_max = device_state_get_solar_max_voltage_v();
+
+	// Update detail screen gauge ranges
+	if (detail_starter_voltage_gauge.initialized) {
+		bar_graph_gauge_configure_advanced(
+			&detail_starter_voltage_gauge,
+			BAR_GRAPH_MODE_BIPOLAR,
+			starter_baseline,
+			starter_min,
+			starter_max,
+			"STARTER BATTERY", "V", "V", 0x00FF00,
+			true, true, true
+		);
+	}
+
+	if (detail_house_voltage_gauge.initialized) {
+		bar_graph_gauge_configure_advanced(
+			&detail_house_voltage_gauge,
+			BAR_GRAPH_MODE_BIPOLAR,
+			house_baseline,
+			house_min,
+			house_max,
+			"HOUSE BATTERY", "V", "V", 0x0080FF,
+			true, true, true
+		);
+	}
+
+	if (detail_solar_voltage_gauge.initialized) {
+		bar_graph_gauge_configure_advanced(
+			&detail_solar_voltage_gauge,
+			BAR_GRAPH_MODE_POSITIVE_ONLY,
+			0.0f,
+			solar_min,
+			solar_max,
+			"SOLAR INPUT", "V", "V", 0xFF8000,
+			true, true, true
+		);
+	}
+
+	printf("[I] power_monitor: Updated detail screen gauge ranges\n");
+}
+
 
 // Public function for updating (required by screen manager)
 

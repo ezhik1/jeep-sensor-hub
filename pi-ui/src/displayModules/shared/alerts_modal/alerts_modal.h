@@ -40,6 +40,7 @@ typedef enum {
 typedef struct {
 	lv_obj_t* button;           // The UI button
 	lv_obj_t* label;            // The value label
+	lv_obj_t* title;            // The title label
 } field_ui_t;
 
 // Field data structure - complete state management for each field
@@ -65,6 +66,10 @@ typedef struct {
 	lv_color_t border_color;    // Current border color
 	int border_width;           // Current border width
 	lv_color_t text_color;      // Current text color
+	lv_color_t text_background_color; // Current text background color
+	lv_color_t title_color;      // Current title color
+	lv_color_t title_background_color; // Current title background color
+	lv_color_t button_background_color; // Current button background color
 } field_data_t;
 
 /**
@@ -78,6 +83,7 @@ typedef struct {
 	lv_obj_t* content_container;    // Main content container
 	lv_obj_t* title_label;          // Modal title
 	lv_obj_t* close_button;         // Close button
+	lv_obj_t* cancel_button;        // Cancel button
 
 	// Gauge sections
 	lv_obj_t* gauge_sections[GAUGE_COUNT];      // Gauge section containers
@@ -87,7 +93,7 @@ typedef struct {
 	// Title labels for caching
 	lv_obj_t* gauge_titles[GAUGE_COUNT];         // Gauge section titles
 	lv_obj_t* alert_titles[GAUGE_COUNT];         // Alert group titles
-	lv_obj_t* gauge_group_titles[GAUGE_COUNT];   // Gauge group titles
+	lv_obj_t* gauge_group_title[GAUGE_COUNT];   // Gauge group titles
 
 	// Field UI objects - 1D array for UI layout
 	field_ui_t field_ui[GAUGE_COUNT * FIELD_COUNT_PER_GAUGE];
@@ -138,42 +144,10 @@ void alerts_modal_destroy(alerts_modal_t* modal);
 bool alerts_modal_is_visible(alerts_modal_t* modal);
 
 /**
- * @brief Show the numberpad for editing a field
- * @param modal Pointer to the modal
- * @param Gauge Gauge type being edited
- * @param field Field type being edited
+ * @brief Update all gauge ranges and alert thresholds after modal changes
+ * This function should be called after the modal closes to refresh all displays
  */
-void alerts_modal_show_numberpad(alerts_modal_t* modal, gauge_type_t Gauge, field_type_t field);
-
-/**
- * @brief Hide the numberpad
- * @param modal Pointer to the modal
- */
-void alerts_modal_hide_numberpad(alerts_modal_t* modal);
-
-// Dim all elements except the target field
-void alerts_modal_dim_for_focus(alerts_modal_t* modal, gauge_type_t Gauge, field_type_t field);
-
-// Restore all elements to normal colors
-void alerts_modal_restore_colors(alerts_modal_t* modal);
-
-/**
- * @brief Get the current value of a field
- * @param modal Pointer to the modal
- * @param Gauge Gauge type
- * @param field Field type
- * @return Current field value
- */
-float alerts_modal_get_field_value(alerts_modal_t* modal, gauge_type_t Gauge, field_type_t field);
-
-/**
- * @brief Set the value of a field
- * @param modal Pointer to the modal
- * @param Gauge Gauge type
- * @param field Field type
- * @param value New value to set
- */
-void alerts_modal_set_field_value(alerts_modal_t* modal, gauge_type_t Gauge, field_type_t field, float value);
+void alerts_modal_refresh_gauges_and_alerts(void);
 
 #ifdef __cplusplus
 }

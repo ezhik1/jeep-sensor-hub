@@ -66,6 +66,9 @@ void power_monitor_render_simple_view(lv_obj_t *container);
 // Data-only update function (no UI structure changes)
 void power_monitor_update_data_only(void);
 
+// Detail screen gauge range update function
+void power_monitor_update_detail_gauge_ranges(void);
+
 
 // Overlay control for shared current_view
 void power_monitor_show_in_container(lv_obj_t *container);
