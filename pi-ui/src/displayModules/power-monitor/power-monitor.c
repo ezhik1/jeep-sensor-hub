@@ -9,6 +9,7 @@
 // Include the shared current view manager
 #include "../shared/current_view/current_view_manager.h"
 #include "../shared/alerts_modal/alerts_modal.h"
+#include "../shared/alerts_modal/voltage_alerts_config.h"
 #include "../shared/gauges/bar_graph_gauge.h"
 #include "../../screens/home_screen/home_screen.h"
 #include "../../state/device_state.h"
@@ -1050,7 +1051,7 @@ void power_monitor_handle_alerts_button(void)
 
 	// Create alerts modal
 	printf("[I] power_monitor: Creating alerts modal\n");
-	current_modal = alerts_modal_create(power_monitor_close_modal);
+	current_modal = alerts_modal_create(&voltage_alerts_config, power_monitor_close_modal);
 
 	if (current_modal) {
 		printf("[I] power_monitor: Showing alerts modal\n");
@@ -1073,7 +1074,7 @@ void power_monitor_handle_timeline_button(void)
 	}
 
 	// Create alerts modal (timeline functionality not implemented yet)
-	current_modal = alerts_modal_create(power_monitor_close_modal);
+	current_modal = alerts_modal_create(&voltage_alerts_config, power_monitor_close_modal);
 	if (current_modal) {
 				alerts_modal_show(current_modal);
 		printf("[I] power_monitor: Timeline modal opened (using alerts modal\n");

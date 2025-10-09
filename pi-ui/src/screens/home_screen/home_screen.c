@@ -43,50 +43,64 @@ typedef struct {
 	display_module_interface_t interface;
 } module_registry_entry_t;
 
-// Dummy module render functions
-static void dummy_module_1_render(lv_obj_t *container) {
+// Placeholder module render functions
+static void cooling_management_render(lv_obj_t *container) {
 	lv_obj_t *label = lv_label_create(container);
-	lv_label_set_text(label, "DUMMY 1");
+	lv_label_set_text(label, "COOLING\nMANAGEMENT");
 	lv_obj_center(label);
 	lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 }
 
-static void dummy_module_2_render(lv_obj_t *container) {
+static void environmental_render(lv_obj_t *container) {
 	lv_obj_t *label = lv_label_create(container);
-	lv_label_set_text(label, "DUMMY 2");
+	lv_label_set_text(label, "ENVIRONMENTAL\nCONDITIONS");
 	lv_obj_center(label);
 	lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 }
 
-static void dummy_module_3_render(lv_obj_t *container) {
+static void tpms_render(lv_obj_t *container) {
 	lv_obj_t *label = lv_label_create(container);
-	lv_label_set_text(label, "DUMMY 3");
+	lv_label_set_text(label, "TPMS\nSYSTEM");
 	lv_obj_center(label);
 	lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 }
 
-static void dummy_module_4_render(lv_obj_t *container) {
+static void inclinometer_render(lv_obj_t *container) {
 	lv_obj_t *label = lv_label_create(container);
-	lv_label_set_text(label, "DUMMY 4");
+	lv_label_set_text(label, "INCLINOMETER");
 	lv_obj_center(label);
 	lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 }
 
-static void dummy_module_5_render(lv_obj_t *container) {
+static void gps_render(lv_obj_t *container) {
 	lv_obj_t *label = lv_label_create(container);
-	lv_label_set_text(label, "DUMMY 5");
+	lv_label_set_text(label, "GPS");
 	lv_obj_center(label);
 	lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+}
+
+static void engine_management_render(lv_obj_t *container) {
+	lv_obj_t *label = lv_label_create(container);
+	lv_label_set_text(label, "ENGINE\nMANAGEMENT");
+	lv_obj_center(label);
+	lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
+	lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
 }
 
 // Module registry - maps module names to their interfaces
 static const module_registry_entry_t module_registry[] = {
+	{"cooling-management", {.renderCurrentView = cooling_management_render}},
+	{"environmental", {.renderCurrentView = environmental_render}},
+	{"tpms", {.renderCurrentView = tpms_render}},
+	{"inclinometer", {.renderCurrentView = inclinometer_render}},
 	{"power-monitor", {.renderCurrentView = power_monitor_show_in_container_home}},
-	{"dummy-module-1", {.renderCurrentView = dummy_module_1_render}},
-	{"dummy-module-2", {.renderCurrentView = dummy_module_2_render}},
-	{"dummy-module-3", {.renderCurrentView = dummy_module_3_render}},
-	{"dummy-module-4", {.renderCurrentView = dummy_module_4_render}},
-	{"dummy-module-5", {.renderCurrentView = dummy_module_5_render}}
+	{"gps", {.renderCurrentView = gps_render}},
+	{"engine-management", {.renderCurrentView = engine_management_render}}
 };
 
 
@@ -338,19 +352,21 @@ void home_screen_init(void)
 		printf("[I] home_screen: Creating %d display modules from registry\n", modules_to_show);
 
 	for (int i = 0; i < modules_to_show; i++) {
-		// 2x3 grid layout: 2 columns, 3 rows
+		const module_registry_entry_t *entry = &module_registry[i];
+
+		// Regular 2x3 grid layout: 2 columns, 3 rows
 		int col = i % 2; // Column (0 or 1)
 		int row = i / 2; // Row (0, 1, or 2)
 		int x = start_x + col * (module_width + inner_margin); // Position based on column with inner margin
 		int y = start_y + row * (module_height + inner_margin); // Position based on row with inner margin
+		int width = module_width;
+		int height = module_height;
 
-			printf("[I] home_screen: Creating module %d at position (%d, %d) - col=%d, row=%d\n", i, x, y, col, row);
+		printf("[I] home_screen: Creating module %d at position (%d, %d) - col=%d, row=%d\n", i, x, y, col, row);
 
-		display_module_init(&display_modules[module_count], content_container, x, y, module_width, module_height);
+		display_module_init(&display_modules[module_count], content_container, x, y, width, height);
 
-		// Set up the module using registry entry
-		const module_registry_entry_t *entry = &module_registry[i];
-			printf("[I] home_screen: Setting up module %d: %s\n", i, entry->module_name);
+		printf("[I] home_screen: Setting up module %d: %s\n", i, entry->module_name);
 
 		// Enable touch on this module
 		display_module_set_touch_callback(&display_modules[module_count], entry->module_name, NULL);

@@ -139,7 +139,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 	lv_obj_set_style_radius(numpad->buttons[11], 3, 0);
 
 	lv_obj_t* negative_label = lv_label_create(numpad->buttons[11]);
-	lv_label_set_text(negative_label, "±");
+	lv_label_set_text(negative_label, "+-");
 	lv_obj_set_style_text_color(negative_label, config->text_color, 0);
 	lv_obj_set_style_text_font(negative_label, &lv_font_montserrat_20, 0);
 	lv_obj_center(negative_label);
@@ -502,7 +502,7 @@ static void set_numberpad_smart_outside_container(numberpad_t* numpad, lv_obj_t*
 	lv_coord_t pad_height = lv_obj_get_height(numpad->background);
 
 	// Minimum gap between numberpad and field/container
-	const lv_coord_t min_gap = 10;
+	const lv_coord_t min_gap = 20;
 	// Screen margins
 	const lv_coord_t screen_margin = 5;
 
