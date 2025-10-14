@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <lvgl.h>
 #include "displayModules/shared/gauges/bar_graph_gauge.h"
+#include "gauge_types.h"
 
 // View type enumeration
 typedef enum {
@@ -116,6 +117,12 @@ void power_monitor_ensure_complete_settlement(void);
 
 // View state management
 void power_monitor_power_grid_view_reset_state(void);
+
+// Timeline modal functions
+void power_monitor_handle_timeline_button(void);
+void power_monitor_timeline_changed_callback(int gauge_index, int duration_seconds, bool is_current_view);
+void power_monitor_update_gauge_intervals(void);
+void power_monitor_update_gauge_timeline(power_monitor_gauge_type_t gauge_type, bool is_detail_view);
 
 #ifdef __cplusplus
 }

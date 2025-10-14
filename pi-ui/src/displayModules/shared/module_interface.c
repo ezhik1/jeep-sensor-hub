@@ -34,6 +34,8 @@ void display_modules_init_all(void)
 
 void display_modules_update_all(void)
 {
+	// Updating all modules
+
 	for (size_t i = 0; i < NUM_MODULES; i++) {
 		const display_module_t* module = registered_modules[i];
 		if (module && module->update) {

@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include "power-monitor.h"
+#include "../../state/device_state.h"
 #include "../shared/module_interface.h"
+#include "../../screens/screen_manager.h"
 
 #include "views/power_grid_view.h"
 #include "views/starter_voltage_view.h"
@@ -9,7 +11,9 @@
 // Include the shared current view manager
 #include "../shared/current_view/current_view_manager.h"
 #include "../shared/alerts_modal/alerts_modal.h"
-#include "../shared/alerts_modal/voltage_alerts_config.h"
+#include "voltage_alerts_config.h"
+#include "../shared/timeline_modal/timeline_modal.h"
+#include "timeline_modal_config.h"
 #include "../shared/gauges/bar_graph_gauge.h"
 #include "../../screens/home_screen/home_screen.h"
 #include "../../state/device_state.h"
@@ -21,6 +25,27 @@
 #include "../../data/lerp_data/lerp_data.h"
 #include <stdlib.h>
 #include <string.h>
+
+// Power monitor defaults
+#define POWER_MONITOR_DEFAULT_TIMELINE_CURRENT_VIEW_SECONDS 30
+#define POWER_MONITOR_DEFAULT_TIMELINE_DETAIL_VIEW_SECONDS 30
+
+#define POWER_MONITOR_DEFAULT_STARTER_ALERT_LOW_VOLTAGE_V 11.0f
+#define POWER_MONITOR_DEFAULT_STARTER_ALERT_HIGH_VOLTAGE_V 14.0f
+#define POWER_MONITOR_DEFAULT_STARTER_BASELINE_VOLTAGE_V 12.6f
+#define POWER_MONITOR_DEFAULT_STARTER_MIN_VOLTAGE_V	11.0f
+#define POWER_MONITOR_DEFAULT_STARTER_MAX_VOLTAGE_V 14.4f
+
+#define POWER_MONITOR_DEFAULT_HOUSE_ALERT_LOW_VOLTAGE_V	11.0f
+#define POWER_MONITOR_DEFAULT_HOUSE_ALERT_HIGH_VOLTAGE_V 14.0f
+#define POWER_MONITOR_DEFAULT_HOUSE_BASELINE_VOLTAGE_V	12.6f
+#define POWER_MONITOR_DEFAULT_HOUSE_MIN_VOLTAGE_V 11.0f
+#define POWER_MONITOR_DEFAULT_HOUSE_MAX_VOLTAGE_V 14.4f
+
+#define POWER_MONITOR_DEFAULT_SOLAR_ALERT_LOW_VOLTAGE_V	12.0f
+#define POWER_MONITOR_DEFAULT_SOLAR_ALERT_HIGH_VOLTAGE_V 22.0f
+#define POWER_MONITOR_DEFAULT_SOLAR_MIN_VOLTAGE_V 0.0f
+#define POWER_MONITOR_DEFAULT_SOLAR_MAX_VOLTAGE_V 20.0f
 
 // Forward declarations
 static void power_monitor_cycle_view(void);
@@ -108,7 +133,14 @@ static const power_monitor_view_type_t available_views[] = {
 	POWER_MONITOR_VIEW_NUMERICAL     // Starter Voltage view (value 4)
 };
 
-static alerts_modal_t* current_modal = NULL;
+// Union to support both modal types
+typedef union {
+	alerts_modal_t* alerts;
+	timeline_modal_t* timeline;
+} modal_union_t;
+
+static modal_union_t current_modal = {.alerts = NULL};
+static bool current_modal_is_timeline = false;
 
 // Helper function to get current view type from global state
 static power_monitor_view_type_t get_current_view_type(void)
@@ -287,12 +319,12 @@ void power_monitor_create_current_view_content(lv_obj_t* container)
 	} else if (view_index == 1) {
 		view_type = POWER_MONITOR_VIEW_NUMERICAL;
 	} else {
-		printf("[W] power_monitor: Unknown view index: %d, defaulting to BAR_GRAPH, view_index\n");
+		printf("[W] power_monitor: Unknown view index: %d, defaulting to BAR_GRAPH\n", view_index);
 		view_type = POWER_MONITOR_VIEW_BAR_GRAPH;
 	}
 
 		// Log the current view type and index
-		printf("[I] power_monitor: View cycling: index=%d, type=%d, view_index, view_type\n");
+		printf("[I] power_monitor: View cycling: index=%d, type=%d\n", view_index, view_type);
 
 	// Render on the appropriate view container (same as initial creation)
 	if (view_type == POWER_MONITOR_VIEW_BAR_GRAPH) {
@@ -300,7 +332,7 @@ void power_monitor_create_current_view_content(lv_obj_t* container)
 	} else if (view_type == POWER_MONITOR_VIEW_NUMERICAL) {
 		power_monitor_starter_voltage_view_render(g_starter_voltage_view_container);
 	} else {
-		printf("[W] power_monitor: Unknown view type: %d, view_type\n");
+		printf("[W] power_monitor: Unknown view type: %d\n", view_type);
 	}
 
 	// Mark view cycling as complete if this was called during cycling
@@ -334,6 +366,33 @@ static bar_graph_gauge_t detail_house_current_gauge = {0};
 static bar_graph_gauge_t detail_solar_voltage_gauge = {0};
 static bar_graph_gauge_t detail_solar_current_gauge = {0};
 
+// Gauge mapping structure for consolidated update functions
+typedef struct {
+	power_monitor_gauge_type_t gauge_type;
+	bar_graph_gauge_t* detail_gauge;
+	const char* gauge_name;
+} gauge_map_entry_t;
+
+// Map gauge types to their detail gauges and names
+static const gauge_map_entry_t gauge_map[] = {
+	{POWER_MONITOR_GAUGE_STARTER_VOLTAGE, &detail_starter_voltage_gauge, "starter_voltage"},
+	{POWER_MONITOR_GAUGE_STARTER_CURRENT, &detail_starter_current_gauge, "starter_current"},
+	{POWER_MONITOR_GAUGE_HOUSE_VOLTAGE, &detail_house_voltage_gauge, "house_voltage"},
+	{POWER_MONITOR_GAUGE_HOUSE_CURRENT, &detail_house_current_gauge, "house_current"},
+	{POWER_MONITOR_GAUGE_SOLAR_VOLTAGE, &detail_solar_voltage_gauge, "solar_voltage"},
+	{POWER_MONITOR_GAUGE_SOLAR_CURRENT, &detail_solar_current_gauge, "solar_current"},
+};
+
+// Helper function to find gauge map entry
+static const gauge_map_entry_t* find_gauge_map_entry(power_monitor_gauge_type_t gauge_type) {
+	for (size_t i = 0; i < sizeof(gauge_map) / sizeof(gauge_map[0]); i++) {
+		if (gauge_map[i].gauge_type == gauge_type) {
+			return &gauge_map[i];
+		}
+	}
+	return NULL;
+}
+
 // Create 6 bar graph gauges in the gauges container (matching original detail.c)
 static void power_monitor_create_detail_gauges(lv_obj_t* container)
 {
@@ -358,11 +417,11 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	lv_coord_t container_width = lv_obj_get_width(container);
 	lv_coord_t container_height = lv_obj_get_height(container);
 
-	printf("[I] power_monitor: Container dimensions after layout update: %dx%d, container_width, container_height\n");
+	printf("[I] power_monitor: Container dimensions after layout update: %dx%d\n", container_width, container_height);
 
 	// Check for valid dimensions
 	if (container_width <= 0 || container_height <= 0) {
-		printf("[E] power_monitor: Invalid container dimensions: %dx%d, container_width, container_height\n");
+		printf("[E] power_monitor: Invalid container dimensions: %dx%d\n", container_width, container_height);
 		return;
 	}
 
@@ -382,9 +441,9 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	// Row 1: Starter Battery Voltage
 	bar_graph_gauge_init(&detail_starter_voltage_gauge, container, 0, 0, gauge_width, gauge_height);
 	// Gauge uses fixed height calculated above (1/6 of available space)
-	float starter_baseline = device_state_get_starter_baseline_voltage_v();
-	float starter_min = device_state_get_starter_min_voltage_v();
-	float starter_max = device_state_get_starter_max_voltage_v();
+	float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
+	float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
+	float starter_max = device_state_get_float("power_monitor.starter_max_voltage_v");
 		printf("[I] power_monitor: Detail starter gauge config: %.1f-%.1fV (baseline=%.1f)\n", starter_min, starter_max, starter_baseline);
 	bar_graph_gauge_configure_advanced(
 		&detail_starter_voltage_gauge,
@@ -397,7 +456,7 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	);
 	detail_starter_voltage_gauge.bar_width = 3; // Match current view bar width
 	detail_starter_voltage_gauge.bar_gap = 1;   // Match current view bar gap
-	bar_graph_gauge_set_update_interval(&detail_starter_voltage_gauge, 33); // 30 FPS for high performance
+	bar_graph_gauge_set_update_interval(&detail_starter_voltage_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 2: Starter Battery Current
 	bar_graph_gauge_init(&detail_starter_current_gauge, container, 0, 0, gauge_width, gauge_height);
@@ -406,20 +465,20 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 		"STARTER BATTERY", "A", "A", 0x0080FF, true, true, true);
 	detail_starter_current_gauge.bar_width = 3; // Match current view bar width
 	detail_starter_current_gauge.bar_gap = 1;   // Match current view bar gap
-	bar_graph_gauge_set_update_interval(&detail_starter_current_gauge, 50); // 20 FPS for high performance
+	bar_graph_gauge_set_update_interval(&detail_starter_current_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 3: House Battery Voltage
 	bar_graph_gauge_init(&detail_house_voltage_gauge, container, 0, 0, gauge_width, gauge_height);
-	float house_baseline = device_state_get_house_baseline_voltage_v();
-	float house_min = device_state_get_house_min_voltage_v();
-	float house_max = device_state_get_house_max_voltage_v();
+	float house_baseline = device_state_get_float("power_monitor.house_baseline_voltage_v");
+	float house_min = device_state_get_float("power_monitor.house_min_voltage_v");
+	float house_max = device_state_get_float("power_monitor.house_max_voltage_v");
 		printf("[I] power_monitor: Detail house gauge config: %.1f-%.1fV (baseline=%.1f)\n", house_min, house_max, house_baseline);
 	bar_graph_gauge_configure_advanced(&detail_house_voltage_gauge,
 		BAR_GRAPH_MODE_BIPOLAR, house_baseline, house_min, house_max,
 		"HOUSE BATTERY", "V", "V", 0x00FF00, true, true, true);
 	detail_house_voltage_gauge.bar_width = 3; // Match current view bar width
 	detail_house_voltage_gauge.bar_gap = 1;   // Match current view bar gap
-	bar_graph_gauge_set_update_interval(&detail_house_voltage_gauge, 33); // 30 FPS for high performance
+	bar_graph_gauge_set_update_interval(&detail_house_voltage_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 4: House Battery Current
 	bar_graph_gauge_init(&detail_house_current_gauge, container, 0, 0, gauge_width, gauge_height);
@@ -428,7 +487,7 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 		"HOUSE BATTERY", "A", "A", 0x0080FF, true, true, true);
 	detail_house_current_gauge.bar_width = 3; // Match current view bar width
 	detail_house_current_gauge.bar_gap = 1;   // Match current view bar gap
-	bar_graph_gauge_set_update_interval(&detail_house_current_gauge, 50); // 20 FPS for high performance
+	bar_graph_gauge_set_update_interval(&detail_house_current_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 5: Solar Input Voltage
 	bar_graph_gauge_init(&detail_solar_voltage_gauge, container, 0, 0, gauge_width, gauge_height);
@@ -437,7 +496,7 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 		"SOLAR VOLTS", "V", "V", 0xFF8000, true, true, true);
 	detail_solar_voltage_gauge.bar_width = 3; // Match current view bar width
 	detail_solar_voltage_gauge.bar_gap = 1;   // Match current view bar gap
-	bar_graph_gauge_set_update_interval(&detail_solar_voltage_gauge, 33); // 30 FPS for high performance
+	bar_graph_gauge_set_update_interval(&detail_solar_voltage_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 6: Solar Input Current
 	bar_graph_gauge_init(&detail_solar_current_gauge, container, 0, 0, gauge_width, gauge_height);
@@ -446,7 +505,7 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 		"SOLAR CURRENT", "A", "A", 0xFF8000, true, true, true);
 	detail_solar_current_gauge.bar_width = 3; // Match current view bar width
 	detail_solar_current_gauge.bar_gap = 1;   // Match current view bar gap
-	bar_graph_gauge_set_update_interval(&detail_solar_current_gauge, 50); // 20 FPS for high performance
+	bar_graph_gauge_set_update_interval(&detail_solar_current_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Update labels and ticks for all gauges
 	bar_graph_gauge_update_labels_and_ticks(&detail_starter_voltage_gauge);
@@ -455,6 +514,14 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	bar_graph_gauge_update_labels_and_ticks(&detail_house_current_gauge);
 	bar_graph_gauge_update_labels_and_ticks(&detail_solar_voltage_gauge);
 	bar_graph_gauge_update_labels_and_ticks(&detail_solar_current_gauge);
+
+	// Set timeline durations for all detail gauges
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_STARTER_VOLTAGE, true);
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_STARTER_CURRENT, true);
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_HOUSE_VOLTAGE, true);
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_HOUSE_CURRENT, true);
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_SOLAR_VOLTAGE, true);
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_SOLAR_CURRENT, true);
 
 		printf("[I] power_monitor: 3 gauges created successfully (LVGL memory increased to 512KB)\n");
 }
@@ -477,12 +544,12 @@ static void power_monitor_apply_current_view_alert_flashing(void)
 	}
 
 	// Get alert thresholds
-	int starter_lo = device_state_get_starter_alert_low_voltage_v();
-	int starter_hi = device_state_get_starter_alert_high_voltage_v();
-	int house_lo = device_state_get_house_alert_low_voltage_v();
-	int house_hi = device_state_get_house_alert_high_voltage_v();
-	int solar_lo = device_state_get_solar_alert_low_voltage_v();
-	int solar_hi = device_state_get_solar_alert_high_voltage_v();
+	int starter_lo = device_state_get_int("power_monitor.starter_alert_low_voltage_v");
+	int starter_hi = device_state_get_int("power_monitor.starter_alert_high_voltage_v");
+	int house_lo = device_state_get_int("power_monitor.house_alert_low_voltage_v");
+	int house_hi = device_state_get_int("power_monitor.house_alert_high_voltage_v");
+	int solar_lo = device_state_get_int("power_monitor.solar_alert_low_voltage_v");
+	int solar_hi = device_state_get_int("power_monitor.solar_alert_high_voltage_v");
 
 	// Blink timing - asymmetric: 1 second on, 0.5 seconds off (1.5 second total cycle)
 	struct timespec ts;
@@ -603,14 +670,14 @@ void power_monitor_update_detail_gauge_ranges(void)
 	}
 
 	// Get current gauge range values from device state
-	float starter_baseline = device_state_get_starter_baseline_voltage_v();
-	float starter_min = device_state_get_starter_min_voltage_v();
-	float starter_max = device_state_get_starter_max_voltage_v();
-	float house_baseline = device_state_get_house_baseline_voltage_v();
-	float house_min = device_state_get_house_min_voltage_v();
-	float house_max = device_state_get_house_max_voltage_v();
-	float solar_min = device_state_get_solar_min_voltage_v();
-	float solar_max = device_state_get_solar_max_voltage_v();
+	float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
+	float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
+	float starter_max = device_state_get_float("power_monitor.starter_max_voltage_v");
+	float house_baseline = device_state_get_float("power_monitor.house_baseline_voltage_v");
+	float house_min = device_state_get_float("power_monitor.house_min_voltage_v");
+	float house_max = device_state_get_float("power_monitor.house_max_voltage_v");
+	float solar_min = device_state_get_float("power_monitor.solar_min_voltage_v");
+	float solar_max = device_state_get_float("power_monitor.solar_max_voltage_v");
 
 	// Update detail screen gauge ranges
 	if (detail_starter_voltage_gauge.initialized) {
@@ -706,10 +773,87 @@ void power_monitor_init_with_default_view(power_monitor_view_type_t default_view
 	power_monitor_set_current_view_type((power_monitor_view_type_t)default_view);
 }
 
+// Default setting mapping structure
+typedef struct {
+	const char* path;
+	double value;
+} power_monitor_default_t;
+
+// Helper function to convert gauge type to string name
+static const char* gauge_type_to_string(power_monitor_gauge_type_t gauge_type) {
+	switch (gauge_type) {
+		case POWER_MONITOR_GAUGE_STARTER_VOLTAGE: return "starter_voltage";
+		case POWER_MONITOR_GAUGE_STARTER_CURRENT: return "starter_current";
+		case POWER_MONITOR_GAUGE_HOUSE_VOLTAGE: return "house_voltage";
+		case POWER_MONITOR_GAUGE_HOUSE_CURRENT: return "house_current";
+		case POWER_MONITOR_GAUGE_SOLAR_VOLTAGE: return "solar_voltage";
+		case POWER_MONITOR_GAUGE_SOLAR_CURRENT: return "solar_current";
+		default: return "unknown";
+	}
+}
+
+// Initialize power monitor defaults in device state only if values don't exist
+static void power_monitor_init_defaults(void)
+{
+	printf("[D] power_monitor: Starting defaults initialization\n");
+
+	// Map all default settings
+	power_monitor_default_t defaults[] = {
+		// Gauge timeline settings - named properties for each gauge
+		{"power_monitor.gauge_timeline_settings.starter_voltage.current_view", POWER_MONITOR_DEFAULT_TIMELINE_CURRENT_VIEW_SECONDS},
+		{"power_monitor.gauge_timeline_settings.starter_voltage.detail_view", POWER_MONITOR_DEFAULT_TIMELINE_DETAIL_VIEW_SECONDS},
+
+		{"power_monitor.gauge_timeline_settings.starter_current.current_view", POWER_MONITOR_DEFAULT_TIMELINE_CURRENT_VIEW_SECONDS},
+		{"power_monitor.gauge_timeline_settings.starter_current.detail_view", POWER_MONITOR_DEFAULT_TIMELINE_DETAIL_VIEW_SECONDS},
+
+		{"power_monitor.gauge_timeline_settings.house_voltage.current_view", POWER_MONITOR_DEFAULT_TIMELINE_CURRENT_VIEW_SECONDS},
+		{"power_monitor.gauge_timeline_settings.house_voltage.detail_view", POWER_MONITOR_DEFAULT_TIMELINE_DETAIL_VIEW_SECONDS},
+
+		{"power_monitor.gauge_timeline_settings.house_current.current_view", POWER_MONITOR_DEFAULT_TIMELINE_CURRENT_VIEW_SECONDS},
+		{"power_monitor.gauge_timeline_settings.house_current.detail_view", POWER_MONITOR_DEFAULT_TIMELINE_DETAIL_VIEW_SECONDS},
+
+		{"power_monitor.gauge_timeline_settings.solar_voltage.current_view", POWER_MONITOR_DEFAULT_TIMELINE_CURRENT_VIEW_SECONDS},
+		{"power_monitor.gauge_timeline_settings.solar_voltage.detail_view", POWER_MONITOR_DEFAULT_TIMELINE_DETAIL_VIEW_SECONDS},
+
+		{"power_monitor.gauge_timeline_settings.solar_current.current_view", POWER_MONITOR_DEFAULT_TIMELINE_CURRENT_VIEW_SECONDS},
+		{"power_monitor.gauge_timeline_settings.solar_current.detail_view", POWER_MONITOR_DEFAULT_TIMELINE_DETAIL_VIEW_SECONDS},
+
+		// Starter battery settings
+		{"power_monitor.starter_alert_low_voltage_v", (double)POWER_MONITOR_DEFAULT_STARTER_ALERT_LOW_VOLTAGE_V},
+		{"power_monitor.starter_alert_high_voltage_v", (double)POWER_MONITOR_DEFAULT_STARTER_ALERT_HIGH_VOLTAGE_V},
+		{"power_monitor.starter_baseline_voltage_v", (double)POWER_MONITOR_DEFAULT_STARTER_BASELINE_VOLTAGE_V},
+		{"power_monitor.starter_min_voltage_v", (double)POWER_MONITOR_DEFAULT_STARTER_MIN_VOLTAGE_V},
+		{"power_monitor.starter_max_voltage_v", (double)POWER_MONITOR_DEFAULT_STARTER_MAX_VOLTAGE_V},
+
+		// House battery settings
+		{"power_monitor.house_alert_low_voltage_v", (double)POWER_MONITOR_DEFAULT_HOUSE_ALERT_LOW_VOLTAGE_V},
+		{"power_monitor.house_alert_high_voltage_v", (double)POWER_MONITOR_DEFAULT_HOUSE_ALERT_HIGH_VOLTAGE_V},
+		{"power_monitor.house_baseline_voltage_v", (double)POWER_MONITOR_DEFAULT_HOUSE_BASELINE_VOLTAGE_V},
+		{"power_monitor.house_min_voltage_v", (double)POWER_MONITOR_DEFAULT_HOUSE_MIN_VOLTAGE_V},
+		{"power_monitor.house_max_voltage_v", (double)POWER_MONITOR_DEFAULT_HOUSE_MAX_VOLTAGE_V},
+
+		// Solar settings
+		{"power_monitor.solar_alert_low_voltage_v", (double)POWER_MONITOR_DEFAULT_SOLAR_ALERT_LOW_VOLTAGE_V},
+		{"power_monitor.solar_alert_high_voltage_v", (double)POWER_MONITOR_DEFAULT_SOLAR_ALERT_HIGH_VOLTAGE_V},
+		{"power_monitor.solar_min_voltage_v", (double)POWER_MONITOR_DEFAULT_SOLAR_MIN_VOLTAGE_V},
+		{"power_monitor.solar_max_voltage_v", (double)POWER_MONITOR_DEFAULT_SOLAR_MAX_VOLTAGE_V},
+	};
+
+	// Process all defaults
+	for (size_t i = 0; i < sizeof(defaults) / sizeof(defaults[0]); i++) {
+		if (!device_state_path_exists(defaults[i].path)) {
+			device_state_set_value(defaults[i].path, defaults[i].value);
+		}
+	}
+}
+
 // Module interface implementation
 void power_monitor_init(void)
 {
 		printf("[I] power_monitor: Power Monitor Module Initialized (V2)\n");
+
+	// Initialize power monitor defaults
+	power_monitor_init_defaults();
 
 	// Set up crash handlers for debugging
 	signal(SIGSEGV, crash_handler);
@@ -720,7 +864,7 @@ void power_monitor_init(void)
 	printf("[I] power_monitor: Crash handlers installed\n");
 
 	// Initialize module-specific screen view state
-	module_screen_view_initialize("power-monitor", SCREEN_HOME, sizeof(available_views) / sizeof(available_views[0]));
+        // module_screen_view_initialize("power-monitor", SCREEN_HOME, sizeof(available_views) / sizeof(available_views[0]));
 
 	// Initialize shared current view manager (for backward compatibility)
 	current_view_manager_init(sizeof(available_views) / sizeof(available_views[0]));
@@ -741,7 +885,7 @@ void power_monitor_init(void)
 void power_monitor_show_in_container(lv_obj_t *container)
 {
 		printf("[I] power_monitor: === SHOW IN CONTAINER (V2) ===\n");
-	printf("[I] power_monitor: Container: %p, container\n");
+	printf("[I] power_monitor: Container: %p\n", container);
 
 	if (!container) {
 		printf("[E] power_monitor: Container is NULL\n");
@@ -756,7 +900,7 @@ void power_monitor_show_in_container_home(lv_obj_t *container)
 {
 	static int call_count = 0;
 	call_count++;
-	printf("[I] power_monitor: === SHOW IN CONTAINER HOME CALLED #%d ===, call_count\n");
+	printf("[I] power_monitor: === SHOW IN CONTAINER HOME CALLED #%d ===\n", call_count);
 
 	// Store the home container for this module
 	g_home_container = container;
@@ -766,7 +910,7 @@ void power_monitor_show_in_container_home(lv_obj_t *container)
 	printf("[I] power_monitor: About to call power_monitor_render_current_view\n");
 	power_monitor_render_current_view(container);
 	printf("[I] power_monitor: power_monitor_render_current_view completed\n");
-	printf("[I] power_monitor: === SHOW IN CONTAINER HOME COMPLETE #%d ===, call_count\n");
+	printf("[I] power_monitor: === SHOW IN CONTAINER HOME COMPLETE #%d ===\n", call_count);
 }
 
 void power_monitor_show_in_container_detail(lv_obj_t *container)
@@ -783,7 +927,7 @@ void power_monitor_cycle_current_view(void)
 {
 	static int call_count = 0;
 	call_count++;
-	printf("[I] power_monitor: === CYCLING CURRENT VIEW CALLED #%d ===, call_count\n");
+	printf("[I] power_monitor: === CYCLING CURRENT VIEW CALLED #%d ===\n", call_count);
 
 	// Simple guard against rapid cycling
 	if (s_detail_view_needs_refresh) {
@@ -850,6 +994,43 @@ void power_monitor_cleanup_internal(void)
 	memset(&detail_solar_voltage_gauge, 0, sizeof(bar_graph_gauge_t));
 	memset(&detail_solar_current_gauge, 0, sizeof(bar_graph_gauge_t));
 	printf("[I] power_monitor: Detail gauge variables reset\n");
+}
+
+// Consolidated gauge update function - replaces both specific and detail functions
+void power_monitor_update_gauge_timeline(power_monitor_gauge_type_t gauge_type, bool is_detail_view)
+{
+	const gauge_map_entry_t* entry = find_gauge_map_entry(gauge_type);
+	if (!entry || !entry->detail_gauge->initialized) {
+		return;
+	}
+
+	// Build the path based on view type
+	char timeline_path[256];
+	const char* view_type = is_detail_view ? "detail_view" : "current_view";
+	snprintf(timeline_path, sizeof(timeline_path), "power_monitor.gauge_timeline_settings.%s.%s", entry->gauge_name, view_type);
+
+	int timeline_duration = device_state_get_int(timeline_path);
+	uint32_t timeline_duration_ms = timeline_duration * 1000;
+
+	// Update the gauge timeline duration
+	bar_graph_gauge_set_timeline_duration(entry->detail_gauge, timeline_duration_ms);
+}
+
+
+// Update all bar graph gauge intervals based on their individual timeline settings
+void power_monitor_update_gauge_intervals(void)
+{
+	// Update detail screen gauges with their own timeline settings
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_STARTER_VOLTAGE, false);
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_STARTER_CURRENT, false);
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_HOUSE_VOLTAGE, false);
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_HOUSE_CURRENT, false);
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_SOLAR_VOLTAGE, false);
+	power_monitor_update_gauge_timeline(POWER_MONITOR_GAUGE_SOLAR_CURRENT, false);
+
+	// Update power grid view gauges with their own timeline settings
+	extern void power_grid_view_update_gauge_intervals(void);
+	power_grid_view_update_gauge_intervals();
 }
 
 void power_monitor_cleanup(void)
@@ -961,14 +1142,14 @@ void power_monitor_set_current_view_type(power_monitor_view_type_t view_type)
 			return;
 		}
 	}
-	printf("[W] power_monitor: View type %d not found in available views, keeping current, view_type\n");
+	printf("[W] power_monitor: View type %d not found in available views, keeping current\n", view_type);
 }
 
 // Create current view in container (for detail screen)
 void power_monitor_create_current_view_in_container(lv_obj_t* container)
 {
 		printf("[I] power_monitor: === CREATE CURRENT VIEW IN CONTAINER (V2) ===\n");
-	printf("[I] power_monitor: Container: %p, container\n");
+	printf("[I] power_monitor: Container: %p\n", container);
 
 	if (!container) {
 		printf("[E] power_monitor: Container is NULL\n");
@@ -1001,12 +1182,21 @@ void power_monitor_create_current_view_in_container(lv_obj_t* container)
 // Modal close callback
 static void power_monitor_close_modal(void)
 {
-	if (current_modal) {
-				alerts_modal_hide(current_modal);
-		alerts_modal_destroy(current_modal);
-		current_modal = NULL;
-		printf("[I] power_monitor: Modal closed\n");
+	if (current_modal_is_timeline) {
+		if (current_modal.timeline) {
+			timeline_modal_destroy(current_modal.timeline);
+			current_modal.timeline = NULL;
+			printf("[I] power_monitor: Timeline modal closed\n");
+		}
+	} else {
+		if (current_modal.alerts) {
+			alerts_modal_hide(current_modal.alerts);
+			alerts_modal_destroy(current_modal.alerts);
+			current_modal.alerts = NULL;
+			printf("[I] power_monitor: Alerts modal closed\n");
+		}
 	}
+	current_modal_is_timeline = false;
 }
 
 // Handle back button - return to home screen
@@ -1015,10 +1205,18 @@ void power_monitor_handle_back_button(void)
 	printf("[I] power_monitor: === BACK BUTTON CLICKED ===\n");
 
 	// Clear modal if exists first
-	if (current_modal) {
-		alerts_modal_destroy(current_modal);
-		current_modal = NULL;
+	if (current_modal_is_timeline) {
+		if (current_modal.timeline) {
+			timeline_modal_destroy(current_modal.timeline);
+			current_modal.timeline = NULL;
+		}
+	} else {
+		if (current_modal.alerts) {
+			alerts_modal_destroy(current_modal.alerts);
+			current_modal.alerts = NULL;
+		}
 	}
+	current_modal_is_timeline = false;
 
 	// Reset all static variables
 	s_rendering_in_progress = false;
@@ -1043,41 +1241,61 @@ void power_monitor_handle_alerts_button(void)
 	printf("[I] power_monitor: ALERTS BUTTON HANDLER CALLED - THIS IS WORKING!\n");
 
 	// Safety check: prevent multiple modals
-	if (current_modal) {
-		printf("[W] power_monitor: Modal already exists, destroying first\n");
-		alerts_modal_destroy(current_modal);
-		current_modal = NULL;
+	if (current_modal_is_timeline) {
+		if (current_modal.timeline) {
+			printf("[W] power_monitor: Timeline modal exists, closing first\n");
+			timeline_modal_destroy(current_modal.timeline);
+			current_modal.timeline = NULL;
+		}
+	} else {
+		if (current_modal.alerts) {
+			printf("[W] power_monitor: Alerts modal exists, destroying first\n");
+			alerts_modal_destroy(current_modal.alerts);
+			current_modal.alerts = NULL;
+		}
 	}
+	current_modal_is_timeline = false;
 
 	// Create alerts modal
 	printf("[I] power_monitor: Creating alerts modal\n");
-	current_modal = alerts_modal_create(&voltage_alerts_config, power_monitor_close_modal);
+	current_modal.alerts = alerts_modal_create(&voltage_alerts_config, power_monitor_close_modal);
 
-	if (current_modal) {
+	if (current_modal.alerts) {
 		printf("[I] power_monitor: Showing alerts modal\n");
-				alerts_modal_show(current_modal);
+		alerts_modal_show(current_modal.alerts);
 		printf("[I] power_monitor: Alerts modal opened\n");
 	} else {
 		printf("[E] power_monitor: Failed to create alerts modal\n");
 	}
 }
 
-// Handle timeline button - open timeline modal (using alerts modal for now)
+// Handle timeline button - open timeline modal
 void power_monitor_handle_timeline_button(void)
 {
 	printf("[I] power_monitor: === TIMELINE BUTTON CLICKED ===\n");
 
-	// Close any existing modal
-	if (current_modal) {
-		alerts_modal_destroy(current_modal);
-		current_modal = NULL;
+	// Safety check: prevent multiple modals
+	if (current_modal_is_timeline) {
+		if (current_modal.timeline) {
+			printf("[W] power_monitor: Timeline modal already exists, closing first\n");
+			timeline_modal_destroy(current_modal.timeline);
+			current_modal.timeline = NULL;
+		}
+	} else {
+		if (current_modal.alerts) {
+			printf("[W] power_monitor: Alerts modal exists, destroying first\n");
+			alerts_modal_destroy(current_modal.alerts);
+			current_modal.alerts = NULL;
+		}
 	}
+	current_modal_is_timeline = true;
 
-	// Create alerts modal (timeline functionality not implemented yet)
-	current_modal = alerts_modal_create(&voltage_alerts_config, power_monitor_close_modal);
-	if (current_modal) {
-				alerts_modal_show(current_modal);
-		printf("[I] power_monitor: Timeline modal opened (using alerts modal\n");
+	// Create timeline modal
+	printf("[I] power_monitor: Creating timeline modal\n");
+	current_modal.timeline = timeline_modal_create(&power_monitor_timeline_modal_config, power_monitor_close_modal);
+	if (current_modal.timeline) {
+		timeline_modal_show(current_modal.timeline);
+		printf("[I] power_monitor: Timeline modal opened\n");
 	} else {
 		printf("[E] power_monitor: Failed to create timeline modal\n");
 	}
@@ -1134,7 +1352,7 @@ static void power_monitor_create_view_containers(lv_obj_t* parent_container)
 	printf("[I] power_monitor: Creating fresh view containers\n");
 
 	// Create power grid view container
-		printf("[I] power_monitor: Creating power grid view container in parent: %p, parent_container\n");
+		printf("[I] power_monitor: Creating power grid view container in parent: %p\n", parent_container);
 		g_power_grid_view_container = lv_obj_create(parent_container);
 		if (!g_power_grid_view_container) {
 			printf("[E] power_monitor: Failed to create power grid view container\n");
@@ -1157,24 +1375,24 @@ static void power_monitor_create_view_containers(lv_obj_t* parent_container)
 		// Add touch callback
 		if (parent_container == g_home_container) {
 			lv_obj_add_event_cb(g_power_grid_view_container, power_monitor_home_current_view_touch_cb, LV_EVENT_CLICKED, NULL);
-			printf("[I] power_monitor: Added home touch callback to power grid view container: %p, g_power_grid_view_container\n");
+			printf("[I] power_monitor: Added home touch callback to power grid view container: %p\n", g_power_grid_view_container);
 		} else if (parent_container == g_detail_container) {
 			lv_obj_add_event_cb(g_power_grid_view_container, power_monitor_detail_current_view_touch_cb, LV_EVENT_CLICKED, NULL);
-			printf("[I] power_monitor: Added detail touch callback to power grid view container: %p, g_power_grid_view_container\n");
+			printf("[I] power_monitor: Added detail touch callback to power grid view container: %p\n", g_power_grid_view_container);
 		} else {
 			printf("[W] power_monitor: Unknown parent container for power grid view: %p (home: %p, detail: %p)\n", parent_container, g_home_container, g_detail_container);
 		}
 
-	printf("[I] power_monitor: Power grid view container created: %p, g_power_grid_view_container\n");
+	printf("[I] power_monitor: Power grid view container created: %p\n", g_power_grid_view_container);
 
 	// Create starter voltage view container
-		printf("[I] power_monitor: Creating starter voltage view container in parent: %p, parent_container\n");
+		printf("[I] power_monitor: Creating starter voltage view container in parent: %p\n", parent_container);
 		g_starter_voltage_view_container = lv_obj_create(parent_container);
 		if (!g_starter_voltage_view_container) {
 			printf("[E] power_monitor: Failed to create starter voltage view container\n");
 			return;
 		}
-		printf("[I] power_monitor: Starter voltage view container created: %p, g_starter_voltage_view_container\n");
+		printf("[I] power_monitor: Starter voltage view container created: %p\n", g_starter_voltage_view_container);
 		// Fill the parent container completely
 		lv_obj_set_size(g_starter_voltage_view_container, LV_PCT(100), LV_PCT(100));
 		lv_obj_align(g_starter_voltage_view_container, LV_ALIGN_TOP_LEFT, 0, 0);
@@ -1193,10 +1411,10 @@ static void power_monitor_create_view_containers(lv_obj_t* parent_container)
 		// Add touch callback
 		if (parent_container == g_home_container) {
 			lv_obj_add_event_cb(g_starter_voltage_view_container, power_monitor_home_current_view_touch_cb, LV_EVENT_CLICKED, NULL);
-			printf("[I] power_monitor: Added home touch callback to starter voltage view container: %p, g_starter_voltage_view_container\n");
+			printf("[I] power_monitor: Added home touch callback to starter voltage view container: %p\n", g_starter_voltage_view_container);
 		} else if (parent_container == g_detail_container) {
 			lv_obj_add_event_cb(g_starter_voltage_view_container, power_monitor_detail_current_view_touch_cb, LV_EVENT_CLICKED, NULL);
-			printf("[I] power_monitor: Added detail touch callback to starter voltage view container: %p, g_starter_voltage_view_container\n");
+			printf("[I] power_monitor: Added detail touch callback to starter voltage view container: %p\n", g_starter_voltage_view_container);
 		} else {
 			printf("[W] power_monitor: Unknown parent container for starter voltage view: %p (home: %p, detail: %p)\n", parent_container, g_home_container, g_detail_container);
 	}
@@ -1244,9 +1462,12 @@ void power_monitor_render_current_view(lv_obj_t* container)
 			printf("[I] power_monitor: Starter voltage view shown and rendered\n");
 	}
 
+	// Update gauge intervals for the current view's timeline settings
+	power_monitor_update_gauge_intervals();
+
 	// Check if content was actually created
 	int child_count = lv_obj_get_child_cnt(container);
-	printf("[I] power_monitor: After rendering, container has %d children, child_count\n");
+	printf("[I] power_monitor: After rendering, container has %d children\n", child_count);
 
 	// Reset rendering flag
 	s_rendering_in_progress = false;
@@ -1293,7 +1514,7 @@ static void power_monitor_home_current_view_touch_cb(lv_event_t * e)
 {
 	static int touch_count = 0;
 	touch_count++;
-	printf("[I] power_monitor: *** HOME TOUCH CALLBACK CALLED #%d ***, touch_count\n");
+	printf("[I] power_monitor: *** HOME TOUCH CALLBACK CALLED #%d ***\n", touch_count);
 
 	// Prevent recursive calls
 	if (s_reset_in_progress || s_creation_in_progress) {
@@ -1318,7 +1539,7 @@ static void power_monitor_detail_current_view_touch_cb(lv_event_t * e)
 {
 	static int touch_count = 0;
 	touch_count++;
-	printf("[I] power_monitor: *** DETAIL TOUCH CALLBACK CALLED #%d ***, touch_count\n");
+	printf("[I] power_monitor: *** DETAIL TOUCH CALLBACK CALLED #%d ***\n", touch_count);
 
 	// Debug: Check event details
 	if (e) {
@@ -1361,7 +1582,7 @@ static int power_monitor_get_view_index(void)
 
 	// Validate and clamp the index
 	if (index < 0 || index >= s_total_views) {
-		printf("[W] power_monitor: Invalid view index %d from device state, using 0, index\n");
+		printf("[W] power_monitor: Invalid view index %d from device state, using 0\n", index);
 		index = 0;
 	}
 
@@ -1375,11 +1596,11 @@ static void power_monitor_set_view_index(int index)
 {
 	// Validate and clamp the index
 	if (index < 0 || index >= s_total_views) {
-		printf("[W] power_monitor: Invalid view index %d, clamping to valid range, index\n");
+		printf("[W] power_monitor: Invalid view index %d, clamping to valid range\n", index);
 		index = (index < 0) ? 0 : (s_total_views - 1);
 	}
 
-	printf("[I] power_monitor: Setting view index to %d, index\n");
+	printf("[I] power_monitor: Setting view index to %d\n", index);
 
 	// Set in device state
 	extern void module_screen_view_set_view_index(const char *module_name, int view_index);
@@ -1450,11 +1671,18 @@ static void power_monitor_module_init(void)
  */
 static void power_monitor_module_update(void)
 {
-	// Skip data updates during view cycling to prevent crashes
-	if (s_detail_view_needs_refresh) {
-		printf("[D] power_monitor: Skipping data updates during view cycling\n");
+	static int update_count = 0;
+	update_count++;
+
+	// Module update running
+
+	// Skip data updates during view cycling only if we're on detail screen
+	extern screen_type_t screen_navigation_get_current_screen(void);
+	if (s_detail_view_needs_refresh && screen_navigation_get_current_screen() == SCREEN_DETAIL_VIEW) {
+		printf("[D] power_monitor: Skipping data updates during view cycling on detail screen\n");
 	} else {
 		// Update data only - no UI creation/destruction
+		// Update data
 		power_monitor_update_data_only();
 	}
 
@@ -1479,7 +1707,7 @@ static void power_monitor_module_update(void)
 
 			// CREATE: Create new view object with updated index
 			int current_index = power_monitor_get_view_index();
-			printf("[I] power_monitor: Creating new view object for index %d, current_index\n");
+			printf("[I] power_monitor: Creating new view object for index %d\n", current_index);
 
 			// Force a final layout update on the container before creating content
 			lv_obj_update_layout(detail_screen->current_view_container);

@@ -1,10 +1,10 @@
 #ifndef VOLTAGE_ALERTS_CONFIG_H
 #define VOLTAGE_ALERTS_CONFIG_H
 
-#include "alerts_modal.h"
-#include "../../../state/device_state.h"
-#include "../gauges/bar_graph_gauge.h"
-#include "../../../screens/detail_screen/detail_screen.h"
+#include "../shared/alerts_modal/alerts_modal.h"
+#include "../../state/device_state.h"
+#include "../shared/gauges/bar_graph_gauge.h"
+#include "../../screens/detail_screen/detail_screen.h"
 
 #ifdef __cplusplus
 extern "C" {

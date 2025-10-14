@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include "starter_voltage_view.h"
+#include "../../../state/device_state.h"
 #include "../power-monitor.h"
 #include "../../shared/gauges/bar_graph_gauge.h"
-#include "../../../state/device_state.h"
 #include "../../../data/lerp_data/lerp_data.h"
 #include "../../../fonts/lv_font_zector_72.h"
 
@@ -147,9 +147,9 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 		}
 
 		// Configure gauge for voltage display
-		float starter_baseline = device_state_get_starter_baseline_voltage_v();
-		float starter_min = device_state_get_starter_min_voltage_v();
-		float starter_max = device_state_get_starter_max_voltage_v();
+		float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
+		float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
+		float starter_max = device_state_get_float("power_monitor.starter_max_voltage_v");
 
 		printf("[I] starter_voltage_view: Configuring gauge: baseline=%.1f, min=%.1f, max=%.1f\n", starter_baseline, starter_min, starter_max);
 		bar_graph_gauge_configure_advanced(&s_voltage_gauge,
@@ -168,6 +168,16 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 
 		printf("[I] starter_voltage_view: Bar gauge initialized: container=%dx%d\n", container_width - 10, gauge_height - 10);
 	}
+
+	// Set timeline duration for the gauge
+	int timeline_duration = device_state_get_int("power_monitor.gauge_timeline_settings.starter_voltage.current_view");
+	uint32_t timeline_duration_ms = timeline_duration * 1000;
+	bar_graph_gauge_set_timeline_duration(&s_voltage_gauge, timeline_duration_ms);
+
+	// Set update interval for the gauge (no rate limiting - gauge calculates its own rate)
+	bar_graph_gauge_set_update_interval(&s_voltage_gauge, 0);
+
+	printf("[I] starter_voltage_view: Gauge timeline set to %d ms\n", timeline_duration_ms);
 
 	// View content created successfully
 

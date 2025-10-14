@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include "power_grid_view.h"
+#include "../../../state/device_state.h"
 #include "../power-monitor.h"
 #include "../../shared/gauges/bar_graph_gauge.h"
-#include "../../../state/device_state.h"
 #include "../../../data/lerp_data/lerp_data.h"
 // Using multiple fonts for comparison
 #include "../../../fonts/lv_font_noplato_24.h"
@@ -55,7 +55,7 @@ static void create_gauge_row(
 	// Track container for cleanup
 	if (row_index >= 0 && row_index < 3) {
 		s_row_containers[row_index] = row_container;
-		printf("[I] power_grid_view: Tracking row container %d: %p, row_index, row_container\n");
+		printf("[I] power_grid_view: Tracking row container %d: %p\n", row_index, row_container);
 	}
 	lv_obj_set_style_radius(row_container, 0, 0); // No border radius
 	lv_obj_set_style_pad_all(row_container, 0, 0);
@@ -205,16 +205,16 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 	lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
 
 		// Use the corrected container dimensions
-	printf("[I] power_grid_view: Power grid container dimensions: %dx%d, container_width, container_height\n");
+	printf("[I] power_grid_view: Power grid container dimensions: %dx%d\n", container_width, container_height);
 
 	// Use the container as-is - don't resize it!
-	printf("[I] power_grid_view: Using container dimensions as-is: %dx%d, container_width, container_height\n");
+	printf("[I] power_grid_view: Using container dimensions as-is: %dx%d\n", container_width, container_height);
 
 	// Always create the power grid view content
 	{
 
 		printf("[I] power_grid_view: Initializing power grid view with bar graph gauges...\n");
-		printf("[I] power_grid_view: Container size: %dx%d, container_width, container_height\n");
+		printf("[I] power_grid_view: Container size: %dx%d\n", container_width, container_height);
 
 		// Set up flexbox for the main container (vertical stack)
 		lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
@@ -229,16 +229,16 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 			gauge_height, CONTAINER_PADDING_PX);
 
 		// Read actual gauge configuration values from device state
-		float starter_baseline = device_state_get_starter_baseline_voltage_v();
-		float starter_min = device_state_get_starter_min_voltage_v();
-		float starter_max = device_state_get_starter_max_voltage_v();
+		float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
+		float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
+		float starter_max = device_state_get_float("power_monitor.starter_max_voltage_v");
 
-		float house_baseline = device_state_get_house_baseline_voltage_v();
-		float house_min = device_state_get_house_min_voltage_v();
-		float house_max = device_state_get_house_max_voltage_v();
+		float house_baseline = device_state_get_float("power_monitor.house_baseline_voltage_v");
+		float house_min = device_state_get_float("power_monitor.house_min_voltage_v");
+		float house_max = device_state_get_float("power_monitor.house_max_voltage_v");
 
-		float solar_min = device_state_get_solar_min_voltage_v();
-		float solar_max = device_state_get_solar_max_voltage_v();
+		float solar_min = device_state_get_float("power_monitor.solar_min_voltage_v");
+		float solar_max = device_state_get_float("power_monitor.solar_max_voltage_v");
 
 		// Create gauge rows with 20:80 split using flexbox helper function
 		// Initialize gauge structures
@@ -315,8 +315,11 @@ void power_monitor_power_grid_view_update_data(void)
 {
 	// Check if view is still valid before updating
 	if (!s_view_initialized) {
+		// View not initialized, skipping update
 		return;
 	}
+
+	// Updating data
 
 	// Use LERP display values for smooth bars
 	lerp_power_monitor_data_t lerp;
@@ -375,6 +378,9 @@ void power_monitor_power_grid_view_update_data(void)
 			lv_label_set_text(s_solar_value_label, value_text);
 		}
 	}
+
+	// Update gauge intervals and timeline durations
+	power_grid_view_update_gauge_intervals();
 
 	// Mark view as initialized for proper cleanup
 	s_view_initialized = true;
@@ -496,12 +502,12 @@ void power_monitor_power_grid_view_update_configuration(void)
 	printf("[I] power_grid_view: Updating power grid view gauge configuration...\n");
 
 	// Read actual gauge configuration values from device state
-	float starter_baseline = device_state_get_starter_baseline_voltage_v();
-	float starter_min = device_state_get_starter_min_voltage_v();
-	float starter_max = device_state_get_starter_max_voltage_v();
-	float house_baseline = device_state_get_house_baseline_voltage_v();
-	float house_min = device_state_get_house_min_voltage_v();
-	float house_max = device_state_get_house_max_voltage_v();
+	float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
+	float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
+	float starter_max = device_state_get_float("power_monitor.starter_max_voltage_v");
+	float house_baseline = device_state_get_float("power_monitor.house_baseline_voltage_v");
+	float house_min = device_state_get_float("power_monitor.house_min_voltage_v");
+	float house_max = device_state_get_float("power_monitor.house_max_voltage_v");
 	float solar_min = 0.0f;     // Fixed minimum display range (solar can be 0)
 	float solar_max = 25.0f;    // Fixed maximum display range (solar can be higher)
 
@@ -530,5 +536,30 @@ void power_monitor_power_grid_view_update_configuration(void)
 			BAR_GRAPH_MODE_POSITIVE_ONLY, 0.0f, solar_min, solar_max,
 			"", "V", "V", 0xFF8000, false, true, false // No border for current view
 		);
+	}
+}
+
+// Update power grid view gauge timelines based on per-gauge timeline settings
+void power_grid_view_update_gauge_intervals(void)
+{
+	// Update starter voltage gauge timeline
+	if (s_starter_voltage_gauge.initialized) {
+		int timeline_duration = device_state_get_int("power_monitor.gauge_timeline_settings.starter_voltage.current_view");
+		uint32_t timeline_duration_ms = timeline_duration * 1000;
+		bar_graph_gauge_set_timeline_duration(&s_starter_voltage_gauge, timeline_duration_ms);
+	}
+
+	// Update house voltage gauge timeline
+	if (s_house_voltage_gauge.initialized) {
+		int timeline_duration = device_state_get_int("power_monitor.gauge_timeline_settings.house_voltage.current_view");
+		uint32_t timeline_duration_ms = timeline_duration * 1000;
+		bar_graph_gauge_set_timeline_duration(&s_house_voltage_gauge, timeline_duration_ms);
+	}
+
+	// Update solar voltage gauge timeline
+	if (s_solar_voltage_gauge.initialized) {
+		int timeline_duration = device_state_get_int("power_monitor.gauge_timeline_settings.solar_voltage.current_view");
+		uint32_t timeline_duration_ms = timeline_duration * 1000;
+		bar_graph_gauge_set_timeline_duration(&s_solar_voltage_gauge, timeline_duration_ms);
 	}
 }

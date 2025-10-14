@@ -1,0 +1,23 @@
+#ifndef GAUGE_TYPES_H
+#define GAUGE_TYPES_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Power monitor gauge types
+typedef enum {
+	POWER_MONITOR_GAUGE_STARTER_VOLTAGE = 0,
+	POWER_MONITOR_GAUGE_STARTER_CURRENT,
+	POWER_MONITOR_GAUGE_HOUSE_VOLTAGE,
+	POWER_MONITOR_GAUGE_HOUSE_CURRENT,
+	POWER_MONITOR_GAUGE_SOLAR_VOLTAGE,
+	POWER_MONITOR_GAUGE_SOLAR_CURRENT,
+	POWER_MONITOR_GAUGE_COUNT
+} power_monitor_gauge_type_t;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // GAUGE_TYPES_H

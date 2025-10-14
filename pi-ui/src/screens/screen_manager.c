@@ -13,6 +13,11 @@ static const char *TAG = "screen_manager";
 static screen_type_t current_screen_type = SCREEN_NONE;
 static char current_module_name[32] = {0};
 
+// Requested screen state (for navigation)
+static screen_type_t requested_screen_type = SCREEN_NONE;
+static char requested_module_name[32] = {0};
+static bool transition_pending = false;
+
 // Transition protection
 static uint32_t last_transition_time = 0;
 #define MIN_TRANSITION_INTERVAL_MS 50  // Minimum 50ms between transitions
@@ -151,6 +156,13 @@ void screen_manager_init(void)
 	printf("[I] screen_manager: Initial screen from state: type=%d, module=%s\n",
 			 initial_screen, initial_module ? initial_module : "none");
 
+	// If no screen is set in state, default to home screen
+	if (initial_screen == SCREEN_NONE) {
+		printf("[I] screen_manager: No initial screen in state, defaulting to home screen\n");
+		initial_screen = SCREEN_HOME;
+		initial_module = NULL;
+	}
+
 	// Show the initial screen
 	create_and_show_screen(initial_screen, initial_module);
 
@@ -249,7 +261,87 @@ screen_type_t screen_manager_get_current_screen(void)
 	return current_screen_type;
 }
 
+// Screen navigation functions (for backward compatibility)
+screen_type_t screen_navigation_get_current_screen(void)
+{
+	return screen_manager_get_current_screen();
+}
+
+const char* screen_navigation_get_current_module(void)
+{
+	return screen_manager_get_current_module();
+}
+
+screen_type_t screen_navigation_get_requested_screen(void)
+{
+	return requested_screen_type;
+}
+
+const char* screen_navigation_get_requested_module(void)
+{
+	return requested_module_name[0] ? requested_module_name : NULL;
+}
+
 const char* screen_manager_get_current_module(void)
 {
 	return current_module_name[0] ? current_module_name : NULL;
+}
+
+// Working implementations for screen navigation
+
+void screen_navigation_set_current_screen(screen_type_t screen_type, const char* module_name) {
+	current_screen_type = screen_type;
+	if (module_name) {
+		strncpy(current_module_name, module_name, sizeof(current_module_name) - 1);
+		current_module_name[sizeof(current_module_name) - 1] = '\0';
+	} else {
+		current_module_name[0] = '\0';
+	}
+	printf("[I] screen_manager: Set current screen to %d, module %s\n", screen_type, module_name ? module_name : "none");
+}
+
+bool screen_navigation_is_transition_pending(void) {
+	return transition_pending;
+}
+
+void screen_navigation_process_transitions(void) {
+	if (transition_pending) {
+		printf("[I] screen_manager: Processing transition to screen %d, module %s\n",
+			   requested_screen_type, requested_module_name[0] ? requested_module_name : "none");
+
+		// Create the requested screen
+		screen_manager_show_screen(requested_screen_type, requested_module_name[0] ? requested_module_name : NULL);
+
+		// Clear the request
+		requested_screen_type = SCREEN_NONE;
+		requested_module_name[0] = '\0';
+		transition_pending = false;
+	}
+}
+
+void screen_navigation_request_home_screen(void) {
+	printf("[I] screen_manager: Requesting home screen\n");
+	requested_screen_type = SCREEN_HOME;
+	requested_module_name[0] = '\0';
+	transition_pending = true;
+}
+
+void screen_navigation_request_detail_view(const char* module_name) {
+	printf("[I] screen_manager: Requesting detail view for module %s\n", module_name ? module_name : "none");
+	requested_screen_type = SCREEN_DETAIL_VIEW;
+	if (module_name) {
+		strncpy(requested_module_name, module_name, sizeof(requested_module_name) - 1);
+		requested_module_name[sizeof(requested_module_name) - 1] = '\0';
+	} else {
+		requested_module_name[0] = '\0';
+	}
+	transition_pending = true;
+}
+
+// Function moved to current_view_manager.c to avoid duplication
+
+void view_state_check_timeout(void) {
+	// Check for any timeouts in the current view
+	// This could be used for auto-return to home screen, etc.
+	// For now, just a placeholder that doesn't spam the log
 }

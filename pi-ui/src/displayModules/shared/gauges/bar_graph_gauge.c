@@ -100,6 +100,7 @@ void bar_graph_gauge_init(
 	gauge->show_y_axis = true; // Enable Y-axis by default for detail screen gauges
 	gauge->show_border = false; // Default to no border, can be overridden by configure_advanced
 	gauge->update_interval_ms = 0; // No rate limiting
+	gauge->timeline_duration_ms = 1000; // Default one second timeline
 	gauge->data_added = false; // No data added yet
 	gauge->bar_width = 6; // Wider bars for visibility
 	gauge->bar_gap = 2;   // 2px gap between bars
@@ -442,18 +443,42 @@ void bar_graph_gauge_init(
 
 void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, float value)
 {
+	// Adding data point
+
 	if (!gauge || !gauge->initialized || !gauge->data_points ) {
 		printf("[W] bar_graph_gauge: Cannot add data point: gauge=%p, initialized=%d, data_points=%p\n",
 			gauge, gauge ? gauge->initialized : 0, gauge ? gauge->data_points : NULL);
 		return;
 	}
 
-	// Rate limiting: only add data if enough time has passed
+	// Timeline control: only add data based on timeline duration
 	struct timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	uint32_t current_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000; // Convert to milliseconds
-	if (gauge->update_interval_ms > 0 &&
-		(current_time - gauge->last_data_time) < gauge->update_interval_ms) {
+
+	// Calculate how often to add data points based on timeline duration
+	// We need to add enough data points to fill the gauge over the timeline duration
+	int canvas_width = gauge->cached_draw_width;
+	int bar_spacing = gauge->bar_width + gauge->bar_gap;
+	int total_bars = canvas_width / bar_spacing;
+
+	uint32_t data_interval_ms = 0;
+	if (gauge->timeline_duration_ms > 0 && total_bars > 0) {
+		// Calculate how often to add a data point to fill the gauge over the timeline duration
+		data_interval_ms = gauge->timeline_duration_ms / total_bars;
+
+		// Debug logging for timeline calculation
+		static int debug_count = 0;
+		if (debug_count < 5) {
+			printf("[D] bar_graph_gauge: Timeline calc: duration=%dms, canvas_width=%d, bar_spacing=%d, total_bars=%d, data_interval=%dms\n",
+				gauge->timeline_duration_ms, canvas_width, bar_spacing, total_bars, data_interval_ms);
+			debug_count++;
+		}
+	}
+
+	// Check if enough time has passed to add a new data point
+	if (data_interval_ms > 0 &&
+		(current_time - gauge->last_data_time) < data_interval_ms) {
 		// Not enough time has passed, skip this data point
 		return;
 	}
@@ -568,6 +593,8 @@ void bar_graph_gauge_update_labels_and_ticks(bar_graph_gauge_t *gauge)
 
 void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 {
+	// Updating canvas
+
 	if (!gauge || !gauge->initialized || !gauge->data_points) {
 		printf("[W] bar_graph_gauge: Cannot update canvas: gauge=%p, initialized=%d, data_points=%p\n",
 			gauge, gauge ? gauge->initialized : 0, gauge ? gauge->data_points : NULL);
@@ -832,6 +859,13 @@ void bar_graph_gauge_set_update_interval(bar_graph_gauge_t *gauge, uint32_t inte
 		clock_gettime(CLOCK_MONOTONIC, &ts);
 		gauge->last_data_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000; // Convert to milliseconds
 	}
+}
+
+void bar_graph_gauge_set_timeline_duration(bar_graph_gauge_t *gauge, uint32_t duration_ms)
+{
+	if (!gauge) return;
+
+	gauge->timeline_duration_ms = duration_ms;
 }
 
 void bar_graph_gauge_configure_advanced(

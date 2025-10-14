@@ -189,7 +189,7 @@ sudo systemctl start jeep-sensor-hub
 
 ```bash
 # Stop the service
-sudo systemctl stop jeep-sensor-hub
+sudo systemctl stop jeep-sensor-hub-ui.service
 
 # Run UI directly (for debugging)
 cd /path/to/jeep-sensor-hub/pi-ui/build

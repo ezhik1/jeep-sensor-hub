@@ -3,6 +3,7 @@
 
 #include "../../../fonts/lv_font_noplato_24.h"
 #include "../numberpad/numberpad.h"
+#include "../palette.h"
 #include "../../../state/device_state.h"
 #include <stdlib.h>
 #include <string.h>
@@ -10,24 +11,6 @@
 #include <math.h>
 
 static const char *TAG = "alerts_modal";
-
-// Color Palette
-#define PALETTE_WHITE lv_color_hex(0xFFFFFF)
-#define PALETTE_BLACK lv_color_hex(0x000000)
-#define PALETTE_GRAY lv_color_hex(0x8c8c8c)
-#define PALETTE_YELLOW lv_color_hex(0xFFD700)
-#define PALETTE_RED lv_color_hex(0xff0000)
-#define PALETTE_GREEN lv_color_hex(0x00ff00)
-#define PALETTE_BLUE lv_color_hex(0x004557)
-#define PALETTE_CYAN lv_color_hex(0x00FFFF)
-#define PALETTE_DARK_GRAY lv_color_hex(0x3F3F3F)
-#define PALETTE_BROWN lv_color_hex(0x793100)
-
-// Shared Colors
-#define BORDER_COLOR PALETTE_WHITE
-#define TEXT_COLOR_LIGHT PALETTE_WHITE
-#define TEXT_COLOR_DARK PALETTE_DARK_GRAY
-#define BACKGROUND_COLOR PALETTE_BLACK
 
 // #### Default State Colors ####
 
@@ -1679,7 +1662,7 @@ alerts_modal_t* alerts_modal_create(const alerts_modal_config_t* config, void (*
 	lv_obj_set_size(modal->background, LV_PCT(100), LV_PCT(100));
 	lv_obj_set_pos(modal->background, 0, 0);
 	lv_obj_set_style_bg_color(modal->background, PALETTE_BLACK, 0);
-	lv_obj_set_style_bg_opa(modal->background, LV_OPA_80, 0);
+	lv_obj_set_style_bg_opa(modal->background, LV_OPA_COVER, 0); // Use full opacity for better performance
 	lv_obj_set_style_border_width(modal->background, 0, 0);
 	lv_obj_set_style_pad_all(modal->background, 0, 0);
 

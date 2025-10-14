@@ -3,6 +3,25 @@
 # Setup script for Jeep Sensor Hub UI dependencies
 echo "Setting up dependencies for Jeep Sensor Hub UI..."
 
+# Update package list and install system dependencies
+echo "Installing system dependencies..."
+sudo apt update
+sudo apt install -y \
+    build-essential \
+    cmake \
+    pkg-config \
+    libsdl2-dev \
+    libcurl4-openssl-dev \
+    libcjson-dev \
+    git
+
+if [ $? -eq 0 ]; then
+    echo "✓ System dependencies installed successfully"
+else
+    echo "✗ Failed to install system dependencies"
+    exit 1
+fi
+
 # Check if lv_drivers exists
 if [ ! -d "lv_drivers" ]; then
 	echo "Cloning lv_drivers repository..."
@@ -18,8 +37,8 @@ else
 fi
 
 # Check if lvgl exists
-if [ ! -d "lv_drivers" ]; then
-	echo "Cloning lv_drivers repository..."
+if [ ! -d "lvgl" ]; then
+	echo "Cloning LVGL repository..."
 	git clone https://github.com/lvgl/lvgl.git
 	if [ $? -eq 0 ]; then
 		echo "✓ LVGL cloned successfully"

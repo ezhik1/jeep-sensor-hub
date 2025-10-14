@@ -50,6 +50,9 @@ typedef struct {
 	uint32_t update_interval_ms;
 	uint32_t last_data_time;
 
+	// Timeline control
+	uint32_t timeline_duration_ms;  // How long it takes for data to move across the gauge
+
 	// Data
 	int head;
 	float *data_points;
@@ -90,6 +93,7 @@ void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge);
 void bar_graph_gauge_redraw_full(bar_graph_gauge_t *gauge);
 void bar_graph_gauge_cleanup(bar_graph_gauge_t *gauge);
 void bar_graph_gauge_set_update_interval(bar_graph_gauge_t *gauge, uint32_t interval_ms);
+void bar_graph_gauge_set_timeline_duration(bar_graph_gauge_t *gauge, uint32_t duration_ms);
 void bar_graph_gauge_configure_advanced(bar_graph_gauge_t *gauge,
 						  bar_graph_mode_t mode,
 						  float baseline_value,

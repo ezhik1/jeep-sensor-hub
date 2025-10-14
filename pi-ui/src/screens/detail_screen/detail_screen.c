@@ -757,12 +757,12 @@ void detail_screen_apply_alert_flashing(detail_screen_t* detail, const void* ler
 	const lerp_power_monitor_data_t* lerp_data = (const lerp_power_monitor_data_t*)lerp_data_ptr;
 
 	// Get alert thresholds (same pattern as power grid view)
-	int starter_lo = device_state_get_starter_alert_low_voltage_v();
-	int starter_hi = device_state_get_starter_alert_high_voltage_v();
-	int house_lo = device_state_get_house_alert_low_voltage_v();
-	int house_hi = device_state_get_house_alert_high_voltage_v();
-	int solar_lo = device_state_get_solar_alert_low_voltage_v();
-	int solar_hi = device_state_get_solar_alert_high_voltage_v();
+	int starter_lo = device_state_get_int("power_monitor.starter_alert_low_voltage_v");
+	int starter_hi = device_state_get_int("power_monitor.starter_alert_high_voltage_v");
+	int house_lo = device_state_get_int("power_monitor.house_alert_low_voltage_v");
+	int house_hi = device_state_get_int("power_monitor.house_alert_high_voltage_v");
+	int solar_lo = device_state_get_int("power_monitor.solar_alert_low_voltage_v");
+	int solar_hi = device_state_get_int("power_monitor.solar_alert_high_voltage_v");
 
 	// Blink timing - asymmetric: 1 second on, 0.5 seconds off (1.5 second total cycle)
 	uint32_t tick_ms = lv_tick_get(); // Use LVGL's tick instead of FreeRTOS

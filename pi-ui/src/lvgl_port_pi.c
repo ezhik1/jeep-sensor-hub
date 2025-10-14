@@ -30,19 +30,42 @@ static uint32_t frame_count = 0;
 static float current_fps = 0.0f;
 static bool show_fps = true;
 static lv_obj_t *fps_label = NULL;
-uint32_t last_tick;
+static uint32_t last_tick = 0;
+static uint32_t last_calculation_time = 0;
+
+// Initial FPS calculation callback (runs once after 1 second)
+static void initial_fps_callback(lv_timer_t *timer)
+{
+	uint32_t now = SDL_GetTicks();
+	if (now - last_tick > 0) {
+		current_fps = (float)frame_count * 1000.0f / (now - last_tick);
+	}
+	lv_timer_del(timer);
+}
 
 // FPS calculation timer callback
 static void fps_timer_cb(lv_timer_t *timer)
 {
+	static int call_count = 0;
+	call_count++;
+
 	uint32_t now = SDL_GetTicks();
 
-	// Update FPS every second
-	if (now - last_tick >= 1000) {
+	// Debug: Print every 100 calls (every ~1 second) - disabled for production
+	// if (call_count % 100 == 0) {
+	//	printf("[DEBUG] FPS timer callback called %d times, now=%d, last_calc=%d, frame_count=%d, diff=%d\n",
+	//		   call_count, now, last_calculation_time, frame_count, (now - last_calculation_time));
+	// }
 
-		current_fps = (float)frame_count * 1000.0f / (now - last_tick);
+	// Update FPS every 500ms for more responsive display
+	if (now - last_calculation_time >= 500) {
+		if (now - last_calculation_time > 0) { // Avoid division by zero
+			current_fps = (float)frame_count * 1000.0f / (now - last_calculation_time);
+			// printf("[DEBUG] FPS calculated: %d frames in %d ms = %.1f FPS\n",
+			//	   frame_count, (now - last_calculation_time), current_fps);
+		}
 		frame_count = 0;
-		last_tick = now;
+		last_calculation_time = now; // Update last_calculation_time to current time for next calculation
 	}
 }
 
@@ -83,6 +106,15 @@ static void update_fps_display(void)
 	snprintf(fps_text, sizeof(fps_text), "FPS: %.1f", current_fps);
 	lv_label_set_text(fps_label, fps_text);
 	lv_obj_move_foreground(fps_label); // Ensure it stays on top
+
+	// Debug: Print FPS every 5 seconds - disabled for production
+	// static uint32_t last_debug_time = 0;
+	// uint32_t now = SDL_GetTicks();
+	// if (now - last_debug_time >= 5000) {
+	//	printf("[DEBUG] FPS display: current_fps=%.1f, show_fps=%d, fps_label=%p\n",
+	//		   current_fps, show_fps, fps_label);
+	//	last_debug_time = now;
+	// }
 }
 #define DISP_BUF_SIZE (LVGL_HOR_RES * LVGL_VER_RES)
 
@@ -263,9 +295,19 @@ void lvgl_port_main_loop(void)
 	signal(SIGINT, signal_handler);   // Ctrl+C
 	signal(SIGTERM, signal_handler);  // kill command
 
+	// Initialize FPS tracking
+	last_tick = 0; // Start with 0 so first calculation happens after 500ms
+	last_calculation_time = 0; // Start with 0 so first calculation happens after 500ms
+	frame_count = 0;
+
 	// Create FPS calculation timer (runs every 10ms for maximum responsiveness)
 	lv_timer_t *fps_timer = lv_timer_create(fps_timer_cb, 10, NULL);
 	lv_timer_set_repeat_count(fps_timer, -1);
+	// printf("[DEBUG] FPS timer created: %p\n", fps_timer);
+
+	// Force an initial FPS calculation after 1 second
+	lv_timer_t *initial_fps_timer = lv_timer_create(initial_fps_callback, 1000, NULL);
+	// printf("[DEBUG] Initial FPS timer created: %p\n", initial_fps_timer);
 
 	// Create FPS label on screen
 	create_fps_label();
