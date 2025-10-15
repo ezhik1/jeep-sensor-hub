@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "detail_screen.h"
+#include "../../displayModules/shared/palette.h"
 
 #include "../../lvgl_port_pi.h"
 #include "../../displayModules/power-monitor/power-monitor.h"
@@ -40,44 +41,54 @@ static const char *TAG = "detail_screen_template";
 // Internal event handlers
 static void back_button_event_cb(lv_event_t *e)
 {
-	printf("[I] detail_screen: BACK button event callback triggered\n");
-	detail_screen_t *detail = (detail_screen_t*)lv_event_get_user_data(e);
-	if (detail && detail->on_back_clicked) {
-		printf("[I] detail_screen: Calling back button handler\n");
-		detail->on_back_clicked();
-	} else {
-		printf("[W] detail_screen: Back button handler not available\n");
+	lv_event_code_t code = lv_event_get_code(e);
+
+	if (code == LV_EVENT_CLICKED) {
+		printf("[I] detail_screen: BACK button clicked\n");
+		detail_screen_t *detail = (detail_screen_t*)lv_event_get_user_data(e);
+		if (detail && detail->on_back_clicked) {
+			printf("[I] detail_screen: Calling back button handler\n");
+			detail->on_back_clicked();
+		} else {
+			printf("[W] detail_screen: Back button handler not available\n");
+		}
 	}
+	// LV_STATE_PRESSED and LV_STATE_RELEASED are handled automatically by LVGL styling
 }
 
 static void setting_button_event_cb(lv_event_t *e)
 {
-	printf("[I] detail_screen: Setting button event callback triggered\n");
-	lv_obj_t *button = lv_event_get_target(e);
-	detail_screen_t *detail = (detail_screen_t*)lv_event_get_user_data(e);
-	if (!detail) {
-		printf("[W] detail_screen: No detail screen data available\n");
-		return;
-	}
+	lv_event_code_t code = lv_event_get_code(e);
 
-	// Get the button index from the button's user data
-	int button_index = (int)(intptr_t)lv_obj_get_user_data(button);
+	if (code == LV_EVENT_CLICKED) {
+		printf("[I] detail_screen: Setting button clicked\n");
+		lv_obj_t *button = lv_event_get_target(e);
+		detail_screen_t *detail = (detail_screen_t*)lv_event_get_user_data(e);
+		if (!detail) {
+			printf("[W] detail_screen: No detail screen data available\n");
+			return;
+		}
+
+		// Get the button index from the button's user data
+		int button_index = (int)(intptr_t)lv_obj_get_user_data(button);
 		printf("[I] detail_screen: Button index: %d\n", button_index);
 
-	// Validate index and call the appropriate handler
-	if (button_index >= 0 && button_index < detail->setting_buttons_count) {
-		printf("[I] detail_screen: Setting button %d clicked: %s\n", button_index, detail->button_configs[button_index].text);
+		// Validate index and call the appropriate handler
+		if (button_index >= 0 && button_index < detail->setting_buttons_count) {
+			printf("[I] detail_screen: Setting button %d clicked: %s\n", button_index, detail->button_configs[button_index].text);
 
-		// Call the button's click handler
-		if (detail->button_configs[button_index].on_clicked) {
-			printf("[I] detail_screen: Calling button handler for: %s\n", detail->button_configs[button_index].text);
-			detail->button_configs[button_index].on_clicked();
+			// Call the button's click handler
+			if (detail->button_configs[button_index].on_clicked) {
+				printf("[I] detail_screen: Calling button handler for: %s\n", detail->button_configs[button_index].text);
+				detail->button_configs[button_index].on_clicked();
+			} else {
+				printf("[W] detail_screen: No handler available for button: %s\n", detail->button_configs[button_index].text);
+			}
 		} else {
-			printf("[W] detail_screen: No handler available for button: %s\n", detail->button_configs[button_index].text);
+			printf("[W] detail_screen: Invalid button index: %d (count: %d)\n", button_index, detail->setting_buttons_count);
 		}
-	} else {
-		printf("[W] detail_screen: Invalid button index: %d (count: %d)\n", button_index, detail->setting_buttons_count);
 	}
+	// LV_STATE_PRESSED and LV_STATE_RELEASED are handled automatically by LVGL styling
 }
 
 static void view_container_event_cb(lv_event_t *e)
@@ -152,7 +163,7 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		return NULL;
 	}
 	lv_obj_set_size(detail->root, LV_PCT(100), LV_PCT(100));
-	lv_obj_set_style_bg_color(detail->root, lv_color_hex(0x000000), 0);
+	lv_obj_set_style_bg_color(detail->root, PALETTE_BLACK, 0);
 	lv_obj_set_style_bg_opa(detail->root, LV_OPA_COVER, 0);
 	lv_obj_set_style_pad_all(detail->root, 0, 0);
 	lv_obj_set_style_border_width(detail->root, 0, 0);
@@ -170,7 +181,7 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		return NULL;
 	}
 	lv_obj_set_size(detail->main_content, LV_PCT(100), LV_PCT(100));
-	lv_obj_set_style_bg_color(detail->main_content, lv_color_hex(0x000000), 0);
+	lv_obj_set_style_bg_color(detail->main_content, PALETTE_BLACK, 0);
 	lv_obj_set_style_border_width(detail->main_content, 0, 0);
 	lv_obj_set_style_pad_all(detail->main_content, 10, 0);
 	lv_obj_clear_flag(detail->main_content, LV_OBJ_FLAG_SCROLLABLE);
@@ -216,7 +227,8 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 
 	lv_obj_set_size(detail->left_column, left_column_width, LV_PCT(100));
 	lv_obj_set_style_flex_grow(detail->left_column, 0, 0); // Don't grow, use fixed width
-	lv_obj_set_style_bg_opa(detail->left_column, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_bg_color(detail->left_column, PALETTE_BLACK, 0);
+	lv_obj_set_style_bg_opa(detail->left_column, LV_OPA_COVER, 0);
 	lv_obj_set_style_border_width(detail->left_column, 0, 0);
 	lv_obj_set_style_pad_all(detail->left_column, 0, 0);
 	lv_obj_clear_flag(detail->left_column, LV_OBJ_FLAG_SCROLLABLE);
@@ -236,7 +248,7 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		lv_obj_set_size(detail->gauges_container, LV_PCT(100), LV_PCT(100));
 		lv_obj_set_style_flex_grow(detail->gauges_container, 1, 0);
 		lv_obj_set_style_pad_all(detail->gauges_container, 0, 0);
-		lv_obj_set_style_bg_color(detail->gauges_container, lv_color_hex(0x000000), 0);
+		lv_obj_set_style_bg_color(detail->gauges_container, PALETTE_BLACK, 0);
 		lv_obj_set_style_border_width(detail->gauges_container, 0, 0); // No border around gauges container
 		lv_obj_set_style_radius(detail->gauges_container, 0, 0);
 		lv_obj_clear_flag(detail->gauges_container, LV_OBJ_FLAG_SCROLLABLE);
@@ -270,9 +282,9 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		printf("[I] detail_screen: Initial current_view_container size: %dx%d (before content)\n",
 		lv_obj_get_width(detail->current_view_container), lv_obj_get_height(detail->current_view_container));
 	lv_obj_set_style_pad_all(detail->current_view_container, CURRENT_VIEW_PADDING, 0); // Internal padding from config
-	lv_obj_set_style_bg_color(detail->current_view_container, lv_color_hex(0x000000), 0);
+	lv_obj_set_style_bg_color(detail->current_view_container, PALETTE_BLACK, 0);
 	lv_obj_set_style_border_width(detail->current_view_container, 1, 0); // Match view container style
-	lv_obj_set_style_border_color(detail->current_view_container, lv_color_hex(0xFFFFFF), 0);
+	lv_obj_set_style_border_color(detail->current_view_container, PALETTE_WHITE, 0);
 	lv_obj_set_style_radius(detail->current_view_container, 4, 0);
 	lv_obj_clear_flag(detail->current_view_container, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -288,9 +300,9 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 	lv_obj_set_style_flex_grow(detail->sensor_data_section, RAW_VALUES_GROW, 0); // Grow factor from config
 	lv_obj_set_style_pad_all(detail->sensor_data_section, OTHER_SECTIONS_PADDING, 0); // Internal padding from config
 	lv_obj_set_style_pad_top(detail->sensor_data_section, 16, 0); // Extra top padding for overlay title space
-	lv_obj_set_style_bg_color(detail->sensor_data_section, lv_color_hex(0x000000), 0);
+	lv_obj_set_style_bg_color(detail->sensor_data_section, PALETTE_BLACK, 0);
 	lv_obj_set_style_border_width(detail->sensor_data_section, 1, 0); // Match current_view container
-	lv_obj_set_style_border_color(detail->sensor_data_section, lv_color_hex(0xFFFFFF), 0);
+	lv_obj_set_style_border_color(detail->sensor_data_section, PALETTE_WHITE, 0);
 	lv_obj_set_style_radius(detail->sensor_data_section, 4, 0);
 	lv_obj_clear_flag(detail->sensor_data_section, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -305,8 +317,8 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 	// Create overlay title for raw values section AFTER content is added (matching POWER MONITOR style)
 	lv_obj_t *sensor_title = lv_label_create(detail->root);
 	lv_obj_set_style_text_font(sensor_title, &lv_font_montserrat_14, 0);
-	lv_obj_set_style_text_color(sensor_title, lv_color_hex(0xFFFFFF), 0);
-	lv_obj_set_style_bg_color(sensor_title, lv_color_hex(0x000000), 0); // Black background to obscure border
+	lv_obj_set_style_text_color(sensor_title, PALETTE_WHITE, 0);
+	lv_obj_set_style_bg_color(sensor_title, PALETTE_BLACK, 0); // Black background to obscure border
 	lv_obj_set_style_bg_opa(sensor_title, LV_OPA_COVER, 0);
 	lv_obj_set_style_pad_left(sensor_title, 8, 0);
 	lv_obj_set_style_pad_right(sensor_title, 8, 0);
@@ -327,10 +339,10 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		lv_obj_set_size(detail->settings_section, LV_PCT(100), LV_SIZE_CONTENT); // Content-based height
 		lv_obj_set_style_flex_grow(detail->settings_section, SETTINGS_GROW, 0); // Grow factor from config
 		lv_obj_set_style_pad_all(detail->settings_section, OTHER_SECTIONS_PADDING, 0); // Internal padding from config
-		lv_obj_set_style_pad_top(detail->settings_section, 16, 0); // Extra top padding for overlay title space
-		lv_obj_set_style_bg_color(detail->settings_section, lv_color_hex(0x000000), 0);
+		lv_obj_set_style_pad_top(detail->settings_section, 8, 0);
+		lv_obj_set_style_bg_color(detail->settings_section, PALETTE_BLACK, 0);
 		lv_obj_set_style_border_width(detail->settings_section, 1, 0); // Match current_view container
-		lv_obj_set_style_border_color(detail->settings_section, lv_color_hex(0xFFFFFF), 0);
+		lv_obj_set_style_border_color(detail->settings_section, PALETTE_WHITE, 0);
 		lv_obj_add_flag(detail->settings_section, LV_OBJ_FLAG_OVERFLOW_VISIBLE); // Allow children to extend outside container
 		lv_obj_set_style_radius(detail->settings_section, 4, 0);
 		lv_obj_clear_flag(detail->settings_section, LV_OBJ_FLAG_SCROLLABLE);
@@ -349,8 +361,8 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		// Create overlay title for settings section (matching POWER MONITOR style)
 		lv_obj_t *settings_title = lv_label_create(detail->root);
 		lv_obj_set_style_text_font(settings_title, &lv_font_montserrat_14, 0);
-		lv_obj_set_style_text_color(settings_title, lv_color_hex(0xFFFFFF), 0);
-		lv_obj_set_style_bg_color(settings_title, lv_color_hex(0x000000), 0); // Black background to obscure border
+		lv_obj_set_style_text_color(settings_title, PALETTE_WHITE, 0);
+		lv_obj_set_style_bg_color(settings_title, PALETTE_BLACK, 0); // Black background to obscure border
 		lv_obj_set_style_bg_opa(settings_title, LV_OPA_COVER, 0);
 		lv_obj_set_style_pad_left(settings_title, 8, 0);
 		lv_obj_set_style_pad_right(settings_title, 8, 0);
@@ -365,75 +377,126 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		lv_obj_align_to(settings_title, detail->settings_section, LV_ALIGN_OUT_TOP_LEFT, 20, 10);
 		printf("[I] detail_screen: Created settings title inline with section border\n");
 
-		// Create container for settings buttons
-		lv_obj_t *buttons_container = lv_obj_create(detail->settings_section);
-		lv_obj_set_size(buttons_container, LV_PCT(100), LV_SIZE_CONTENT);
-		lv_obj_set_style_bg_opa(buttons_container, LV_OPA_TRANSP, 0);
-		lv_obj_set_style_border_width(buttons_container, 0, 0);
-		lv_obj_set_style_pad_all(buttons_container, 0, 0);
-		lv_obj_clear_flag(buttons_container, LV_OBJ_FLAG_SCROLLABLE);
+		// Get the settings section dimensions for proper button sizing
+		lv_coord_t settings_width = lv_obj_get_width(detail->settings_section);
+		lv_coord_t settings_height = lv_obj_get_height(detail->settings_section);
+		printf("[I] detail_screen: Settings section size: %dx%d\n", settings_width, settings_height);
 
-		// Set up flexbox for buttons (2 columns)
-		lv_obj_set_flex_flow(buttons_container, LV_FLEX_FLOW_ROW_WRAP);
-		lv_obj_set_flex_align(buttons_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-		lv_obj_set_style_pad_gap(buttons_container, 8, 8); // 8px gap between buttons
-
-		// Dynamic settings buttons
-		int button_height = 40; // larger settings buttons
-
-		// Create dynamic buttons
-		printf("[I] detail_screen: Creating %d dynamic buttons\n", detail->setting_buttons_count);
-		for (int i = 0; i < detail->setting_buttons_count; i++) {
-			detail->setting_buttons[i] = lv_btn_create(buttons_container);
-			lv_obj_set_size(detail->setting_buttons[i], LV_PCT(48), button_height); // 48% width for 2 columns with gap
-			printf("[I] detail_screen: Created button %d: %s\n", i, config->setting_buttons[i].text);
-			lv_obj_set_style_bg_color(detail->setting_buttons[i], lv_color_hex(0x1a1a1a), 0); // Almost-black gray
-			lv_obj_set_style_border_width(detail->setting_buttons[i], 1, 0);
-			lv_obj_set_style_border_color(detail->setting_buttons[i], lv_color_hex(0xFFFFFF), 0);
-			lv_obj_set_style_radius(detail->setting_buttons[i], 4, 0);
-
-			// Ensure button is clickable
-			lv_obj_add_flag(detail->setting_buttons[i], LV_OBJ_FLAG_CLICKABLE);
-			lv_obj_clear_flag(detail->setting_buttons[i], LV_OBJ_FLAG_SCROLLABLE);
-
-			lv_obj_add_event_cb(detail->setting_buttons[i], setting_button_event_cb, LV_EVENT_CLICKED, detail);
-			printf("[I] detail_screen: Added event callback for button %d\n", i);
-
-			// Store button index in user data
-			lv_obj_set_user_data(detail->setting_buttons[i], (void*)(intptr_t)i);
-			printf("[I] detail_screen: Set user data for button %d: index=%d\n", i, i);
-
-			// Create label
-			lv_obj_t *label = lv_label_create(detail->setting_buttons[i]);
-			lv_label_set_text(label, config->setting_buttons[i].text);
-			lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
-			lv_obj_center(label);
+		// If settings section height is 0, use a default value
+		if (settings_height <= 0) {
+			settings_height = 100; // Default height for settings section
+			printf("[W] detail_screen: Settings section height is 0, using default: %d\n", settings_height);
 		}
 
-		// BACK button (full width, fills remaining space with proper padding) - created outside flexbox container
-		printf("[I] detail_screen: Creating BACK button\n");
-		detail->back_button = lv_btn_create(detail->settings_section);
+		// Create main button container with flexbox layout
+		lv_obj_t *main_button_container = lv_obj_create(detail->settings_section);
+		lv_obj_set_size(main_button_container, LV_PCT(100), LV_PCT(100));
+		lv_obj_set_style_pad_all(main_button_container, 8, 0);
+		lv_obj_set_style_bg_color(main_button_container, PALETTE_BLACK, 0);
+		lv_obj_set_style_bg_opa(main_button_container, LV_OPA_COVER, 0);
+		lv_obj_set_style_border_width(main_button_container, 0, 0);
+		lv_obj_clear_flag(main_button_container, LV_OBJ_FLAG_SCROLLABLE);
+		lv_obj_set_style_pad_gap(main_button_container, 8, 0);
 
-		lv_obj_set_size(detail->back_button, LV_PCT(100), LV_PCT(100)); // Full width and height
-		lv_obj_set_style_pad_all(detail->back_button, 0, 0); // No internal padding
-		lv_obj_align(detail->back_button, LV_ALIGN_BOTTOM_MID, 0, -OTHER_SECTIONS_PADDING); // Align to bottom with padding
-		lv_obj_set_style_bg_color(detail->back_button, lv_color_hex(0x1a1a1a), 0); // Almost-black gray
-		lv_obj_set_style_border_width(detail->back_button, 1, 0);
-		lv_obj_set_style_border_color(detail->back_button, lv_color_hex(0xFFFFFF), 0);
-		lv_obj_set_style_radius(detail->back_button, 4, 0);
+
+		// Set up flexbox layout: BACK button on left, other buttons on right
+		lv_obj_set_flex_flow(main_button_container, LV_FLEX_FLOW_ROW);
+		lv_obj_set_flex_align(main_button_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+		// BACK button Left side
+		printf("[I] detail_screen: Creating BACK button\n");
+		detail->back_button = lv_btn_create(main_button_container);
+		lv_obj_set_size(detail->back_button, LV_PCT(49), LV_PCT(96));
+
+		// Style BACK button (green)
+		lv_obj_set_style_border_width(detail->back_button, 2, 0);
+		lv_obj_set_style_border_color(detail->back_button, PALETTE_GREEN, 0);
+		lv_obj_set_style_bg_color(detail->back_button, PALETTE_BLACK, 0);
+		lv_obj_set_style_bg_color(detail->back_button, PALETTE_GREEN, LV_STATE_PRESSED);
+		lv_obj_set_style_text_color(detail->back_button, PALETTE_GREEN, LV_PART_MAIN | LV_STATE_DEFAULT );
+		lv_obj_set_style_text_color(detail->back_button, PALETTE_BLACK, LV_PART_MAIN | LV_STATE_PRESSED );
+		lv_obj_set_style_radius(detail->back_button, 8, 0);
+		lv_obj_set_style_shadow_width(detail->back_button, 0, 0); // Remove drop shadow
 
 		// Ensure button is clickable
 		lv_obj_add_flag(detail->back_button, LV_OBJ_FLAG_CLICKABLE);
 		lv_obj_clear_flag(detail->back_button, LV_OBJ_FLAG_SCROLLABLE);
 
-		lv_obj_add_event_cb(detail->back_button, back_button_event_cb, LV_EVENT_CLICKED, detail);
+		lv_obj_add_event_cb(detail->back_button, back_button_event_cb, LV_EVENT_ALL, detail);
 		printf("[I] detail_screen: Added event callback for BACK button\n");
 
 		lv_obj_t *back_label = lv_label_create(detail->back_button);
 		lv_label_set_text(back_label, "BACK");
-		lv_obj_set_style_text_color(back_label, lv_color_hex(0xFFFFFF), 0);
-		lv_obj_set_style_text_align(back_label, LV_TEXT_ALIGN_CENTER, 0); // Center text alignment
-		lv_obj_center(back_label); // Center the label object itself
+		lv_obj_center(back_label);
+
+		// Right side container for ALERTS and TIMELINE buttons
+		lv_obj_t* right_buttons_container = lv_obj_create(main_button_container);
+		lv_obj_set_size(right_buttons_container, LV_PCT(49), LV_PCT(100));
+		lv_obj_set_style_bg_color(right_buttons_container, PALETTE_BLACK, 0);
+		lv_obj_set_style_bg_opa(right_buttons_container, LV_OPA_COVER, 0);
+		lv_obj_set_style_border_width(right_buttons_container, 0, 0);
+		lv_obj_add_flag(right_buttons_container, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+		lv_obj_set_style_pad_all(right_buttons_container, 2, 0);
+		lv_obj_set_style_pad_gap(right_buttons_container, 8, 0);
+
+		// Set up vertical flexbox for right buttons
+		lv_obj_set_flex_flow(right_buttons_container, LV_FLEX_FLOW_COLUMN);
+		lv_obj_set_flex_align(right_buttons_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+		// ALERTS, TIMELINE Buttons
+		for (int i = 0; i < detail->setting_buttons_count; i++) {
+
+			detail->setting_buttons[i] = lv_btn_create(right_buttons_container);
+			lv_obj_set_size(detail->setting_buttons[i], LV_PCT(100), LV_PCT(47));
+
+			// Determine colors based on button text
+			lv_color_t border_color, text_color, pressed_bg_color, pressed_text_color;
+			if (strcmp(config->setting_buttons[i].text, "ALERTS") == 0) {
+
+				border_color = PALETTE_YELLOW; // Yellow
+				text_color = PALETTE_YELLOW;
+				pressed_bg_color = PALETTE_YELLOW;
+				pressed_text_color = PALETTE_BLACK;
+			} else if (strcmp(config->setting_buttons[i].text, "TIMELINE") == 0) {
+
+				border_color = PALETTE_CYAN; // Cyan
+				text_color = PALETTE_CYAN;
+				pressed_bg_color = PALETTE_CYAN;
+				pressed_text_color = PALETTE_BLACK;
+			} else {
+
+				border_color = PALETTE_WHITE; // Default white
+				text_color = PALETTE_WHITE;
+				pressed_bg_color = PALETTE_WHITE;
+				pressed_text_color = PALETTE_BLACK;
+			}
+
+			// Style button
+			lv_obj_set_style_bg_color(detail->setting_buttons[i], PALETTE_BLACK, 0);
+			lv_obj_set_style_bg_color(detail->setting_buttons[i], pressed_bg_color, LV_PART_MAIN | LV_STATE_PRESSED );
+			lv_obj_set_style_text_color( detail->setting_buttons[i], text_color, LV_PART_MAIN | LV_STATE_DEFAULT );
+			lv_obj_set_style_text_color( detail->setting_buttons[i], pressed_text_color, LV_PART_MAIN | LV_STATE_PRESSED );
+
+			lv_obj_set_style_border_width(detail->setting_buttons[i], 2, 0);
+			lv_obj_set_style_border_color(detail->setting_buttons[i], border_color, 0);
+			lv_obj_set_style_radius(detail->setting_buttons[i], 8, 0);
+			lv_obj_set_style_shadow_width(detail->setting_buttons[i], 0, 0); // Remove drop shadow
+
+			// Ensure button is clickable
+			lv_obj_add_flag(detail->setting_buttons[i], LV_OBJ_FLAG_CLICKABLE);
+			lv_obj_clear_flag(detail->setting_buttons[i], LV_OBJ_FLAG_SCROLLABLE);
+
+			lv_obj_add_event_cb(detail->setting_buttons[i], setting_button_event_cb, LV_EVENT_ALL, detail);
+
+			// Store button index in user data
+			lv_obj_set_user_data(detail->setting_buttons[i], (void*)(intptr_t)i);
+
+			// Create label
+			lv_obj_t *label = lv_label_create( detail->setting_buttons[ i ] );
+			lv_label_set_text( label, config->setting_buttons[ i ].text );
+
+			lv_obj_center( label );
+		}
 	}
 
 	// Position RAW VALUES overlay title inline with the settings section's top border (like POWER MONITOR)
@@ -453,7 +516,7 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		lv_obj_set_style_pad_all(detail->status_container, 10, 0);
 		lv_obj_set_style_bg_color(detail->status_container, lv_color_hex(0x0A0A0A), 0);
 		lv_obj_set_style_border_width(detail->status_container, 2, 0);
-		lv_obj_set_style_border_color(detail->status_container, lv_color_hex(0xFFFFFF), 0);
+		lv_obj_set_style_border_color(detail->status_container, PALETTE_WHITE, 0);
 		lv_obj_set_style_radius(detail->status_container, 4, 0);
 		lv_obj_clear_flag(detail->status_container, LV_OBJ_FLAG_SCROLLABLE);
 	}
@@ -583,7 +646,7 @@ void detail_screen_destroy(detail_screen_t* detail)
 
 	// Destroy root (this will destroy all children)
 	if (detail->root) {
-		lv_obj_del_async(detail->root);
+		lv_obj_del(detail->root);
 	}
 
 	free(detail);
@@ -637,7 +700,7 @@ void detail_screen_create_sensor_labels(detail_screen_t* detail)
 	// Create sensor data labels with horizontal layout (label: value on same line)
 	lv_color_t labelColor = lv_color_hex(0x00bbe6);
 	lv_color_t valueColor = lv_color_hex(0x39ab00);
-	lv_color_t groupColor = lv_color_hex(0xFFFFFF);
+	lv_color_t groupColor = PALETTE_WHITE;
 
 	// Sensor data layout: Group headers + horizontal label:value pairs
 	// Index mapping: 0=Starter Header, 1=Starter Volts, 2=Starter Volts Value, 3=Starter Amps, 4=Starter Amps Value
@@ -665,7 +728,8 @@ void detail_screen_create_sensor_labels(detail_screen_t* detail)
 			// Create horizontal container for label:value pair
 			lv_obj_t* value_row = lv_obj_create(detail->sensor_data_section);
 			lv_obj_set_size(value_row, LV_PCT(100), LV_SIZE_CONTENT);
-			lv_obj_set_style_bg_opa(value_row, LV_OPA_TRANSP, 0);
+			lv_obj_set_style_bg_color(value_row, PALETTE_BLACK, 0);
+			lv_obj_set_style_bg_opa(value_row, LV_OPA_COVER, 0);
 			lv_obj_set_style_border_width(value_row, 0, 0);
 			lv_obj_set_style_pad_all(value_row, 2, 0);
 			lv_obj_clear_flag(value_row, LV_OBJ_FLAG_SCROLLABLE);

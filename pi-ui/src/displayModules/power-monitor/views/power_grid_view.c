@@ -133,13 +133,11 @@ static void create_gauge_row(
 
 	// Create gauge (shrink by 6px to give more space for numeric values)
 	int gauge_width = (container_width * BAR_GRAPH_PERCENT) / 100 - 6;
-	bar_graph_gauge_init(gauge, gauge_container, 0, 0, gauge_width, gauge_height);
+	bar_graph_gauge_init(gauge, gauge_container, 0, 0, gauge_width, gauge_height, 3, 1);
 	bar_graph_gauge_configure_advanced(
 		gauge, mode, baseline, min_val, max_val,
 		"", "V", "V", lv_color_to_int(color), false, true, false // No border for current view
 	);
-	gauge->bar_width = 3;
-	gauge->bar_gap = 1;
 }
 
 // Static bar graph gauges for this view (temporarily reverted from shared)

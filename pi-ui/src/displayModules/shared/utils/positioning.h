@@ -23,4 +23,22 @@ void smart_position_outside_container(lv_obj_t* element, lv_obj_t* target_field,
  */
 void smart_position_outside_container_default(lv_obj_t* element, lv_obj_t* target_field, lv_obj_t* container);
 
+/**
+ * @brief Generic clamp function - clamps value between min and max
+ * @param value The value to clamp
+ * @param min The minimum allowed value
+ * @param max The maximum allowed value
+ * @return The clamped value
+ */
+int clamp_int(int value, int min, int max);
+
+/**
+ * @brief Generic clamp function for float values
+ * @param value The value to clamp
+ * @param min The minimum allowed value
+ * @param max The maximum allowed value
+ * @return The clamped value
+ */
+float clamp_float(float value, float min, float max);
+
 #endif // POSITIONING_H

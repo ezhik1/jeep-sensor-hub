@@ -13,10 +13,11 @@
 #include "../../../state/device_state.h"
 #include <lvgl.h>
 
+
 // #### Default State Colors ####
 
 // Gauge Section
-#define DEFAULT_GAUGE_SECTION_BORDER_COLOR PALETTE_WHITE
+#define DEFAULT_GAUGE_SECTION_BORDER_COLOR PALETTE_GRAY
 #define DEFAULT_GAUGE_SECTION_BORDER_WIDTH 1
 
 // Gauge Title
@@ -24,7 +25,7 @@
 #define DEFAULT_GAUGE_TITLE_TEXT_COLOR PALETTE_WHITE
 
 // Group Containers
-#define DEFAULT_GROUP_BORDER_COLOR PALETTE_WHITE
+#define DEFAULT_GROUP_BORDER_COLOR PALETTE_GRAY
 #define DEFAULT_GROUP_BORDER_WIDTH 1
 #define DIM_GROUP_BORDER_COLOR PALETTE_DARK_GRAY
 #define DIM_GROUP_BORDER_WIDTH 1
@@ -125,7 +126,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 
 	// Create gauge container parent - holds both gauge section and title
 	lv_obj_t* gauge_container = lv_obj_create(parent);
-	lv_obj_set_size(gauge_container, LV_PCT(100), 112);
+	lv_obj_set_size(gauge_container, LV_PCT(100), 116);
 	lv_obj_set_style_bg_color(gauge_container, PALETTE_BLACK, 0);
 	lv_obj_set_style_bg_opa(gauge_container, LV_OPA_COVER, 0);
 	lv_obj_set_style_border_width(gauge_container, 0, 0);
@@ -180,7 +181,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_obj_set_pos(modal->gauge_ui[gauge].current_view_group, 10, 20);
 	lv_obj_set_layout(modal->gauge_ui[gauge].current_view_group, LV_LAYOUT_FLEX);
 	lv_obj_set_flex_flow(modal->gauge_ui[gauge].current_view_group, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(modal->gauge_ui[gauge].current_view_group, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_flex_align(modal->gauge_ui[gauge].current_view_group, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_bg_color(modal->gauge_ui[gauge].current_view_group, PALETTE_BLACK, 0);
 	lv_obj_set_style_bg_opa(modal->gauge_ui[gauge].current_view_group, LV_OPA_COVER, 0);
 	lv_obj_set_style_border_width(modal->gauge_ui[gauge].current_view_group, DEFAULT_GROUP_BORDER_WIDTH, 0);
@@ -213,7 +214,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_group, modal->gauge_ui[gauge].current_view_group, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
 	lv_obj_set_layout(modal->gauge_ui[gauge].detail_view_group, LV_LAYOUT_FLEX);
 	lv_obj_set_flex_flow(modal->gauge_ui[gauge].detail_view_group, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(modal->gauge_ui[gauge].detail_view_group, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_flex_align(modal->gauge_ui[gauge].detail_view_group, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_bg_color(modal->gauge_ui[gauge].detail_view_group, PALETTE_BLACK, 0);
 	lv_obj_set_style_bg_opa(modal->gauge_ui[gauge].detail_view_group, LV_OPA_COVER, 0);
 	lv_obj_set_style_border_width(modal->gauge_ui[gauge].detail_view_group, DEFAULT_GROUP_BORDER_WIDTH, 0);
@@ -246,7 +247,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].current_view_hours_label, "0");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_hours_label, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_hours_label, &lv_font_noplato_24, 0);
-	lv_obj_align(modal->gauge_ui[gauge].current_view_hours_label, LV_ALIGN_CENTER, -40, 0);
+	// Positioned by flexbox parent container
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_hours_label, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_hours_label, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -254,7 +255,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].current_view_hours_letter, "H");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_hours_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_hours_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].current_view_hours_letter, modal->gauge_ui[gauge].current_view_hours_label, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+	lv_obj_align_to(modal->gauge_ui[gauge].current_view_hours_letter, modal->gauge_ui[gauge].current_view_hours_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_hours_letter, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_hours_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -263,7 +264,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].current_view_minutes_label, "0");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_minutes_label, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_minutes_label, &lv_font_noplato_24, 0);
-	lv_obj_align(modal->gauge_ui[gauge].current_view_minutes_label, LV_ALIGN_CENTER, -10, 0);
+	// Positioned by flexbox parent container
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_minutes_label, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_minutes_label, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -271,7 +272,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].current_view_minutes_letter, "M");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_minutes_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_minutes_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].current_view_minutes_letter, modal->gauge_ui[gauge].current_view_minutes_label, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+	lv_obj_align_to(modal->gauge_ui[gauge].current_view_minutes_letter, modal->gauge_ui[gauge].current_view_minutes_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_minutes_letter, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_minutes_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -280,7 +281,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].current_view_seconds_label, "30");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_seconds_label, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_seconds_label, &lv_font_noplato_24, 0);
-	lv_obj_align(modal->gauge_ui[gauge].current_view_seconds_label, LV_ALIGN_CENTER, 20, 0);
+	// Positioned by flexbox parent container
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_seconds_label, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_seconds_label, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -288,7 +289,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].current_view_seconds_letter, "S");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_seconds_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_seconds_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].current_view_seconds_letter, modal->gauge_ui[gauge].current_view_seconds_label, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+	lv_obj_align_to(modal->gauge_ui[gauge].current_view_seconds_letter, modal->gauge_ui[gauge].current_view_seconds_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_seconds_letter, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_seconds_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -298,7 +299,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].detail_view_hours_label, "0");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_hours_label, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_hours_label, &lv_font_noplato_24, 0);
-	lv_obj_align(modal->gauge_ui[gauge].detail_view_hours_label, LV_ALIGN_CENTER, -40, 0);
+	// Positioned by flexbox parent container
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_hours_label, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_hours_label, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -306,7 +307,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].detail_view_hours_letter, "H");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_hours_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_hours_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_hours_letter, modal->gauge_ui[gauge].detail_view_hours_label, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_hours_letter, modal->gauge_ui[gauge].detail_view_hours_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_hours_letter, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_hours_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -315,7 +316,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].detail_view_minutes_label, "0");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_minutes_label, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_minutes_label, &lv_font_noplato_24, 0);
-	lv_obj_align(modal->gauge_ui[gauge].detail_view_minutes_label, LV_ALIGN_CENTER, -10, 0);
+	// Positioned by flexbox parent container
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_minutes_label, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_minutes_label, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -323,7 +324,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].detail_view_minutes_letter, "M");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_minutes_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_minutes_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_minutes_letter, modal->gauge_ui[gauge].detail_view_minutes_label, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_minutes_letter, modal->gauge_ui[gauge].detail_view_minutes_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_minutes_letter, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_minutes_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -332,7 +333,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].detail_view_seconds_label, "30");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_seconds_label, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_seconds_label, &lv_font_noplato_24, 0);
-	lv_obj_align(modal->gauge_ui[gauge].detail_view_seconds_label, LV_ALIGN_CENTER, 20, 0);
+	// Positioned by flexbox parent container
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_seconds_label, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_seconds_label, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -340,7 +341,7 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	lv_label_set_text(modal->gauge_ui[gauge].detail_view_seconds_letter, "S");
 	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_seconds_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
 	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_seconds_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_seconds_letter, modal->gauge_ui[gauge].detail_view_seconds_label, LV_ALIGN_OUT_RIGHT_MID, 0, 0);
+	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_seconds_letter, modal->gauge_ui[gauge].detail_view_seconds_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_seconds_letter, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_seconds_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -625,11 +626,11 @@ static void update_timeline_display(timeline_modal_t* modal, int gauge, bool is_
 		lv_obj_add_flag(minutes_letter,
 			LV_OBJ_FLAG_HIDDEN);
 
-		// Show "REAL TIME" for realtime
-		lv_label_set_text(seconds_label, "REAL TIME");
-		lv_obj_set_style_text_font(seconds_label, &lv_font_montserrat_20, 0); // Same monospace font as other numbers
+		// Show "REALTIME" for realtime
+		lv_label_set_text(seconds_label, "REALTIME");
+		lv_obj_set_style_text_font(seconds_label, &lv_font_montserrat_20, 0);
 		lv_obj_clear_flag(seconds_label, LV_OBJ_FLAG_HIDDEN);
-		lv_obj_add_flag(seconds_letter, LV_OBJ_FLAG_HIDDEN); // Hide the "S" letter
+		lv_obj_add_flag(seconds_letter, LV_OBJ_FLAG_HIDDEN);
 		return;
 	}
 
@@ -663,6 +664,8 @@ static void update_timeline_display(timeline_modal_t* modal, int gauge, bool is_
 	lv_label_set_text(seconds_label, seconds_text);
 	lv_obj_clear_flag(seconds_label, LV_OBJ_FLAG_HIDDEN);
 	lv_obj_clear_flag(seconds_letter, LV_OBJ_FLAG_HIDDEN);
+
+	// Labels are positioned by flexbox - no manual positioning needed
 }
 
 // Update gauge value and display with smooth animation
@@ -686,6 +689,7 @@ static void update_gauge_value(timeline_modal_t* modal, int gauge, float value, 
 		modal->config.on_timeline_changed(gauge, (int)value, is_current_view);
 	}
 }
+
 
 // Update gauge UI - set default colors and apply state-based highlighting
 static void update_gauge_ui(timeline_modal_t* modal)
@@ -1351,18 +1355,23 @@ timeline_modal_t* timeline_modal_create(const timeline_modal_config_t* config, v
 	lv_obj_set_style_bg_color(modal->background, PALETTE_BLACK, 0);
 	lv_obj_set_style_bg_opa(modal->background, LV_OPA_COVER, 0); // Use full opacity for better performance
 	lv_obj_set_style_border_width(modal->background, 0, 0);
-	lv_obj_set_style_pad_all(modal->background, 0, 0);
+	lv_obj_set_style_pad_top(modal->background, 0, 0);
+	lv_obj_set_style_pad_bottom(modal->background, 0, 0);
+	lv_obj_set_style_pad_left(modal->background, 5, 0);
+	lv_obj_set_style_pad_right(modal->background, 5, 0);
 	lv_obj_clear_flag(modal->background, LV_OBJ_FLAG_SCROLLABLE);
 
 	// Content Container
 	modal->content_container = lv_obj_create(modal->background);
 	lv_obj_set_size(modal->content_container, LV_PCT(100), LV_PCT(100));
-	lv_obj_align(modal->content_container, LV_ALIGN_CENTER, 0, 0);
+	// lv_obj_align(modal->content_container, LV_ALIGN_CENTER, 0, 0);
 	lv_obj_set_style_bg_color(modal->content_container, PALETTE_BLACK, 0);
 	lv_obj_set_style_border_color(modal->content_container, PALETTE_BLACK, 0);
 	lv_obj_set_style_border_width(modal->content_container, 0, 0);
 	lv_obj_set_style_pad_left(modal->content_container, 5, 0);
 	lv_obj_set_style_pad_right(modal->content_container, 5, 0);
+	lv_obj_set_style_pad_top(modal->content_container, 0, 0);
+	lv_obj_set_style_pad_bottom(modal->content_container, 0, 0);
 	lv_obj_clear_flag(modal->content_container, LV_OBJ_FLAG_SCROLLABLE);
 	lv_obj_add_flag(modal->content_container, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_event_cb(modal->content_container, timeline_click_handler, LV_EVENT_CLICKED, modal);
@@ -1374,7 +1383,7 @@ timeline_modal_t* timeline_modal_create(const timeline_modal_config_t* config, v
 
 	// Gauges Container
 	lv_obj_t* gauges_container = lv_obj_create(modal->content_container);
-	lv_obj_set_size(gauges_container, LV_PCT(100), LV_PCT(90));
+	lv_obj_set_size(gauges_container, LV_PCT(100), LV_PCT(91));
 	lv_obj_set_layout(gauges_container, LV_LAYOUT_FLEX);
 	lv_obj_set_flex_flow(gauges_container, LV_FLEX_FLOW_COLUMN);
 	lv_obj_set_flex_align(gauges_container, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
@@ -1411,7 +1420,7 @@ timeline_modal_t* timeline_modal_create(const timeline_modal_config_t* config, v
 
 	// Button Container
 	lv_obj_t* button_container = lv_obj_create(modal->content_container);
-	lv_obj_set_size(button_container, LV_PCT(100), LV_PCT(10));
+	lv_obj_set_size(button_container, LV_PCT(100), LV_PCT(9));
 	lv_obj_set_layout(button_container, LV_LAYOUT_FLEX);
 	lv_obj_set_flex_flow(button_container, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(button_container, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -1424,26 +1433,40 @@ timeline_modal_t* timeline_modal_create(const timeline_modal_config_t* config, v
 	lv_obj_add_flag(button_container, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_event_cb(button_container, timeline_click_handler, LV_EVENT_CLICKED, modal);
 
-	// Cancel Button - left side
+	// Cancel Button - left side (RED)
 	modal->cancel_button = lv_button_create(button_container);
 	lv_obj_set_size(modal->cancel_button, 100, 50);
-	lv_obj_set_style_bg_color(modal->cancel_button, PALETTE_GRAY, 0);
+	lv_obj_set_style_bg_color(modal->cancel_button, PALETTE_BLACK, 0);
+	lv_obj_set_style_bg_color(modal->cancel_button, PALETTE_RED, LV_STATE_PRESSED);
+	lv_obj_set_style_border_width(modal->cancel_button, 2, 0);
+	lv_obj_set_style_border_color(modal->cancel_button, PALETTE_RED, 0);
+	lv_obj_set_style_text_color(modal->cancel_button, PALETTE_RED, LV_PART_MAIN | LV_STATE_DEFAULT);
+	lv_obj_set_style_text_color(modal->cancel_button, PALETTE_BLACK, LV_PART_MAIN | LV_STATE_PRESSED);
+	lv_obj_set_style_radius(modal->cancel_button, 8, 0);
+	lv_obj_set_style_pad_all(modal->cancel_button, 8, 0);
+	lv_obj_set_style_shadow_width(modal->cancel_button, 0, 0); // Remove drop shadow
 	lv_obj_add_event_cb(modal->cancel_button, cancel_button_clicked, LV_EVENT_CLICKED, modal);
 
 	lv_obj_t* cancel_label = lv_label_create(modal->cancel_button);
 	lv_label_set_text(cancel_label, "CANCEL");
-	lv_obj_set_style_text_color(cancel_label, PALETTE_WHITE, 0);
 	lv_obj_center(cancel_label);
 
-	// Close Button - right side
+	// Close Button - right side (GREEN, "DONE")
 	modal->close_button = lv_button_create(button_container);
 	lv_obj_set_size(modal->close_button, 100, 50);
-	lv_obj_set_style_bg_color(modal->close_button, PALETTE_RED, 0);
+	lv_obj_set_style_bg_color(modal->close_button, PALETTE_BLACK, 0);
+	lv_obj_set_style_bg_color(modal->close_button, PALETTE_GREEN, LV_STATE_PRESSED);
+	lv_obj_set_style_border_width(modal->close_button, 2, 0);
+	lv_obj_set_style_border_color(modal->close_button, PALETTE_GREEN, 0);
+	lv_obj_set_style_text_color(modal->close_button, PALETTE_GREEN, LV_PART_MAIN | LV_STATE_DEFAULT);
+	lv_obj_set_style_text_color(modal->close_button, PALETTE_BLACK, LV_PART_MAIN | LV_STATE_PRESSED);
+	lv_obj_set_style_radius(modal->close_button, 8, 0);
+	lv_obj_set_style_pad_all(modal->close_button, 8, 0);
+	lv_obj_set_style_shadow_width(modal->close_button, 0, 0); // Remove drop shadow
 	lv_obj_add_event_cb(modal->close_button, close_button_clicked, LV_EVENT_CLICKED, modal);
 
 	lv_obj_t* close_label = lv_label_create(modal->close_button);
-	lv_label_set_text(close_label, "CLOSE");
-	lv_obj_set_style_text_color(close_label, PALETTE_WHITE, 0);
+	lv_label_set_text(close_label, "DONE");
 	lv_obj_center(close_label);
 
 	// Add single click handler to the modal background for all clicks

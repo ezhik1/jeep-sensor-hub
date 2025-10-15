@@ -204,10 +204,6 @@ void screen_manager_update(void)
 	// Process the transition in device state (this clears the pending flag)
 		screen_navigation_process_transitions();
 
-	// Perform the actual screen transition
-	screen_manager_show_screen(requested_screen,
-							  local_module_name[0] ? local_module_name : NULL);
-
 		// Update transition time
 	last_transition_time = current_time;
 

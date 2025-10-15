@@ -1680,33 +1680,54 @@ alerts_modal_t* alerts_modal_create(const alerts_modal_config_t* config, void (*
 		create_gauge_section(modal, i, modal->content_container, i * 240);  // Increased for better visual separation
 	}
 
-	// Create close button - made taller to fit to bottom of last gauge
-	modal->close_button = lv_button_create(modal->content_container);
-	lv_obj_set_size(modal->close_button, 100, 60);  // Increased height from 40 to 60
-	lv_obj_align(modal->close_button, LV_ALIGN_BOTTOM_RIGHT, 0, -10);
-	lv_obj_set_style_bg_color(modal->close_button, lv_color_hex(0x555555), 0);
+	// Button Container - standardized layout
+	lv_obj_t* button_container = lv_obj_create(modal->content_container);
+	lv_obj_set_size(button_container, LV_PCT(100), 60);
+	lv_obj_align(button_container, LV_ALIGN_BOTTOM_MID, 0, -10);
+	lv_obj_set_layout(button_container, LV_LAYOUT_FLEX);
+	lv_obj_set_flex_flow(button_container, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(button_container, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_bg_color(button_container, PALETTE_BLACK, 0);
+	lv_obj_set_style_bg_opa(button_container, LV_OPA_COVER, 0);
+	lv_obj_set_style_border_width(button_container, 0, 0);
+	lv_obj_set_style_pad_all(button_container, 0, 0);
+	lv_obj_clear_flag(button_container, LV_OBJ_FLAG_SCROLLABLE);
 
-	lv_obj_t *close_label = lv_label_create(modal->close_button);
-	lv_label_set_text(close_label, "Close");
-	lv_obj_set_style_text_color(close_label, PALETTE_WHITE, 0);
-	lv_obj_center(close_label);
+	// Cancel Button - left side (RED)
+	modal->cancel_button = lv_button_create(button_container);
+	lv_obj_set_size(modal->cancel_button, 100, 50);
+	lv_obj_set_style_bg_color(modal->cancel_button, PALETTE_BLACK, 0);
+	lv_obj_set_style_bg_color(modal->cancel_button, PALETTE_RED, LV_STATE_PRESSED);
+	lv_obj_set_style_border_width(modal->cancel_button, 2, 0);
+	lv_obj_set_style_border_color(modal->cancel_button, PALETTE_RED, 0);
+	lv_obj_set_style_text_color(modal->cancel_button, PALETTE_RED, LV_PART_MAIN | LV_STATE_DEFAULT);
+	lv_obj_set_style_text_color(modal->cancel_button, PALETTE_BLACK, LV_PART_MAIN | LV_STATE_PRESSED);
+	lv_obj_set_style_radius(modal->cancel_button, 8, 0);
+	lv_obj_set_style_pad_all(modal->cancel_button, 8, 0);
+	lv_obj_set_style_shadow_width(modal->cancel_button, 0, 0); // Remove drop shadow
+	lv_obj_add_event_cb(modal->cancel_button, cancel_button_cb, LV_EVENT_CLICKED, modal);
 
-	// Add click event to close button
-	lv_obj_add_event_cb(modal->close_button, close_button_cb, LV_EVENT_CLICKED, modal);
-
-	// Create cancel button - same height as close button
-	modal->cancel_button = lv_button_create(modal->content_container);
-	lv_obj_set_size(modal->cancel_button, 100, 60);  // Same height as close button
-	lv_obj_align(modal->cancel_button, LV_ALIGN_BOTTOM_RIGHT, -110, -10);  // Positioned to the left of close button
-	lv_obj_set_style_bg_color(modal->cancel_button, lv_color_hex(0x666666), 0);
-
-	lv_obj_t *cancel_label = lv_label_create(modal->cancel_button);
-	lv_label_set_text(cancel_label, "Cancel");
-	lv_obj_set_style_text_color(cancel_label, PALETTE_WHITE, 0);
+	lv_obj_t* cancel_label = lv_label_create(modal->cancel_button);
+	lv_label_set_text(cancel_label, "CANCEL");
 	lv_obj_center(cancel_label);
 
-	// Add click event to cancel button
-	lv_obj_add_event_cb(modal->cancel_button, cancel_button_cb, LV_EVENT_CLICKED, modal);
+	// Close Button - right side (GREEN, "DONE")
+	modal->close_button = lv_button_create(button_container);
+	lv_obj_set_size(modal->close_button, 100, 50);
+	lv_obj_set_style_bg_color(modal->close_button, PALETTE_BLACK, 0);
+	lv_obj_set_style_bg_color(modal->close_button, PALETTE_GREEN, LV_STATE_PRESSED);
+	lv_obj_set_style_border_width(modal->close_button, 2, 0);
+	lv_obj_set_style_border_color(modal->close_button, PALETTE_GREEN, 0);
+	lv_obj_set_style_text_color(modal->close_button, PALETTE_GREEN, LV_PART_MAIN | LV_STATE_DEFAULT);
+	lv_obj_set_style_text_color(modal->close_button, PALETTE_BLACK, LV_PART_MAIN | LV_STATE_PRESSED);
+	lv_obj_set_style_radius(modal->close_button, 8, 0);
+	lv_obj_set_style_pad_all(modal->close_button, 8, 0);
+	lv_obj_set_style_shadow_width(modal->close_button, 0, 0); // Remove drop shadow
+	lv_obj_add_event_cb(modal->close_button, close_button_cb, LV_EVENT_CLICKED, modal);
+
+	lv_obj_t* close_label = lv_label_create(modal->close_button);
+	lv_label_set_text(close_label, "DONE");
+	lv_obj_center(close_label);
 
 	// Add field click handler to modal containers to handle all clicks
 	lv_obj_add_event_cb(modal->background, field_click_handler, LV_EVENT_CLICKED, modal);

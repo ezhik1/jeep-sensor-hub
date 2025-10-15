@@ -33,6 +33,12 @@ typedef struct {
 	lv_obj_t *max_range_rect;
 	lv_obj_t *center_range_rect;
 	lv_obj_t *min_range_rect;
+	// Indicator line objects (separate from canvas)
+	lv_obj_t *indicator_container;
+	lv_obj_t *indicator_vertical_line;
+	lv_obj_t *indicator_top_line;
+	lv_obj_t *indicator_middle_line;
+	lv_obj_t *indicator_bottom_line;
 	lv_obj_t *canvas;
 	lv_color_t *canvas_buffer;
 
@@ -55,8 +61,9 @@ typedef struct {
 
 	// Data
 	int head;
+	int max_data_points; // Maximum number of data points to store
 	float *data_points;
-	int max_data_points;
+	int actual_bars_to_draw; // Number of bars that actually fit in the canvas
 	bool initialized;
 	float min_value;
 	float max_value;
@@ -81,31 +88,33 @@ typedef struct {
 } bar_graph_gauge_t;
 
 // Core functions
-void bar_graph_gauge_init(bar_graph_gauge_t *gauge, lv_obj_t *parent,
-						  int x, int y, int width, int height);
+void bar_graph_gauge_init(
+	bar_graph_gauge_t *gauge, lv_obj_t *parent,
+	int x, int y, int width, int height,
+	int bar_width, int bar_gap);
 
 void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, float value);
 // Background feed: update data buffer without triggering canvas draw
 void bar_graph_gauge_push_data(bar_graph_gauge_t *gauge, float value);
 // Draw canvas from current data buffer (no shifting), right-aligned
 void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge);
-// Redraw entire canvas from buffer, right-aligning the latest head (more efficient)
-void bar_graph_gauge_redraw_full(bar_graph_gauge_t *gauge);
+
 void bar_graph_gauge_cleanup(bar_graph_gauge_t *gauge);
 void bar_graph_gauge_set_update_interval(bar_graph_gauge_t *gauge, uint32_t interval_ms);
 void bar_graph_gauge_set_timeline_duration(bar_graph_gauge_t *gauge, uint32_t duration_ms);
-void bar_graph_gauge_configure_advanced(bar_graph_gauge_t *gauge,
-						  bar_graph_mode_t mode,
-						  float baseline_value,
-						  float min_val,
-						  float max_val,
-						  const char *title,
-						  const char *unit,
-						  const char *y_axis_unit,
-						  uint32_t color,
-						  bool show_title,
-						  bool show_y_axis,
-						  bool show_border);
+void bar_graph_gauge_configure_advanced(
+	bar_graph_gauge_t *gauge,
+	bar_graph_mode_t mode,
+	float baseline_value,
+	float min_val,
+	float max_val,
+	const char *title,
+	const char *unit,
+	const char *y_axis_unit,
+	uint32_t color,
+	bool show_title,
+	bool show_y_axis,
+	bool show_border);
 void bar_graph_gauge_update_labels_and_ticks(bar_graph_gauge_t *gauge);
 
 #ifdef __cplusplus

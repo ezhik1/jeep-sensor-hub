@@ -108,52 +108,52 @@ static cJSON* get_object_by_path(const char* path, bool create_if_missing) {
 	char* token = strtok(path_copy, ".");
 
 	while (token != NULL) {
-	    // Check if this token has array indexing [index]
-	    char* bracket = strchr(token, '[');
-	    if (bracket) {
-	        *bracket = '\0'; // Null-terminate the array name
-	        int index = atoi(bracket + 1);
+		// Check if this token has array indexing [index]
+		char* bracket = strchr(token, '[');
+		if (bracket) {
+			*bracket = '\0'; // Null-terminate the array name
+			int index = atoi(bracket + 1);
 
-	        cJSON* array = cJSON_GetObjectItemCaseSensitive(current, token);
-	        if (!array) {
-	            if (create_if_missing) {
-	                array = cJSON_AddArrayToObject(current, token);
-	                if (!array) return NULL;
-	            } else {
-	                return NULL;
-	            }
-	        }
+			cJSON* array = cJSON_GetObjectItemCaseSensitive(current, token);
+			if (!array) {
+				if (create_if_missing) {
+					array = cJSON_AddArrayToObject(current, token);
+					if (!array) return NULL;
+				} else {
+					return NULL;
+				}
+			}
 
-	        if (!cJSON_IsArray(array)) return NULL;
+			if (!cJSON_IsArray(array)) return NULL;
 
-	        // Ensure array has enough elements only if creating
-	        if (create_if_missing) {
-	            while (cJSON_GetArraySize(array) <= index) {
-	                cJSON_AddItemToArray(array, cJSON_CreateObject());
-	            }
-	        } else {
-	            // If not creating, check if index exists
-	            if (cJSON_GetArraySize(array) <= index) {
-	                return NULL;
-	            }
-	        }
+			// Ensure array has enough elements only if creating
+			if (create_if_missing) {
+				while (cJSON_GetArraySize(array) <= index) {
+					cJSON_AddItemToArray(array, cJSON_CreateObject());
+				}
+			} else {
+				// If not creating, check if index exists
+				if (cJSON_GetArraySize(array) <= index) {
+					return NULL;
+				}
+			}
 
-	        current = cJSON_GetArrayItem(array, index);
-	    } else {
-	        // Regular object property
-	        cJSON* next = cJSON_GetObjectItemCaseSensitive(current, token);
-	        if (!next) {
-	            if (create_if_missing) {
-	                next = cJSON_AddObjectToObject(current, token);
-	                if (!next) return NULL;
-	            } else {
-	                return NULL;
-	            }
-	        }
-	        current = next;
-	    }
+			current = cJSON_GetArrayItem(array, index);
+		} else {
+			// Regular object property
+			cJSON* next = cJSON_GetObjectItemCaseSensitive(current, token);
+			if (!next) {
+				if (create_if_missing) {
+					next = cJSON_AddObjectToObject(current, token);
+					if (!next) return NULL;
+				} else {
+					return NULL;
+				}
+			}
+			current = next;
+		}
 
-	    token = strtok(NULL, ".");
+		token = strtok(NULL, ".");
 	}
 
 	return current;
@@ -163,7 +163,7 @@ static cJSON* get_object_by_path(const char* path, bool create_if_missing) {
 int device_state_get_int(const char* path) {
 	cJSON* obj = get_object_by_path(path, false);
 	if (obj && cJSON_IsNumber(obj)) {
-	    return obj->valueint;
+		return obj->valueint;
 	}
 	return 0;
 }
@@ -171,7 +171,7 @@ int device_state_get_int(const char* path) {
 float device_state_get_float(const char* path) {
 	cJSON* obj = get_object_by_path(path, false);
 	if (obj && cJSON_IsNumber(obj)) {
-	    return (float)obj->valuedouble;
+		return (float)obj->valuedouble;
 	}
 	return 0.0f;
 }
@@ -179,7 +179,7 @@ float device_state_get_float(const char* path) {
 bool device_state_get_bool(const char* path) {
 	cJSON* obj = get_object_by_path(path, false);
 	if (obj && cJSON_IsBool(obj)) {
-	    return cJSON_IsTrue(obj);
+		return cJSON_IsTrue(obj);
 	}
 	return false;
 }
@@ -187,30 +187,30 @@ bool device_state_get_bool(const char* path) {
 void device_state_set_int(const char* path, int value) {
 	cJSON* obj = get_object_by_path(path, true);
 	if (obj) {
-	    // Directly set the value
-	    obj->valueint = value;
-	    obj->valuedouble = (double)value;
-	    obj->type = cJSON_Number;
-	    // Save immediately
-	    device_state_save();
+		// Directly set the value
+		obj->valueint = value;
+		obj->valuedouble = (double)value;
+		obj->type = cJSON_Number;
+		// Save immediately
+		device_state_save();
 	}
 }
 
 void device_state_set_float(const char* path, float value) {
 	cJSON* obj = get_object_by_path(path, true);
 	if (obj) {
-	    cJSON_SetNumberValue(obj, value);
-	    // Save immediately
-	    device_state_save();
+		cJSON_SetNumberValue(obj, value);
+		// Save immediately
+		device_state_save();
 	}
 }
 
 void device_state_set_bool(const char* path, bool value) {
 	cJSON* obj = get_object_by_path(path, true);
 	if (obj) {
-	    cJSON_SetBoolValue(obj, value);
-	    // Save immediately
-	    device_state_save();
+		cJSON_SetBoolValue(obj, value);
+		// Save immediately
+		device_state_save();
 	}
 }
 
@@ -236,7 +236,7 @@ void device_state_set_value(const char* path, double value) {
 // Save device state to JSON file
 void device_state_save(void) {
 	if (!g_root) {
-	    printf("[W] device_state: Cannot save - not initialized\n");
+		printf("[W] device_state: Cannot save - not initialized\n");
 		return;
 	}
 
@@ -257,14 +257,14 @@ void device_state_save(void) {
 	// Write to file
 	char *json_string = cJSON_Print(g_root);
 	if (!json_string) {
-	    printf("[E] device_state: Failed to convert JSON to string\n");
+		printf("[E] device_state: Failed to convert JSON to string\n");
 		return;
 	}
 
 	FILE *file = fopen(get_state_file_path(), "w");
 	if (!file) {
-	    printf("[E] device_state: Failed to open state file for writing: %s\n", get_state_file_path());
-	    free(json_string);
+		printf("[E] device_state: Failed to open state file for writing: %s\n", get_state_file_path());
+		free(json_string);
 		return;
 	}
 
@@ -279,7 +279,7 @@ void device_state_save(void) {
 // Load device state from JSON file
 void device_state_load(void) {
 	if (!g_root) {
-	    printf("[W] device_state: Cannot load - not initialized\n");
+		printf("[W] device_state: Cannot load - not initialized\n");
 		return;
 	}
 
@@ -287,7 +287,7 @@ void device_state_load(void) {
 
 	FILE *file = fopen(get_state_file_path(), "r");
 	if (!file) {
-	    printf("[W] device_state: State file not found, using defaults: %s\n", get_state_file_path());
+		printf("[W] device_state: State file not found, using defaults: %s\n", get_state_file_path());
 		return;
 	}
 
@@ -297,16 +297,16 @@ void device_state_load(void) {
 	fseek(file, 0, SEEK_SET);
 
 	if (file_size <= 0) {
-	    printf("[W] device_state: State file is empty, using defaults\n");
-	    fclose(file);
+		printf("[W] device_state: State file is empty, using defaults\n");
+		fclose(file);
 		return;
 	}
 
 	// Read file content
 	char *json_string = malloc(file_size + 1);
 	if (!json_string) {
-	    printf("[E] device_state: Failed to allocate memory for JSON string\n");
-	    fclose(file);
+		printf("[E] device_state: Failed to allocate memory for JSON string\n");
+		fclose(file);
 		return;
 	}
 
@@ -319,7 +319,7 @@ void device_state_load(void) {
 	free(json_string);
 
 	if (!loaded_root) {
-	    printf("[E] device_state: Failed to parse JSON: %s\n", cJSON_GetErrorPtr());
+		printf("[E] device_state: Failed to parse JSON: %s\n", cJSON_GetErrorPtr());
 		return;
 	}
 

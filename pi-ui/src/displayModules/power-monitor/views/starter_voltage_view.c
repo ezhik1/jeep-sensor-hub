@@ -137,7 +137,7 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 		printf("[I] starter_voltage_view: Initializing bar graph gauge in container: %p\n", gauge_container);
 	printf("[I] starter_voltage_view: About to call bar_graph_gauge_init...\n");
 	bar_graph_gauge_init(&s_voltage_gauge, gauge_container,
-		0, 0, container_width, gauge_height);
+		0, 0, container_width, gauge_height, 3, 1);
 	printf("[I] starter_voltage_view: bar_graph_gauge_init completed\n");
 
 		// Check if gauge was initialized successfully
@@ -155,10 +155,6 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 		bar_graph_gauge_configure_advanced(&s_voltage_gauge,
 			BAR_GRAPH_MODE_BIPOLAR, starter_baseline, starter_min, starter_max,
 			"", "", "", 0x00FF00, false, true, false); // No labels, just bars and scale, no border for current view
-
-		// Set bar width and gap to match other gauges
-		s_voltage_gauge.bar_width = 3;
-		s_voltage_gauge.bar_gap = 1;
 
 		// Set update interval
 		bar_graph_gauge_set_update_interval(&s_voltage_gauge, 33); // 30 FPS for high performance

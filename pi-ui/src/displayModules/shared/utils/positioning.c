@@ -1,5 +1,6 @@
 #include "positioning.h"
 #include <stdio.h>
+#include <math.h>
 
 void smart_position_outside_container(lv_obj_t* element, lv_obj_t* target_field, lv_obj_t* container,
 									lv_coord_t min_gap, lv_coord_t screen_margin)
@@ -130,4 +131,14 @@ void smart_position_outside_container(lv_obj_t* element, lv_obj_t* target_field,
 void smart_position_outside_container_default(lv_obj_t* element, lv_obj_t* target_field, lv_obj_t* container)
 {
 	smart_position_outside_container(element, target_field, container, 20, 5);
+}
+
+int clamp_int(int value, int min, int max)
+{
+	return (int)fmax(min, fmin(max, value));
+}
+
+float clamp_float(float value, float min, float max)
+{
+	return fmax(min, fmin(max, value));
 }

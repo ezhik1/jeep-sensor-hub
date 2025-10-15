@@ -439,7 +439,7 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	lv_obj_set_style_pad_row(container, gauge_padding, 0); // Vertical gap between gauges
 
 	// Row 1: Starter Battery Voltage
-	bar_graph_gauge_init(&detail_starter_voltage_gauge, container, 0, 0, gauge_width, gauge_height);
+	bar_graph_gauge_init(&detail_starter_voltage_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
 	// Gauge uses fixed height calculated above (1/6 of available space)
 	float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
 	float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
@@ -454,21 +454,17 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 		"STARTER BATTERY", "V", "V", 0x00FF00,
 		true, true, true // Show title, Show Y-axis, Show border
 	);
-	detail_starter_voltage_gauge.bar_width = 3; // Match current view bar width
-	detail_starter_voltage_gauge.bar_gap = 1;   // Match current view bar gap
 	bar_graph_gauge_set_update_interval(&detail_starter_voltage_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 2: Starter Battery Current
-	bar_graph_gauge_init(&detail_starter_current_gauge, container, 0, 0, gauge_width, gauge_height);
+	bar_graph_gauge_init(&detail_starter_current_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
 	bar_graph_gauge_configure_advanced(&detail_starter_current_gauge,
 		BAR_GRAPH_MODE_BIPOLAR, 0.0f, -50.0f, 50.0f,
 		"STARTER BATTERY", "A", "A", 0x0080FF, true, true, true);
-	detail_starter_current_gauge.bar_width = 3; // Match current view bar width
-	detail_starter_current_gauge.bar_gap = 1;   // Match current view bar gap
 	bar_graph_gauge_set_update_interval(&detail_starter_current_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 3: House Battery Voltage
-	bar_graph_gauge_init(&detail_house_voltage_gauge, container, 0, 0, gauge_width, gauge_height);
+	bar_graph_gauge_init(&detail_house_voltage_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
 	float house_baseline = device_state_get_float("power_monitor.house_baseline_voltage_v");
 	float house_min = device_state_get_float("power_monitor.house_min_voltage_v");
 	float house_max = device_state_get_float("power_monitor.house_max_voltage_v");
@@ -476,35 +472,27 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	bar_graph_gauge_configure_advanced(&detail_house_voltage_gauge,
 		BAR_GRAPH_MODE_BIPOLAR, house_baseline, house_min, house_max,
 		"HOUSE BATTERY", "V", "V", 0x00FF00, true, true, true);
-	detail_house_voltage_gauge.bar_width = 3; // Match current view bar width
-	detail_house_voltage_gauge.bar_gap = 1;   // Match current view bar gap
 	bar_graph_gauge_set_update_interval(&detail_house_voltage_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 4: House Battery Current
-	bar_graph_gauge_init(&detail_house_current_gauge, container, 0, 0, gauge_width, gauge_height);
+	bar_graph_gauge_init(&detail_house_current_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
 	bar_graph_gauge_configure_advanced(&detail_house_current_gauge,
 		BAR_GRAPH_MODE_BIPOLAR, 0.0f, -50.0f, 50.0f,
 		"HOUSE BATTERY", "A", "A", 0x0080FF, true, true, true);
-	detail_house_current_gauge.bar_width = 3; // Match current view bar width
-	detail_house_current_gauge.bar_gap = 1;   // Match current view bar gap
 	bar_graph_gauge_set_update_interval(&detail_house_current_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 5: Solar Input Voltage
-	bar_graph_gauge_init(&detail_solar_voltage_gauge, container, 0, 0, gauge_width, gauge_height);
+	bar_graph_gauge_init(&detail_solar_voltage_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
 	bar_graph_gauge_configure_advanced(&detail_solar_voltage_gauge,
 		BAR_GRAPH_MODE_POSITIVE_ONLY, 0.0f, 0.0f, 25.0f,
 		"SOLAR VOLTS", "V", "V", 0xFF8000, true, true, true);
-	detail_solar_voltage_gauge.bar_width = 3; // Match current view bar width
-	detail_solar_voltage_gauge.bar_gap = 1;   // Match current view bar gap
 	bar_graph_gauge_set_update_interval(&detail_solar_voltage_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 6: Solar Input Current
-	bar_graph_gauge_init(&detail_solar_current_gauge, container, 0, 0, gauge_width, gauge_height);
+	bar_graph_gauge_init(&detail_solar_current_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
 	bar_graph_gauge_configure_advanced(&detail_solar_current_gauge,
 		BAR_GRAPH_MODE_POSITIVE_ONLY, 0.0f, 0.0f, 10.0f,
 		"SOLAR CURRENT", "A", "A", 0xFF8000, true, true, true);
-	detail_solar_current_gauge.bar_width = 3; // Match current view bar width
-	detail_solar_current_gauge.bar_gap = 1;   // Match current view bar gap
 	bar_graph_gauge_set_update_interval(&detail_solar_current_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Update labels and ticks for all gauges

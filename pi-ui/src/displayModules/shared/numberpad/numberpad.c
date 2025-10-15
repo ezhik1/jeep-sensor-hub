@@ -85,6 +85,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 		lv_obj_set_style_bg_color(numpad->buttons[i], lv_color_hex(0x556b2f), 0); // Dark olive green
 		lv_obj_set_style_border_width(numpad->buttons[i], 0, 0); // Remove border
 		lv_obj_set_style_radius(numpad->buttons[i], 3, 0);
+		lv_obj_set_style_shadow_width(numpad->buttons[i], 0, 0); // Remove drop shadow
 
 		lv_obj_t* label = lv_label_create(numpad->buttons[i]);
 		lv_label_set_text(label, number_labels[i]);
@@ -103,6 +104,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 	lv_obj_set_style_bg_color(numpad->buttons[9], lv_color_hex(0x556b2f), 0); // Dark olive green
 	lv_obj_set_style_border_width(numpad->buttons[9], 0, 0); // Remove border
 	lv_obj_set_style_radius(numpad->buttons[9], 3, 0);
+	lv_obj_set_style_shadow_width(numpad->buttons[9], 0, 0); // Remove drop shadow
 
 	lv_obj_t* zero_label = lv_label_create(numpad->buttons[9]);
 	lv_label_set_text(zero_label, "0");
@@ -121,6 +123,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 	lv_obj_set_style_bg_color(numpad->buttons[10], lv_color_hex(0xba3232), 0); // Red
 	lv_obj_set_style_border_width(numpad->buttons[10], 0, 0); // Remove border
 	lv_obj_set_style_radius(numpad->buttons[10], 3, 0);
+	lv_obj_set_style_shadow_width(numpad->buttons[10], 0, 0); // Remove drop shadow
 
 	lv_obj_t* clear_label = lv_label_create(numpad->buttons[10]);
 	lv_label_set_text(clear_label, config->clear_text);
@@ -137,6 +140,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 	lv_obj_set_style_bg_color(numpad->buttons[11], lv_color_hex(0x556b2f), 0); // Dark olive green
 	lv_obj_set_style_border_width(numpad->buttons[11], 0, 0); // Remove border
 	lv_obj_set_style_radius(numpad->buttons[11], 3, 0);
+	lv_obj_set_style_shadow_width(numpad->buttons[11], 0, 0); // Remove drop shadow
 
 	lv_obj_t* negative_label = lv_label_create(numpad->buttons[11]);
 	lv_label_set_text(negative_label, "+-");
@@ -155,6 +159,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 	lv_obj_set_style_bg_color(numpad->buttons[12], lv_color_hex(0x87CEEB), 0); // Light blue
 	lv_obj_set_style_border_width(numpad->buttons[12], 0, 0); // Remove border
 	lv_obj_set_style_radius(numpad->buttons[12], 3, 0);
+	lv_obj_set_style_shadow_width(numpad->buttons[12], 0, 0); // Remove drop shadow
 
 	lv_obj_t* cancel_label = lv_label_create(numpad->buttons[12]);
 	lv_label_set_text(cancel_label, "CANCEL");
