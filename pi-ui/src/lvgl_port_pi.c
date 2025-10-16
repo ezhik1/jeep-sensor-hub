@@ -51,18 +51,12 @@ static void fps_timer_cb(lv_timer_t *timer)
 
 	uint32_t now = SDL_GetTicks();
 
-	// Debug: Print every 100 calls (every ~1 second) - disabled for production
-	// if (call_count % 100 == 0) {
-	//	printf("[DEBUG] FPS timer callback called %d times, now=%d, last_calc=%d, frame_count=%d, diff=%d\n",
-	//		   call_count, now, last_calculation_time, frame_count, (now - last_calculation_time));
-	// }
-
 	// Update FPS every 500ms for more responsive display
 	if (now - last_calculation_time >= 500) {
+
 		if (now - last_calculation_time > 0) { // Avoid division by zero
+
 			current_fps = (float)frame_count * 1000.0f / (now - last_calculation_time);
-			// printf("[DEBUG] FPS calculated: %d frames in %d ms = %.1f FPS\n",
-			//	   frame_count, (now - last_calculation_time), current_fps);
 		}
 		frame_count = 0;
 		last_calculation_time = now; // Update last_calculation_time to current time for next calculation
@@ -106,16 +100,8 @@ static void update_fps_display(void)
 	snprintf(fps_text, sizeof(fps_text), "FPS: %.1f", current_fps);
 	lv_label_set_text(fps_label, fps_text);
 	lv_obj_move_foreground(fps_label); // Ensure it stays on top
-
-	// Debug: Print FPS every 5 seconds - disabled for production
-	// static uint32_t last_debug_time = 0;
-	// uint32_t now = SDL_GetTicks();
-	// if (now - last_debug_time >= 5000) {
-	//	printf("[DEBUG] FPS display: current_fps=%.1f, show_fps=%d, fps_label=%p\n",
-	//		   current_fps, show_fps, fps_label);
-	//	last_debug_time = now;
-	// }
 }
+
 #define DISP_BUF_SIZE (LVGL_HOR_RES * LVGL_VER_RES)
 
 // Global display dimensions
@@ -201,7 +187,7 @@ static void indev_read(lv_indev_t * indev, lv_indev_data_t * data)
 int lvgl_port_init(void)
 {
 
-	printf("Initializing LVGL for Raspberry Pi (logical %dx%d -> physical %dx%d)...\n",
+	printf("[I] lvgl_port_pi: (logical %dx%d -> physical %dx%d)...\n",
 		LVGL_HOR_RES, LVGL_VER_RES, DISP_HOR_RES, DISP_VER_RES);
 
 	// Initialize SDL
@@ -244,8 +230,6 @@ int lvgl_port_init(void)
 		DISP_VER_RES, DISP_HOR_RES
 	);
 
-	printf("Texture created: %dx%d\n", LVGL_HOR_RES, LVGL_VER_RES);
-
 	if (!texture) {
 		printf("Failed to create SDL texture: %s\n", SDL_GetError());
 		return -1;
@@ -265,7 +249,7 @@ int lvgl_port_init(void)
 		printf("ERROR: Failed to create evdev input device\n");
 		return -1;
 	}
-	printf("Touch input device created successfully\n");
+
 	lv_indev_set_display(touch, disp);
 
 	// Touchscreen is 800x480 in landscape; display is 480x800 portrait.
@@ -278,11 +262,6 @@ int lvgl_port_init(void)
 	indev = touch;
 
 	lv_indev_enable(indev, true);
-	printf("Touch input device enabled\n");
-
-
-	printf("LVGL initialized successfully (logical %dx%d -> texture %dx%d)\n",
-		LVGL_HOR_RES, LVGL_VER_RES, LVGL_HOR_RES, LVGL_VER_RES);
 	return 0;
 }
 
@@ -303,11 +282,9 @@ void lvgl_port_main_loop(void)
 	// Create FPS calculation timer (runs every 10ms for maximum responsiveness)
 	lv_timer_t *fps_timer = lv_timer_create(fps_timer_cb, 10, NULL);
 	lv_timer_set_repeat_count(fps_timer, -1);
-	// printf("[DEBUG] FPS timer created: %p\n", fps_timer);
 
 	// Force an initial FPS calculation after 1 second
 	lv_timer_t *initial_fps_timer = lv_timer_create(initial_fps_callback, 1000, NULL);
-	// printf("[DEBUG] Initial FPS timer created: %p\n", initial_fps_timer);
 
 	// Create FPS label on screen
 	create_fps_label();

@@ -80,19 +80,19 @@ static void destroy_current_screen(void)
 		return;
 	}
 
-	printf("[I] screen_manager: Destroying current screen: type=%d, module=%s\n",
-			 current_screen_type, current_module_name[0] ? current_module_name : "none");
+	printf(
+		"[I] screen_manager: Destroying current screen: type=%d, module=%s\n",
+		current_screen_type, current_module_name[0] ? current_module_name : "none"
+	);
 
 	// Find the current screen definition
-	const screen_definition_t *def = find_screen_definition(current_screen_type,
-														   current_module_name[0] ? current_module_name : NULL);
+	const screen_definition_t *def = find_screen_definition(
+		current_screen_type,
+		current_module_name[0] ? current_module_name : NULL);
 
 	if (def && def->destroy_func) {
-		printf("[I] screen_manager: Calling destroy function for screen type %d\n", current_screen_type);
+
 		def->destroy_func();
-		printf("[I] screen_manager: Screen destroyed successfully\n");
-	} else {
-		printf("[W] screen_manager: No destroy function found for screen type %d\n", current_screen_type);
 	}
 
 	// Clear current screen state
@@ -105,36 +105,32 @@ static void destroy_current_screen(void)
  */
 static void create_and_show_screen(screen_type_t screen_type, const char *module_name)
 {
-	printf("[I] screen_manager: Creating new screen: type=%d, module=%s\n",
-			 screen_type, module_name ? module_name : "none");
+	printf(
+		"[I] screen_manager: Creating new screen: type=%d, module=%s\n",
+		screen_type, module_name ? module_name : "none"
+	);
 
 	// Find the screen definition
 	const screen_definition_t *def = find_screen_definition(screen_type, module_name);
 
-	if (!def) {
-		printf("[E] screen_manager: No screen definition found for type %d, module %s\n",
-				 screen_type, module_name ? module_name : "none");
-		return;
-	}
+	if (!def || !def->create_func) {
 
-	if (!def->create_func) {
-		printf("[E] screen_manager: No create function found for screen type %d\n", screen_type);
 		return;
 	}
 
 	// Update current screen state BEFORE creating (in case create function checks it)
 	current_screen_type = screen_type;
 	if (module_name) {
+
 		strncpy(current_module_name, module_name, sizeof(current_module_name) - 1);
 		current_module_name[sizeof(current_module_name) - 1] = '\0';
 	} else {
+
 		memset(current_module_name, 0, sizeof(current_module_name));
 	}
 
 	// Create the new screen
-		printf("[I] screen_manager: Calling create function for screen type %d\n", screen_type);
 	def->create_func();
-	printf("[I] screen_manager: Screen created successfully\n");
 
 	// Update global device state to match
 	screen_navigation_set_current_screen(screen_type, module_name);
@@ -142,7 +138,6 @@ static void create_and_show_screen(screen_type_t screen_type, const char *module
 
 void screen_manager_init(void)
 {
-	printf("[I] screen_manager: Initializing screen manager\n");
 
 	// Initialize state
 	current_screen_type = SCREEN_NONE;
@@ -153,11 +148,14 @@ void screen_manager_init(void)
 	screen_type_t initial_screen = screen_navigation_get_current_screen();
 	const char *initial_module = screen_navigation_get_current_module();
 
-	printf("[I] screen_manager: Initial screen from state: type=%d, module=%s\n",
-			 initial_screen, initial_module ? initial_module : "none");
+	printf(
+		"[I] screen_manager: Initial screen from state: type=%d, module=%s\n",
+		initial_screen, initial_module ? initial_module : "none"
+	);
 
 	// If no screen is set in state, default to home screen
 	if (initial_screen == SCREEN_NONE) {
+
 		printf("[I] screen_manager: No initial screen in state, defaulting to home screen\n");
 		initial_screen = SCREEN_HOME;
 		initial_module = NULL;
@@ -165,71 +163,65 @@ void screen_manager_init(void)
 
 	// Show the initial screen
 	create_and_show_screen(initial_screen, initial_module);
-
-	printf("[I] screen_manager: Screen manager initialized\n");
 }
 
 void screen_manager_update(void)
 {
 	// Check if there's a pending screen transition
 	if (!screen_navigation_is_transition_pending()) {
+
 		return; // No transition needed
 	}
 
 	// Check transition rate limiting
-		struct timespec ts;
-		clock_gettime(CLOCK_MONOTONIC, &ts);
-		uint32_t current_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
-		if (current_time - last_transition_time < MIN_TRANSITION_INTERVAL_MS) {
-		printf("[D] screen_manager: Transition rate limited, skipping\n");
-			return;
-		}
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	uint32_t current_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 
-	printf("[I] screen_manager: Processing screen transition\n");
+	if (current_time - last_transition_time < MIN_TRANSITION_INTERVAL_MS) {
+
+		return;
+	}
 
 	// Get the requested screen
-		screen_type_t requested_screen = screen_navigation_get_requested_screen();
+	screen_type_t requested_screen = screen_navigation_get_requested_screen();
 	const char *requested_module = screen_navigation_get_requested_module();
 
-	printf("[I] screen_manager: Requested transition: type=%d, module=%s\n",
-			 requested_screen, requested_module ? requested_module : "none");
 
 	// Store module name locally before processing transitions (which may clear it)
-		char local_module_name[32] = {0};
-		if (requested_module) {
-			strncpy(local_module_name, requested_module, sizeof(local_module_name) - 1);
-			local_module_name[sizeof(local_module_name) - 1] = '\0';
-		}
+	char local_module_name[32] = {0};
+	if (requested_module) {
+
+		strncpy(local_module_name, requested_module, sizeof(local_module_name) - 1);
+		local_module_name[sizeof(local_module_name) - 1] = '\0';
+	}
 
 	// Process the transition in device state (this clears the pending flag)
-		screen_navigation_process_transitions();
+	screen_navigation_process_transitions();
 
-		// Update transition time
+	// Update transition time
 	last_transition_time = current_time;
-
-	printf("[I] screen_manager: Screen transition completed\n");
 }
 
 void screen_manager_show_screen(screen_type_t screen_type, const char *module_name)
 {
-	printf("[I] screen_manager: === SCREEN TRANSITION START ===\n");
-	printf("[I] screen_manager: From: type=%d, module=%s\n", current_screen_type,
-			 current_module_name[0] ? current_module_name : "none");
-	printf("[I] screen_manager: To: type=%d, module=%s\n", screen_type, module_name ? module_name : "none");
 
 	// Check if this is actually a different screen
 	bool same_screen = (current_screen_type == screen_type);
 	bool same_module = false;
 
 	if (module_name == NULL && current_module_name[0] == '\0') {
+
 		same_module = true; // Both NULL/empty
-	} else if (module_name != NULL && current_module_name[0] != '\0' &&
-			   strcmp(module_name, current_module_name) == 0) {
+	} else if (
+		module_name != NULL && current_module_name[0] != '\0' &&
+		strcmp(module_name, current_module_name) == 0
+	){
 		same_module = true; // Both non-NULL and equal
 	}
 
 	if (same_screen && same_module) {
-		printf("[I] screen_manager: Same screen requested, no transition needed\n");
+
 		return;
 	}
 
@@ -238,34 +230,18 @@ void screen_manager_show_screen(screen_type_t screen_type, const char *module_na
 
 	// Step 2: Create new screen
 	create_and_show_screen(screen_type, module_name);
-
-	printf("[I] screen_manager: === SCREEN TRANSITION COMPLETE ===\n");
 }
 
 void screen_manager_cleanup(void)
 {
-	printf("[I] screen_manager: Cleaning up screen manager\n");
 
 	// Destroy current screen
 	destroy_current_screen();
-
-	printf("[I] screen_manager: Screen manager cleanup complete\n");
 }
 
-screen_type_t screen_manager_get_current_screen(void)
-{
-	return current_screen_type;
-}
-
-// Screen navigation functions (for backward compatibility)
 screen_type_t screen_navigation_get_current_screen(void)
 {
-	return screen_manager_get_current_screen();
-}
-
-const char* screen_navigation_get_current_module(void)
-{
-	return screen_manager_get_current_module();
+	return current_screen_type;
 }
 
 screen_type_t screen_navigation_get_requested_screen(void)
@@ -273,37 +249,41 @@ screen_type_t screen_navigation_get_requested_screen(void)
 	return requested_screen_type;
 }
 
-const char* screen_navigation_get_requested_module(void)
-{
-	return requested_module_name[0] ? requested_module_name : NULL;
-}
-
-const char* screen_manager_get_current_module(void)
+const char* screen_navigation_get_current_module(void)
 {
 	return current_module_name[0] ? current_module_name : NULL;
+}
+
+
+const char* screen_navigation_get_requested_module(void)
+{
+	return requested_module_name[ 0 ] ? requested_module_name : NULL;
 }
 
 // Working implementations for screen navigation
 
 void screen_navigation_set_current_screen(screen_type_t screen_type, const char* module_name) {
+
 	current_screen_type = screen_type;
+
 	if (module_name) {
+
 		strncpy(current_module_name, module_name, sizeof(current_module_name) - 1);
 		current_module_name[sizeof(current_module_name) - 1] = '\0';
 	} else {
+
 		current_module_name[0] = '\0';
 	}
-	printf("[I] screen_manager: Set current screen to %d, module %s\n", screen_type, module_name ? module_name : "none");
 }
 
 bool screen_navigation_is_transition_pending(void) {
+
 	return transition_pending;
 }
 
 void screen_navigation_process_transitions(void) {
+
 	if (transition_pending) {
-		printf("[I] screen_manager: Processing transition to screen %d, module %s\n",
-			   requested_screen_type, requested_module_name[0] ? requested_module_name : "none");
 
 		// Create the requested screen
 		screen_manager_show_screen(requested_screen_type, requested_module_name[0] ? requested_module_name : NULL);
@@ -316,28 +296,24 @@ void screen_navigation_process_transitions(void) {
 }
 
 void screen_navigation_request_home_screen(void) {
-	printf("[I] screen_manager: Requesting home screen\n");
+
 	requested_screen_type = SCREEN_HOME;
 	requested_module_name[0] = '\0';
 	transition_pending = true;
 }
 
 void screen_navigation_request_detail_view(const char* module_name) {
-	printf("[I] screen_manager: Requesting detail view for module %s\n", module_name ? module_name : "none");
+
 	requested_screen_type = SCREEN_DETAIL_VIEW;
+
 	if (module_name) {
+
 		strncpy(requested_module_name, module_name, sizeof(requested_module_name) - 1);
 		requested_module_name[sizeof(requested_module_name) - 1] = '\0';
 	} else {
+
 		requested_module_name[0] = '\0';
 	}
+
 	transition_pending = true;
-}
-
-// Function moved to current_view_manager.c to avoid duplication
-
-void view_state_check_timeout(void) {
-	// Check for any timeouts in the current view
-	// This could be used for auto-return to home screen, etc.
-	// For now, just a placeholder that doesn't spam the log
 }

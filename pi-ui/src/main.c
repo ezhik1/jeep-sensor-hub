@@ -10,6 +10,8 @@
 #include "data/mock_data/mock_data.h"
 #include "data/real_data/real_data.h"
 
+#include "utils/crash_handler.h"
+
 #include <stdio.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -22,11 +24,6 @@ static const char *TAG = "main";
    ========================= */
 void ui_update_timer_callback(lv_timer_t *timer)
 {
-
-	// Check for view cycling timeouts to prevent stuck states
-	extern void view_state_check_timeout(void);
-	view_state_check_timeout();
-
 
 	// Update all display modules (data only, no UI structure changes)
 	display_modules_update_all();
@@ -70,6 +67,9 @@ void app_main(void)
 {
 	printf("[I] main: Starting Jeep Sensor Hub UI\n");
 
+	// 0) Initialize crash handlers first
+	crash_handler_init();
+
 	// 1) Init LVGL port for Pi (starts LVGL tasks & tick internally)
 	int ret = lvgl_port_init();
 	if (ret != 0) {
@@ -95,19 +95,8 @@ void app_main(void)
 		printf("[I] main: Real data component initialized\n");
 	}
 
-	// 3) Display modules (create LVGL objs → lock per call)
-	printf("[I] main: Initializing display modules\n");
-
 	// Initialize all display modules via standardized interface
 	display_modules_init_all();
-
-	printf("[I] main: Display modules initialized\n");
-
-	// 4) Display ready (no backlight control needed for SDL)
-	printf("[I] main: Display ready\n");
-
-	// 5) Boot screen
-	printf("[I] main: Initializing screens and boot screen\n");
 
 	boot_screen_init();
 	boot_screen_update_progress(100);
@@ -115,12 +104,10 @@ void app_main(void)
 
 	// 6) Init screen manager (creates Home/Detail etc.)
 	screen_manager_init();
-	printf("[I] main: Screens initialized successfully\n");
 
 	// 7) Create LVGL UI update timer (runs in LVGL context)
 	lv_timer_t *ui_timer = lv_timer_create(ui_update_timer_callback, 8, NULL); // 8ms (120 FPS) for maximum performance
 	lv_timer_set_repeat_count(ui_timer, -1);
-	printf("[I] main: UI update timer created\n");
 
 	// 8) Start data producer task (no LVGL calls inside)
 	pthread_t data_thread;

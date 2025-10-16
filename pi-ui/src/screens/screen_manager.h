@@ -65,15 +65,6 @@ void screen_manager_show_screen(screen_type_t screen_type, const char *module_na
  */
 void screen_manager_cleanup(void);
 
-/**
- * @brief Get the currently active screen type
- */
-screen_type_t screen_manager_get_current_screen(void);
-
-/**
- * @brief Get the currently active module name
- */
-const char* screen_manager_get_current_module(void);
 
 // Screen navigation functions (for backward compatibility)
 screen_type_t screen_navigation_get_current_screen(void);
@@ -81,14 +72,12 @@ const char* screen_navigation_get_current_module(void);
 screen_type_t screen_navigation_get_requested_screen(void);
 const char* screen_navigation_get_requested_module(void);
 
-// Missing function declarations - these need to be implemented
 void screen_navigation_set_current_screen(screen_type_t screen_type, const char* module_name);
 bool screen_navigation_is_transition_pending(void);
 void screen_navigation_process_transitions(void);
 void screen_navigation_request_home_screen(void);
 void screen_navigation_request_detail_view(const char* module_name);
 void module_screen_view_set_view_index(const char* module_name, int view_index);
-void view_state_check_timeout(void);
 
 #ifdef __cplusplus
 }

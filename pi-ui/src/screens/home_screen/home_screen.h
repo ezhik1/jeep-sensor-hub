@@ -24,9 +24,6 @@ void home_screen_show(void);
 void home_screen_destroy(void);
 lv_obj_t* get_power_monitor_container(void);
 
-// Function to reset rendered_once flag for a specific module
-void home_screen_reset_module_rendered_flag(const char* module_name);
-
 #ifdef __cplusplus
 }
 #endif

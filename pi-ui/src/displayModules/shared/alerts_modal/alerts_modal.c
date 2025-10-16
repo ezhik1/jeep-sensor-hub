@@ -316,8 +316,6 @@ static void update_all_field_borders(alerts_modal_t* modal)
 	if (!modal) return;
 
 
-	printf("[I] alerts_modal: update_all_field_borders called (current_field_id=%d)\n", modal->current_field_id);
-
 	// Cache references to the gauge containers and group type containers
 	typedef struct {
 		lv_obj_t* container;
@@ -360,8 +358,6 @@ static void update_all_field_borders(alerts_modal_t* modal)
 
 	bool does_modal_have_active_field = modal->current_field_id >= 0 &&
 		modal->current_field_id < modal->total_field_count;
-
-	printf("[I] alerts_modal: does_modal_have_active_field: %d\n", does_modal_have_active_field);
 
 	// Step 1: Clear all highlighting on Fields and their containers
 	for (int field_id = 0; field_id < modal->total_field_count; field_id++) {
@@ -1413,8 +1409,6 @@ static void hide_out_of_range_warning(alerts_modal_t* modal, int field_id)
 {
 	if (!modal || field_id < 0 || field_id >= modal->total_field_count) return;
 
-	printf("[I] alerts_modal: Hiding warning for field %d\n", field_id);
-
 	// Mark field as no longer out of range
 	modal->field_data[field_id].is_out_of_range = false;
 
@@ -1455,8 +1449,6 @@ static void hide_out_of_range_warning(alerts_modal_t* modal, int field_id)
 	// Update field display for the baseline field
 	update_field_display(modal, field_id);
 	// Note: update_all_field_borders is called by the caller to avoid recursive calls
-
-	printf("[I] alerts_modal: Hiding warning for field %d\n", field_id);
 }
 
 static void warning_timer_callback(lv_timer_t* timer)

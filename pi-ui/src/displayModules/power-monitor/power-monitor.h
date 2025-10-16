@@ -7,6 +7,9 @@
 #include "displayModules/shared/gauges/bar_graph_gauge.h"
 #include "gauge_types.h"
 
+// Forward declaration - will be defined in detail_screen.h
+struct detail_screen_t;
+
 // View type enumeration
 typedef enum {
 	POWER_MONITOR_VIEW_CURRENT = 0,
@@ -54,7 +57,6 @@ void power_monitor_destroy_detail_screen(void);
 // Starter voltage view functions
 void power_monitor_starter_voltage_view_render(lv_obj_t *container);
 void power_monitor_starter_voltage_view_update_data(void);
-const char* power_monitor_starter_voltage_view_get_title(void);
 void power_monitor_starter_voltage_view_apply_alert_flashing(const power_monitor_data_t* data, int starter_lo, int starter_hi, int house_lo, int house_hi, int solar_lo, int solar_hi, bool blink_on);
 
 // Data access functions
@@ -74,8 +76,6 @@ void power_monitor_update_detail_gauge_ranges(void);
 // Overlay control for shared current_view
 void power_monitor_show_in_container(lv_obj_t *container);
 void power_monitor_show_in_container_home(lv_obj_t *container);
-// void power_monitor_show_in_container_detail(lv_obj_t *container); - REMOVED, using shared template
-void power_monitor_create_current_view_in_container(lv_obj_t* container);
 void power_monitor_create_current_view_content(lv_obj_t* container);
 void power_monitor_destroy(void);
 
@@ -97,7 +97,7 @@ void power_monitor_handle_timeline_button(void);
 // Additional compatibility functions for screen_manager and home_screen
 void power_monitor_destroy(void);
 void power_monitor_show_in_container_home(lv_obj_t* container);
-void power_monitor_show_in_container_detail(lv_obj_t* container);
+// void power_monitor_show_in_container_detail(lv_obj_t* container);
 void power_monitor_cycle_current_view(void);
 void power_monitor_render_current_view(lv_obj_t* container);
 
@@ -123,6 +123,10 @@ void power_monitor_handle_timeline_button(void);
 void power_monitor_timeline_changed_callback(int gauge_index, int duration_seconds, bool is_current_view);
 void power_monitor_update_gauge_intervals(void);
 void power_monitor_update_gauge_timeline(power_monitor_gauge_type_t gauge_type, bool is_detail_view);
+
+// Detail screen sensor label functions
+void power_monitor_create_sensor_labels_in_detail_screen(lv_obj_t* container);
+void power_monitor_update_sensor_labels_in_detail_screen(lv_obj_t* sensor_section, const power_monitor_data_t* data);
 
 #ifdef __cplusplus
 }

@@ -16,11 +16,9 @@ static bool g_lerp_initialized = false;
 void lerp_data_init(void)
 {
 	if (g_lerp_initialized) {
-		printf("[W] lerp_data: LERP data already initialized\n");
+
 		return;
 	}
-
-	printf("[I] lerp_data: Initializing LERP data system\n");
 
 	// Initialize all LERP values to 0
 	lerp_value_init(&g_lerp_data.starter_voltage, 0.0f);
@@ -31,13 +29,13 @@ void lerp_data_init(void)
 	lerp_value_init(&g_lerp_data.solar_current, 0.0f);
 
 	g_lerp_initialized = true;
-	printf("[I] lerp_data: LERP data system initialized\n");
 }
 
 // Update all LERP values (call this every frame)
 void lerp_data_update(void)
 {
 	if (!g_lerp_initialized) {
+
 		printf("[W] lerp_data: LERP data not initialized\n");
 		return;
 	}
@@ -55,6 +53,7 @@ void lerp_data_update(void)
 void lerp_data_set_targets(const void* raw_data)
 {
 	if (!g_lerp_initialized) {
+
 		printf("[W] lerp_data: LERP data not initialized\n");
 		return;
 	}
@@ -75,6 +74,7 @@ void lerp_data_set_targets(const void* raw_data)
 void lerp_data_get_current(lerp_power_monitor_data_t* output)
 {
 	if (!g_lerp_initialized || !output) {
+
 		printf("[W] lerp_data: LERP data not initialized or output is NULL\n");
 		return;
 	}
@@ -95,7 +95,6 @@ void lerp_data_cleanup(void)
 		return;
 	}
 
-	printf("[I] lerp_data: Cleaning up LERP data system\n");
 	memset(&g_lerp_data, 0, sizeof(g_lerp_data));
 	g_lerp_initialized = false;
 }
@@ -104,6 +103,7 @@ void lerp_data_cleanup(void)
 void lerp_value_init(lerp_value_t* lerp_val, float initial_value)
 {
 	if (!lerp_val) {
+
 		printf("[E] lerp_data: LERP value pointer is NULL\n");
 		return;
 	}
@@ -119,6 +119,7 @@ void lerp_value_init(lerp_value_t* lerp_val, float initial_value)
 void lerp_value_set_target(lerp_value_t* lerp_val, float target_value)
 {
 	if (!lerp_val) {
+
 		printf("[E] lerp_data: LERP value pointer is NULL\n");
 		return;
 	}
@@ -160,6 +161,7 @@ void lerp_value_update(lerp_value_t* lerp_val)
 float lerp_value_get_raw(const lerp_value_t* lerp_val)
 {
 	if (!lerp_val) {
+
 		printf("[E] lerp_data: LERP value pointer is NULL\n");
 		return 0.0f;
 	}
@@ -171,6 +173,7 @@ float lerp_value_get_raw(const lerp_value_t* lerp_val)
 float lerp_value_get_display(const lerp_value_t* lerp_val)
 {
 	if (!lerp_val) {
+
 		printf("[E] lerp_data: LERP value pointer is NULL\n");
 		return 0.0f;
 	}
@@ -182,6 +185,7 @@ float lerp_value_get_display(const lerp_value_t* lerp_val)
 bool lerp_value_is_interpolating(const lerp_value_t* lerp_val)
 {
 	if (!lerp_val) {
+
 		return false;
 	}
 

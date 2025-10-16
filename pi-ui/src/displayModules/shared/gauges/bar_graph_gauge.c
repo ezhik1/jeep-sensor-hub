@@ -31,8 +31,6 @@ void bar_graph_gauge_init(
 		return;
 	}
 
-	printf("[I] bar_graph_gauge: Initializing gauge: parent=%p, size=%dx%d\n", parent, width, height);
-
 	memset(gauge, 0, sizeof(bar_graph_gauge_t));
 
 	gauge->x = x;
@@ -56,35 +54,29 @@ void bar_graph_gauge_init(
 
 	gauge->cached_bar_color = lv_color_hex(0x00FF00); // Normal green color
 	gauge->max_data_points = (gauge->width - gauge->canvas_padding) / (gauge->bar_width + gauge->bar_gap);
+
 	if (gauge->max_data_points < 5) gauge->max_data_points = 5;
 	if (gauge->max_data_points > 200) gauge->max_data_points = 200;
 
-
 	// Data points calculated
-
 	gauge->data_points = malloc(gauge->max_data_points * sizeof(float));
-	if (!gauge->data_points) {
-		printf("[E] bar_graph_gauge: Failed to allocate data points array\n");
-		return;
-	}
+
 	memset(gauge->data_points, 0, gauge->max_data_points * sizeof(float));
 	gauge->head = -1;
 
 	// MAIN Gauge Container
 	gauge->container = lv_obj_create(parent);
 	lv_obj_set_size(gauge->container, width, height);
-	// Don't set position for flexbox layout - let parent handle positioning
-	printf("[I] bar_graph_gauge: Gauge container created with size: %dx%d\n", width, height);
+
 	lv_obj_set_style_pad_all(gauge->container, 0, 0);
 	lv_obj_set_style_pad_left(gauge->container, 0, 0);
 	lv_obj_set_style_pad_right(gauge->container, 0, 0);
 	lv_obj_set_style_pad_top(gauge->container, 0, 0);
 	lv_obj_set_style_pad_bottom(gauge->container, 0, 0);
 	lv_obj_set_style_bg_color(gauge->container, PALETTE_BLACK, 0);
-	lv_obj_set_style_border_width(gauge->container, gauge->show_border ? 1 : 0, 0); // Conditional border
-	if (gauge->show_border) {
-		lv_obj_set_style_border_color(gauge->container, PALETTE_WHITE, 0); // White border
-	}
+	lv_obj_set_style_border_width(gauge->container, gauge->show_border ? 1 : 0, 0);
+	lv_obj_set_style_border_color(gauge->container, gauge->show_border ? PALETTE_WHITE : PALETTE_BLACK, 0);
+
 	lv_obj_set_style_radius(gauge->container, 0, 0); // No border radius
 	lv_obj_add_flag(gauge->container, LV_OBJ_FLAG_CLICKABLE); // Make clickable for touch event bubbling
 	lv_obj_add_flag(gauge->container, LV_OBJ_FLAG_EVENT_BUBBLE); // Allow events to bubble up
@@ -95,8 +87,6 @@ void bar_graph_gauge_init(
 	lv_obj_set_style_pad_gap(gauge->container, 0, 0); // NO gap between content and title
 	lv_obj_set_style_pad_row(gauge->container, 0, 0); // NO row gap
 	lv_obj_set_style_pad_column(gauge->container, 0, 0); // NO column gap
-	printf("[I] bar_graph_gauge: Gauge container ID: %p\n", gauge->container);
-
 
 	gauge->content_container = lv_obj_create(gauge->container);
 
@@ -125,16 +115,10 @@ void bar_graph_gauge_init(
 		}
 
 		gauge->labels_container = lv_obj_create(gauge->content_container);
-		if (!gauge->labels_container) {
-			printf("[E] bar_graph_gauge: Failed to create labels container\n");
-			return;
-		}
 
 		lv_obj_set_size(gauge->labels_container, 22, content_height); // 22px wide (20px + 2px for negative values)
-		// Prevent Y-axis labels container from growing beyond its specified width
 		lv_obj_set_style_flex_grow(gauge->labels_container, 0, 0);
-		printf("[I] bar_graph_gauge: Y-axis labels container created: width=22, height=%d, gauge_height=%d\n",
-			content_height, gauge->height);
+
 		lv_obj_set_style_bg_opa(gauge->labels_container, LV_OPA_COVER, 0);
 		lv_obj_set_style_bg_color(gauge->labels_container, PALETTE_BLACK, 0);
 		lv_obj_set_style_border_width(gauge->labels_container, 0, 0); // No border
@@ -154,14 +138,10 @@ void bar_graph_gauge_init(
 		lv_obj_set_style_pad_gap(gauge->labels_container, 0, 0);
 		lv_obj_set_style_pad_row(gauge->labels_container, 0, 0);
 		lv_obj_set_style_pad_column(gauge->labels_container, 0, 0);
-		printf("[I] bar_graph_gauge: Labels container ID: %p\n", gauge->labels_container);
 
 		// Max Label Container - positioned at top
 		lv_obj_t* max_container = lv_obj_create(gauge->labels_container);
-		if (!max_container) {
-			printf("[E] bar_graph_gauge: Failed to create max_container\n");
-			return;
-		}
+
 		lv_obj_set_size(max_container, LV_PCT(100), 20); // Fixed height for proper spacing
 		lv_obj_set_style_flex_grow(max_container, 0, 0);
 		lv_obj_set_style_bg_opa(max_container, LV_OPA_COVER, 0);
@@ -293,20 +273,10 @@ void bar_graph_gauge_init(
 	gauge->cached_draw_width = canvas_container_width; // Match canvas container width
 	gauge->cached_draw_height = content_height; // Reduced height to accommodate inline title
 
-	// Safety check: ensure canvas_container is valid
-	if (!gauge->canvas_container || !lv_obj_is_valid(gauge->canvas_container)) {
-		printf("[E] bar_graph_gauge: Cannot create canvas - canvas_container is NULL or invalid\n");
-		return;
-	}
-
 	gauge->canvas = lv_canvas_create(gauge->canvas_container);
-	if (!gauge->canvas) {
-		printf("[E] bar_graph_gauge: Failed to create canvas\n");
-		return;
-	}
+
 	lv_obj_set_size(gauge->canvas, canvas_container_width, content_height); // Match container size
-	printf("[I] bar_graph_gauge: CANVAS CREATED: container_width=%d, canvas_size=%dx%d, gauge_width=%d\n",
-		canvas_container_width, canvas_container_width, content_height, gauge->width);
+
 	// Let flexbox handle positioning - canvas fills its container
 	lv_obj_set_style_border_width(gauge->canvas, 0, 0); // No border
 	lv_obj_set_style_radius(gauge->canvas, 0, 0); // No border radius
@@ -319,30 +289,19 @@ void bar_graph_gauge_init(
 
 	// Calculate buffer size and log it
 	size_t buffer_size = gauge->cached_draw_width * gauge->cached_draw_height * sizeof(lv_color_t);
-	printf("[I] bar_graph_gauge: Allocating canvas buffer: %dx%d = %zu bytes\n",
-		gauge->cached_draw_width, gauge->cached_draw_height, buffer_size);
-
 	gauge->canvas_buffer = malloc(buffer_size);
 
-	if (!gauge->canvas_buffer) {
-		printf("[E] bar_graph_gauge: Failed to allocate canvas buffer of %zu bytes\n", buffer_size);
-		free(gauge->data_points);
-		gauge->data_points = NULL;
-		return;
-	}
-
-		printf("[I] bar_graph_gauge: Canvas buffer allocated successfully: %p\n", gauge->canvas_buffer);
 	lv_canvas_set_buffer(
 		gauge->canvas, gauge->canvas_buffer,
-						 gauge->cached_draw_width, gauge->cached_draw_height,
+		gauge->cached_draw_width, gauge->cached_draw_height,
 		LV_COLOR_FORMAT_RGB888
 	);
 
 	lv_canvas_fill_bg(gauge->canvas, PALETTE_BLACK, LV_OPA_COVER);
 
-
 	// Create indicator lines as direct children of gauge container (positioned relative to canvas)
 	if (gauge->show_y_axis) {
+
 		lv_obj_update_layout(gauge->canvas_container);
 
 		int indicator_width = 1;
@@ -397,6 +356,7 @@ void bar_graph_gauge_init(
 			LV_ALIGN_OUT_BOTTOM_LEFT, -tick_width, -indicator_width
 		);
 	} else {
+
 		gauge->indicator_container = NULL;
 		gauge->indicator_vertical_line = NULL;
 		gauge->indicator_top_line = NULL;
@@ -406,6 +366,7 @@ void bar_graph_gauge_init(
 
 	// Title Label - positioned inline with gauge container, aligned bottom right (like raw values section)
 	if (gauge->show_title) {
+
 		gauge->title_label = lv_label_create(parent); // Create as sibling to gauge container, not child
 		lv_obj_set_style_text_font(gauge->title_label, &lv_font_montserrat_12, 0);
 		lv_label_set_text(gauge->title_label, "CABIN VOLTAGE (V)"); // DEBUG: Set initial text
@@ -424,32 +385,16 @@ void bar_graph_gauge_init(
 
 		// Position inline with gauge container, 10px up and 10px right from bottom-right corner
 		lv_obj_align_to(gauge->title_label, gauge->container, LV_ALIGN_BOTTOM_RIGHT, -50, 8);
-		printf("[I] bar_graph_gauge: Title label ID: %p (positioned inline bottom-right)\n", gauge->title_label);
 	} else {
+
 		gauge->title_label = NULL;
 	}
 
-	// Canvas is ready for bar graph drawing
-	printf("[I] bar_graph_gauge: Canvas initialized: container=%dx%d, canvas=%dx%d\n",
-		gauge->width, gauge->height, gauge->cached_draw_width, gauge->cached_draw_height);
-
-
 	gauge->initialized = true;
-		printf("[I] bar_graph_gauge: Gauge initialization completed successfully: %p\n", gauge);
-
-	// Canvas is ready for bar graph drawing
-	// Bar graph gauge initialized
 }
 
 void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, float value)
 {
-	// Adding data point
-
-	if (!gauge || !gauge->initialized || !gauge->data_points ) {
-		printf("[W] bar_graph_gauge: Cannot add data point: gauge=%p, initialized=%d, data_points=%p\n",
-			gauge, gauge ? gauge->initialized : 0, gauge ? gauge->data_points : NULL);
-		return;
-	}
 
 	// Timeline control: only add data based on timeline duration
 	struct timespec ts;
@@ -463,17 +408,10 @@ void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, float value)
 	int total_bars = canvas_width / bar_spacing;
 
 	uint32_t data_interval_ms = 0;
+
 	if (gauge->timeline_duration_ms > 0 && total_bars > 0) {
 		// Calculate how often to add a data point to fill the gauge over the timeline duration
 		data_interval_ms = gauge->timeline_duration_ms / total_bars;
-
-		// Debug logging for timeline calculation
-		static int debug_count = 0;
-		if (debug_count < 5) {
-			printf("[D] bar_graph_gauge: Timeline calc: duration=%dms, canvas_width=%d, bar_spacing=%d, total_bars=%d, data_interval=%dms\n",
-				gauge->timeline_duration_ms, canvas_width, bar_spacing, total_bars, data_interval_ms);
-			debug_count++;
-		}
 	}
 
 	// Check if enough time has passed to add a new data point
@@ -488,8 +426,10 @@ void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, float value)
 
 	// Advance head in circular buffer
 	if (gauge->head == -1) {
+
 		gauge->head = 0;  // first sample
 	} else {
+
 		gauge->head = (gauge->head + 1) % gauge->max_data_points;
 	}
 
@@ -498,8 +438,6 @@ void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, float value)
 
 	// Mark that data was added
 	gauge->data_added = true;
-
-	// Data point added
 
 	// Use efficient incremental update instead of expensive full redraw
 	bar_graph_gauge_update_canvas(gauge);
@@ -519,20 +457,6 @@ void bar_graph_gauge_push_data(bar_graph_gauge_t *gauge, float value)
 
 void bar_graph_gauge_update_labels_and_ticks(bar_graph_gauge_t *gauge)
 {
-	if (!gauge) {
-		printf("[E] bar_graph_gauge: bar_graph_gauge_update_labels_and_ticks: gauge is NULL\n");
-		return;
-	}
-
-	if (!gauge->initialized) {
-		printf("[W] bar_graph_gauge: bar_graph_gauge_update_labels_and_ticks: gauge not initialized, skipping\n");
-		return;
-	}
-
-	if (!gauge->show_y_axis) {
-		printf("[E] bar_graph_gauge: bar_graph_gauge_update_labels_and_ticks: show_y_axis is NULL\n");
-		return;
-	}
 
 	// Calculate the relative positions within the gauge container (top, middle, bottom)
 	int bar_graph_height = gauge->cached_draw_height;
@@ -581,14 +505,6 @@ void bar_graph_gauge_update_labels_and_ticks(bar_graph_gauge_t *gauge)
 
 void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 {
-	// Updating canvas
-
-	if (!gauge || !gauge->initialized || !gauge->data_points) {
-		printf("[W] bar_graph_gauge: Cannot update canvas: gauge=%p, initialized=%d, data_points=%p\n",
-			gauge, gauge ? gauge->initialized : 0, gauge ? gauge->data_points : NULL);
-		return;
-	}
-
 
 	// Use the actual canvas width for buffer operations (this matches the allocated buffer)
 	int canvas_width = gauge->cached_draw_width;
@@ -629,8 +545,8 @@ void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 	// Canvas should auto-refresh after drawing operations
 
 	// Draw the latest bar on the right
-	int idx = gauge->head;
-	float val = gauge->data_points[idx];
+	int index = gauge->head;
+	float val = gauge->data_points[ index ];
 	// Clamp value to the visible range (between L shape lines)
 	if (val < gauge->init_min_value) val = gauge->init_min_value;
 	if (val > gauge->init_max_value) val = gauge->init_max_value;
@@ -661,10 +577,12 @@ void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 	} else {
 		// Bipolar: bars centered on baseline
 		if (val >= gauge->baseline_value) {
+
 			int bar_height = (int)((val - gauge->baseline_value) * scale);
 			y1 = baseline_y - bar_height;
 			y2 = baseline_y;
 		} else {
+
 			int bar_height = (int)((gauge->baseline_value - val) * scale);
 			y1 = baseline_y;
 			y2 = baseline_y + bar_height;
@@ -677,27 +595,18 @@ void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 	rect_dsc.bg_opa = LV_OPA_COVER;
 
 	// Draw new bar at rightmost position within bar area
-	// Drawing bar
-		// Create area for rectangle (adjust coordinates for L shape offset)
-		lv_area_t rect_area;
-		rect_area.x1 = bar_area_width - bar_spacing;
-		rect_area.y1 = top_y + y1; // Offset to match L shape boundaries
-		rect_area.x2 = rect_area.x1 + gauge->bar_width - 1;
-		rect_area.y2 = top_y + y2 - 1; // Offset to match L shape boundaries
+	// Create area for rectangle (adjust coordinates for L shape offset)
+	lv_area_t rect_area;
+	rect_area.x1 = bar_area_width - bar_spacing;
+	rect_area.y1 = top_y + y1; // Offset to match L shape boundaries
+	rect_area.x2 = rect_area.x1 + gauge->bar_width - 1;
+	rect_area.y2 = top_y + y2 - 1; // Offset to match L shape boundaries
 
-		// Initialize canvas layer and draw rectangle
-		lv_layer_t layer;
-		lv_canvas_init_layer(gauge->canvas, &layer);
-		lv_draw_rect(&layer, &rect_dsc, &rect_area);
-		lv_canvas_finish_layer(gauge->canvas, &layer);
-
-	// Redraw L-shapes after drawing bars to ensure they remain visible
-	// This is necessary because the canvas operations might affect the L-shapes
-	if (gauge->show_y_axis) {
-		// Indicator lines are now separate LVGL objects, no need to draw on canvas
-	}
-
-	// Canvas should auto-refresh after drawing operations
+	// Initialize canvas layer and draw rectangle
+	lv_layer_t layer;
+	lv_canvas_init_layer(gauge->canvas, &layer);
+	lv_draw_rect(&layer, &rect_dsc, &rect_area);
+	lv_canvas_finish_layer(gauge->canvas, &layer);
 }
 
 // Redraw entire canvas from buffer, right-aligning the latest head
@@ -717,8 +626,11 @@ void bar_graph_gauge_redraw_full(bar_graph_gauge_t *gauge)
 
 	// Clear canvas (only the drawing area between L shape lines)
 	for (int row = 0; row < h; row++) {
+
 		int actual_row = top_y + row; // Offset to match L shape boundaries
+
 		for (int col = 0; col < canvas_width; col++) {
+
 			gauge->canvas_buffer[actual_row * canvas_width + col] = PALETTE_BLACK;
 		}
 	}
@@ -726,14 +638,18 @@ void bar_graph_gauge_redraw_full(bar_graph_gauge_t *gauge)
 	// Precompute scale
 	float scale;
 	int baseline_y;
+
 	if (gauge->mode == BAR_GRAPH_MODE_BIPOLAR) {
+
 		float dist_min = gauge->baseline_value - gauge->init_min_value;
 		float dist_max = gauge->init_max_value - gauge->baseline_value;
 		float max_dist = (dist_min > dist_max) ? dist_min : dist_max;
+
 		if (max_dist <= 0) max_dist = 1;
 		scale = (float)(h - 2) / (2.0f * max_dist);
 		baseline_y = h - 1 - (int)((gauge->baseline_value - gauge->init_min_value) * scale);
 	} else {
+
 		scale = (float)(h - 2) / (gauge->init_max_value - gauge->init_min_value);
 		baseline_y = h - 1;
 	}
@@ -745,50 +661,53 @@ void bar_graph_gauge_redraw_full(bar_graph_gauge_t *gauge)
 
 	// Draw bars from oldest to newest into the right-aligned area
 	int x = bar_area_width - bar_spacing;
-	int idx = gauge->head;
+	int index = gauge->head;
+
 	for (int i = 0; i < count; i++) {
+
 		// walk backward through data points
-		float val = gauge->data_points[idx];
+		float val = gauge->data_points[index];
 		if (val < gauge->init_min_value) val = gauge->init_min_value;
 		if (val > gauge->init_max_value) val = gauge->init_max_value;
 
 		int y1, y2;
+
 		if (gauge->mode == BAR_GRAPH_MODE_POSITIVE_ONLY) {
+
 			int bar_height = (int)((val - gauge->init_min_value) * scale);
 			y1 = h - bar_height;
 			y2 = h;
 		} else {
+
 			if (val >= gauge->baseline_value) {
+
 				int bar_height = (int)((val - gauge->baseline_value) * scale);
 				y1 = baseline_y - bar_height;
 				y2 = baseline_y;
 			} else {
+
 				int bar_height = (int)((gauge->baseline_value - val) * scale);
 				y1 = baseline_y;
 				y2 = baseline_y + bar_height;
 			}
 		}
 
-				// Create area for rectangle (adjust coordinates for L shape offset)
-				lv_area_t rect_area;
-				rect_area.x1 = x;
-				rect_area.y1 = top_y + y1; // Offset to match L shape boundaries
-				rect_area.x2 = x + gauge->bar_width - 1;
-				rect_area.y2 = top_y + y2 - 1; // Offset to match L shape boundaries
+		// Create area for rectangle (adjust coordinates for L shape offset)
+		lv_area_t rect_area;
+		rect_area.x1 = x;
+		rect_area.y1 = top_y + y1; // Offset to match L shape boundaries
+		rect_area.x2 = x + gauge->bar_width - 1;
+		rect_area.y2 = top_y + y2 - 1; // Offset to match L shape boundaries
 
-				// Initialize canvas layer and draw rectangle
-				lv_layer_t layer;
-				lv_canvas_init_layer(gauge->canvas, &layer);
-				lv_draw_rect(&layer, &rect_dsc, &rect_area);
-				lv_canvas_finish_layer(gauge->canvas, &layer);
+		// Initialize canvas layer and draw rectangle
+		lv_layer_t layer;
+		lv_canvas_init_layer(gauge->canvas, &layer);
+		lv_draw_rect(&layer, &rect_dsc, &rect_area);
+		lv_canvas_finish_layer(gauge->canvas, &layer);
 		x -= bar_spacing;
-		if (--idx < 0) idx = gauge->max_data_points - 1;
-		if (x < 0) break;
-	}
 
-	// Redraw L-shapes after full redraw to ensure they remain visible
-	if (gauge->show_y_axis) {
-		// Indicator lines are now separate LVGL objects, no need to draw on canvas
+		if (--index < 0) index = gauge->max_data_points - 1;
+		if (x < 0) break;
 	}
 }
 
@@ -802,19 +721,21 @@ void bar_graph_gauge_cleanup(bar_graph_gauge_t *gauge)
 
 	// Free canvas buffer if it exists
 	if (gauge->canvas_buffer) {
+
 		free(gauge->canvas_buffer);
 		gauge->canvas_buffer = NULL;
 	}
 
-
 	// Free data points if they exist
 	if (gauge->data_points) {
+
 		free(gauge->data_points);
 		gauge->data_points = NULL;
 	}
 
 	// Delete LVGL objects to prevent memory leaks
 	if (gauge->container && lv_obj_is_valid(gauge->container)) {
+
 		lv_obj_del(gauge->container);
 	}
 
@@ -831,7 +752,6 @@ void bar_graph_gauge_cleanup(bar_graph_gauge_t *gauge)
 	gauge->max_range_rect = NULL;
 	gauge->center_range_rect = NULL;
 	gauge->min_range_rect = NULL;
-
 	gauge->initialized = false;
 }
 
@@ -842,6 +762,7 @@ void bar_graph_gauge_set_update_interval(bar_graph_gauge_t *gauge, uint32_t inte
 
 	// Initialize last_data_time if not set
 	if (gauge->last_data_time == 0) {
+
 		struct timespec ts;
 		clock_gettime(CLOCK_MONOTONIC, &ts);
 		gauge->last_data_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000; // Convert to milliseconds
@@ -869,17 +790,15 @@ void bar_graph_gauge_configure_advanced(
 	bool show_y_axis,
 	bool show_border
 ){
-	if (!gauge || !gauge->initialized) {
-		printf("[E] bar_graph_gauge: bar_graph_gauge_configure_advanced: gauge=%p, initialized=%d\n", gauge, gauge ? gauge->initialized : 0);
-		return;
-	}
 
 	// Validate baseline is within min/max range for bipolar mode
-	if (mode == BAR_GRAPH_MODE_BIPOLAR) {
-		if (baseline_value < min_val || baseline_value > max_val) {
-			// Set baseline to middle of min/max range if outside bounds
-			baseline_value = (min_val + max_val) / 2.0f;
-		}
+	if (
+		mode == BAR_GRAPH_MODE_BIPOLAR &&
+		( baseline_value < min_val || baseline_value > max_val )
+	){
+
+		// Set baseline to middle of min/max range if outside bounds
+		baseline_value = (min_val + max_val) / 2.0f;
 	}
 
 	// Apply mode and ranges
@@ -905,21 +824,29 @@ void bar_graph_gauge_configure_advanced(
 
 	// Update title with unit
 	if (title && gauge->title_label) {
+
 		char title_with_unit[64];
+
 		if (unit) {
+
 			snprintf(title_with_unit, sizeof(title_with_unit), "%s (%s)", title, unit);
 		} else {
+
 			strncpy(title_with_unit, title, sizeof(title_with_unit) - 1);
 			title_with_unit[sizeof(title_with_unit) - 1] = '\0';
 		}
+
 		lv_label_set_text(gauge->title_label, title_with_unit);
 	}
 
 	// Apply show_title visibility (title is now positioned outside, no canvas reflow needed)
 	if (gauge->title_label) {
+
 		if (gauge->show_title) {
+
 			lv_obj_clear_flag(gauge->title_label, LV_OBJ_FLAG_HIDDEN);
 		} else {
+
 			lv_obj_add_flag(gauge->title_label, LV_OBJ_FLAG_HIDDEN);
 		}
 
@@ -939,15 +866,13 @@ void bar_graph_gauge_configure_advanced(
 		// Update border styling based on show_border setting
 		lv_obj_set_style_border_width(gauge->container, gauge->show_border ? 1 : 0, 0);
 		if (gauge->show_border) {
+
 			lv_obj_set_style_border_color(gauge->container, PALETTE_WHITE, 0);
 			lv_obj_set_style_radius(gauge->container, 4, 0);
 		}
+
 		lv_obj_set_size(gauge->canvas_container, gauge->width - 20, content_height);
 		lv_obj_set_size(gauge->canvas, gauge->width - 20, content_height);
-
-		// DISABLED: Canvas resizing conflicts with flexbox layout
-		// lv_obj_set_size(gauge->canvas, gauge->cached_draw_width, gauge->cached_draw_height);
-		// lv_obj_align(gauge->canvas, LV_ALIGN_TOP_LEFT, gauge->canvas_padding, title_space);
 
 		// Recreate buffer to match new size
 		if (gauge->canvas_buffer) {
@@ -958,26 +883,18 @@ void bar_graph_gauge_configure_advanced(
 
 		gauge->canvas_buffer = malloc(gauge->cached_draw_width * gauge->cached_draw_height * sizeof(lv_color_t));
 
-		if (!gauge->canvas_buffer) {
-
-			printf("[E] bar_graph_gauge: Failed to reallocate canvas buffer (title toggle)\n");
-			return;
-		}
 
 		lv_canvas_set_buffer(gauge->canvas, gauge->canvas_buffer,
 			gauge->cached_draw_width, gauge->cached_draw_height,
 			LV_COLOR_FORMAT_RGB888);
 		lv_canvas_fill_bg(gauge->canvas, PALETTE_BLACK, LV_OPA_COVER);
-
-		// Redraw L-shapes after canvas buffer recreation
-		if (gauge->show_y_axis) {
-			// Indicator lines are now separate LVGL objects, no need to draw on canvas
-		}
 	}
 
 	// Ensure canvas leaves space for Y-axis labels when enabled
 	uint32_t new_padding = gauge->show_y_axis ? 20 : 0; // Reduced padding to use more space
+
 	if (new_padding != gauge->canvas_padding) {
+
 		gauge->canvas_padding = new_padding;
 		// Recompute drawable width and realign canvas
 		// Canvas width should match the canvas container width, not the full gauge width
@@ -985,38 +902,33 @@ void bar_graph_gauge_configure_advanced(
 		int side_padding = 8; // 8px padding on each side
 		int canvas_container_width = gauge->show_y_axis ? gauge->width - 22 - (side_padding * 2) : gauge->width - (side_padding * 2);
 		gauge->cached_draw_width = canvas_container_width;
+
 		if (gauge->cached_draw_width < 0) gauge->cached_draw_width = 0;
 
 		// Update canvas container size to match the new width
 		lv_obj_set_size(gauge->canvas_container, canvas_container_width, gauge->cached_draw_height);
-		// DISABLED: Canvas resizing conflicts with flexbox layout
-		// lv_obj_set_size(gauge->canvas, gauge->cached_draw_width, gauge->cached_draw_height);
-		// lv_obj_align(gauge->canvas, LV_ALIGN_TOP_LEFT, gauge->canvas_padding, 0);
 
 		// Recreate canvas buffer to match new width
 		if (gauge->canvas_buffer) {
+
 			free(gauge->canvas_buffer);
 			gauge->canvas_buffer = NULL;
 		}
-		gauge->canvas_buffer = malloc(gauge->cached_draw_width * gauge->cached_draw_height * sizeof(lv_color_t));
-		if (!gauge->canvas_buffer) {
-			printf("[E] bar_graph_gauge: Failed to reallocate canvas buffer\n");
-			return;
-		}
-		lv_canvas_set_buffer(gauge->canvas, gauge->canvas_buffer,
-			gauge->cached_draw_width, gauge->cached_draw_height,
-			LV_COLOR_FORMAT_RGB888);
-		lv_canvas_fill_bg(gauge->canvas, PALETTE_BLACK, LV_OPA_COVER);
 
-		// Redraw L-shapes after canvas buffer recreation
-		if (gauge->show_y_axis) {
-			// Indicator lines are now separate LVGL objects, no need to draw on canvas
-		}
+		gauge->canvas_buffer = malloc(gauge->cached_draw_width * gauge->cached_draw_height * sizeof(lv_color_t));
+
+		lv_canvas_set_buffer(
+			gauge->canvas, gauge->canvas_buffer,
+			gauge->cached_draw_width, gauge->cached_draw_height,
+			LV_COLOR_FORMAT_RGB888
+		);
+
+		lv_canvas_fill_bg(gauge->canvas, PALETTE_BLACK, LV_OPA_COVER);
 	}
 
 	// Create Y-axis labels if they don't exist but are now enabled
 	if (gauge->show_y_axis && !gauge->labels_container) {
-		printf("[I] bar_graph_gauge: Creating Y-axis labels for gauge %p\n", gauge);
+
 		// Create Y-axis labels container (left side) - use same width as initial creation
 		gauge->labels_container = lv_obj_create(gauge->content_container);
 		lv_obj_set_size(gauge->labels_container, 22, gauge->height - 20); // Match initial creation width and height
@@ -1034,7 +946,6 @@ void bar_graph_gauge_configure_advanced(
 		// FLEXBOX LAYOUT: Labels container (vertical distribution, right-aligned)
 		lv_obj_set_flex_flow(gauge->labels_container, LV_FLEX_FLOW_COLUMN);
 		lv_obj_set_flex_align(gauge->labels_container, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER);
-		printf("[I] bar_graph_gauge: Labels container created during configuration: %p\n", gauge->labels_container);
 
 		// Create Y-axis labels
 		// Max Label
@@ -1075,21 +986,8 @@ void bar_graph_gauge_configure_advanced(
 		lv_obj_clear_flag(gauge->min_label, LV_OBJ_FLAG_CLICKABLE);
 		// Right align text for better negative value display
 		lv_obj_set_style_text_align(gauge->min_label, LV_TEXT_ALIGN_RIGHT, 0);
-
-		// Canvas container size is already set correctly in init - don't resize here
-		// Flexbox will handle the layout automatically
 	}
 
 	// Y-axis labels will be updated when range values change
 	bar_graph_gauge_update_labels_and_ticks(gauge);
-
-	// Debug: Log Y-axis label creation
-	if (gauge->show_y_axis && gauge->labels_container) {
-		printf("[I] bar_graph_gauge: Y-axis labels ready: container=%p, max=%p, center=%p, min=%p\n",
-			gauge->labels_container, gauge->max_label, gauge->center_label, gauge->min_label);
-	} else {
-		printf("[W] bar_graph_gauge: Y-axis labels NOT created: show_y_axis=%d, labels_container=%p\n",
-			gauge->show_y_axis, gauge->labels_container);
-	}
-
 }

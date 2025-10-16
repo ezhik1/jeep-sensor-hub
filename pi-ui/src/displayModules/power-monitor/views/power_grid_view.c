@@ -1,15 +1,15 @@
 #include <stdio.h>
-#include "power_grid_view.h"
-#include "../../../state/device_state.h"
-#include "../power-monitor.h"
-#include "../../shared/gauges/bar_graph_gauge.h"
-#include "../../../data/lerp_data/lerp_data.h"
-// Using multiple fonts for comparison
-#include "../../../fonts/lv_font_noplato_24.h"
-// Montserrat fonts are already included globally
-
-#include <stdio.h>
 #include <string.h>
+
+#include "../power-monitor.h"
+#include "power_grid_view.h"
+
+#include "../../../state/device_state.h"
+#include "../../../data/lerp_data/lerp_data.h"
+
+#include "../../shared/gauges/bar_graph_gauge.h"
+
+#include "../../../fonts/lv_font_noplato_24.h"
 
 static const char *TAG = "power_grid_view";
 
@@ -46,7 +46,6 @@ static void create_gauge_row(
 	int row_index
 ){
 	// ROW CONTAINER : full width, Numeric and Gauge
-
 	lv_obj_t* row_container = lv_obj_create(parent);
 	lv_obj_set_size(row_container, LV_PCT(100), gauge_height);
 	lv_obj_set_style_bg_opa(row_container, LV_OPA_TRANSP, 0);
@@ -55,8 +54,8 @@ static void create_gauge_row(
 	// Track container for cleanup
 	if (row_index >= 0 && row_index < 3) {
 		s_row_containers[row_index] = row_container;
-		printf("[I] power_grid_view: Tracking row container %d: %p\n", row_index, row_container);
 	}
+
 	lv_obj_set_style_radius(row_container, 0, 0); // No border radius
 	lv_obj_set_style_pad_all(row_container, 0, 0);
 	lv_obj_clear_flag(row_container, LV_OBJ_FLAG_SCROLLABLE);
@@ -145,8 +144,6 @@ static bar_graph_gauge_t s_starter_voltage_gauge;
 static bar_graph_gauge_t s_house_voltage_gauge;
 static bar_graph_gauge_t s_solar_voltage_gauge;
 
-// Removed shared gauge references function - using static gauges
-
 // Static numeric value labels and title labels for each gauge
 static lv_obj_t* s_starter_value_label = NULL;
 static lv_obj_t* s_starter_title_label = NULL;
@@ -158,21 +155,8 @@ static lv_obj_t* s_solar_title_label = NULL;
 // Value editor for interactive editing
 static int s_current_editing_gauge = -1; // -1 = none, 0 = starter, 1 = house, 2 = solar
 
-// Value editor callback
-// Value editor callback removed - touch events are now in ALERTS modal only
-
-// Value label click event handlers removed - touch events are now in ALERTS modal only
-
 void power_monitor_power_grid_view_render(lv_obj_t *container)
 {
-	printf("[I] power_grid_view: === POWER GRID VIEW RENDER START ===\n");
-	if (!container) {
-		printf("[E] power_grid_view: Container is NULL\n");
-		return;
-	}
-
-	// Always create fresh content
-	printf("[I] power_grid_view: Creating fresh power grid view content\n");
 
 	// Reset view state
 	s_view_initialized = false;
@@ -185,9 +169,10 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 	lv_coord_t container_height = lv_obj_get_height(container);
 
 	if (container_width == 0 || container_height == 0) {
-		printf("[W] power_grid_view: Container has invalid dimensions %dx%d, forcing to 238x189 (1/8 grid)\n", container_width, container_height);
+
 		lv_obj_set_size(container, 238, 189);
 		lv_obj_update_layout(container);
+
 		container_width = lv_obj_get_width(container);
 		container_height = lv_obj_get_height(container);
 	}
@@ -202,104 +187,85 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 	// Container clickability is handled by parent - just clear scrollable
 	lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
 
-		// Use the corrected container dimensions
+	// Use the corrected container dimensions
 	printf("[I] power_grid_view: Power grid container dimensions: %dx%d\n", container_width, container_height);
 
 	// Use the container as-is - don't resize it!
 	printf("[I] power_grid_view: Using container dimensions as-is: %dx%d\n", container_width, container_height);
 
-	// Always create the power grid view content
-	{
+	// Set up flexbox for the main container (vertical stack)
+	lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_flex_align(container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+	lv_obj_set_style_pad_gap(container, 0, 0); // No vertical gap between gauges
+	lv_obj_set_style_pad_all(container, CONTAINER_PADDING_PX, 0); // Container padding
 
-		printf("[I] power_grid_view: Initializing power grid view with bar graph gauges...\n");
-		printf("[I] power_grid_view: Container size: %dx%d\n", container_width, container_height);
+	// Calculate gauge dimensions using configuration
+	int gauge_height = (container_height - CONTAINER_PADDING_PX) / 3;
 
-		// Set up flexbox for the main container (vertical stack)
-		lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
-		lv_obj_set_flex_align(container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-		lv_obj_set_style_pad_gap(container, 0, 0); // No vertical gap between gauges
-		lv_obj_set_style_pad_all(container, CONTAINER_PADDING_PX, 0); // Container padding
+	printf("[D] power_grid_view: Container dimensions: %dx%d, gauge_height=%d\n", container_width, container_height, gauge_height);
 
-		// Calculate gauge dimensions using configuration
-		int gauge_height = (container_height - CONTAINER_PADDING_PX) / 3;
+	// Read actual gauge configuration values from device state
+	float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
+	float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
+	float starter_max = device_state_get_float("power_monitor.starter_max_voltage_v");
 
-		printf("[I] power_grid_view: Gauge dimensions: height=%d (20:80 split layout, container padding: %d)\n",
-			gauge_height, CONTAINER_PADDING_PX);
+	float house_baseline = device_state_get_float("power_monitor.house_baseline_voltage_v");
+	float house_min = device_state_get_float("power_monitor.house_min_voltage_v");
+	float house_max = device_state_get_float("power_monitor.house_max_voltage_v");
 
-		// Read actual gauge configuration values from device state
-		float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
-		float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
-		float starter_max = device_state_get_float("power_monitor.starter_max_voltage_v");
+	float solar_min = device_state_get_float("power_monitor.solar_min_voltage_v");
+	float solar_max = device_state_get_float("power_monitor.solar_max_voltage_v");
 
-		float house_baseline = device_state_get_float("power_monitor.house_baseline_voltage_v");
-		float house_min = device_state_get_float("power_monitor.house_min_voltage_v");
-		float house_max = device_state_get_float("power_monitor.house_max_voltage_v");
+	// Create gauge rows with 20:80 split using flexbox helper function
+	// Initialize gauge structures
+	memset(&s_starter_voltage_gauge, 0, sizeof(bar_graph_gauge_t));
+	memset(&s_house_voltage_gauge, 0, sizeof(bar_graph_gauge_t));
+	memset(&s_solar_voltage_gauge, 0, sizeof(bar_graph_gauge_t));
 
-		float solar_min = device_state_get_float("power_monitor.solar_min_voltage_v");
-		float solar_max = device_state_get_float("power_monitor.solar_max_voltage_v");
-
-		// Create gauge rows with 20:80 split using flexbox helper function
-		// Initialize gauge structures
-		memset(&s_starter_voltage_gauge, 0, sizeof(bar_graph_gauge_t));
-		memset(&s_house_voltage_gauge, 0, sizeof(bar_graph_gauge_t));
-		memset(&s_solar_voltage_gauge, 0, sizeof(bar_graph_gauge_t));
-
-	create_gauge_row(container, &s_starter_voltage_gauge,
+	create_gauge_row(
+		container, &s_starter_voltage_gauge,
 		&s_starter_value_label, &s_starter_title_label,
 		"CABIN\n(V)", lv_color_hex(0x00FF00),
 		container_width, gauge_height,
 		starter_baseline, starter_min, starter_max,
-		BAR_GRAPH_MODE_BIPOLAR, &lv_font_noplato_24, 0);
+		BAR_GRAPH_MODE_BIPOLAR, &lv_font_noplato_24, 0
+	);
 
-	if (!s_starter_voltage_gauge.initialized) {
-		printf("[E] power_grid_view: Failed to initialize starter voltage gauge\n");
-		return;
-	}
-
-
-	create_gauge_row(container, &s_house_voltage_gauge,
+	create_gauge_row(
+		container, &s_house_voltage_gauge,
 		&s_house_value_label, &s_house_title_label,
 		"HOUSE\n(V)", lv_color_hex(0x0080FF),
 		container_width, gauge_height,
 		house_baseline, house_min, house_max,
-		BAR_GRAPH_MODE_BIPOLAR, &lv_font_noplato_24, 1);
+		BAR_GRAPH_MODE_BIPOLAR, &lv_font_noplato_24, 1
+	);
 
-	if (!s_house_voltage_gauge.initialized) {
-		printf("[E] power_grid_view: Failed to initialize house voltage gauge\n");
-		return;
-	}
+	create_gauge_row(
+		container, &s_solar_voltage_gauge,
+		&s_solar_value_label, &s_solar_title_label,
+		"SOLAR\n(V)", lv_color_hex(0xFF8000),
+		container_width, gauge_height,
+		0.0f, solar_min, solar_max,
+		BAR_GRAPH_MODE_POSITIVE_ONLY, &lv_font_noplato_24, 2
+	);
 
+	// Update labels and ticks for Y-axis (show ticks but not values)
+	bar_graph_gauge_update_labels_and_ticks(&s_starter_voltage_gauge);
+	bar_graph_gauge_update_labels_and_ticks(&s_house_voltage_gauge);
+	bar_graph_gauge_update_labels_and_ticks(&s_solar_voltage_gauge);
 
-		create_gauge_row(container, &s_solar_voltage_gauge,
-			&s_solar_value_label, &s_solar_title_label,
-			"SOLAR\n(V)", lv_color_hex(0xFF8000),
-			container_width, gauge_height,
-			0.0f, solar_min, solar_max,
-			BAR_GRAPH_MODE_POSITIVE_ONLY, &lv_font_noplato_24, 2);
+	// Add initial data to make gauges visible
+	bar_graph_gauge_add_data_point(&s_starter_voltage_gauge, 12.5f);
+	bar_graph_gauge_add_data_point(&s_house_voltage_gauge, 13.2f);
+	bar_graph_gauge_add_data_point(&s_solar_voltage_gauge, 14.1f);
 
-		if (!s_solar_voltage_gauge.initialized) {
-			printf("[E] power_grid_view: Failed to initialize solar voltage gauge\n");
-			return;
-		}
-
-		// Update labels and ticks for Y-axis (show ticks but not values)
-		bar_graph_gauge_update_labels_and_ticks(&s_starter_voltage_gauge);
-		bar_graph_gauge_update_labels_and_ticks(&s_house_voltage_gauge);
-		bar_graph_gauge_update_labels_and_ticks(&s_solar_voltage_gauge);
-
-		// Add initial data to make gauges visible
-		bar_graph_gauge_add_data_point(&s_starter_voltage_gauge, 12.5f);
-		bar_graph_gauge_add_data_point(&s_house_voltage_gauge, 13.2f);
-		bar_graph_gauge_add_data_point(&s_solar_voltage_gauge, 14.1f);
-
-		// Force canvas updates to make data visible
-		bar_graph_gauge_update_canvas(&s_starter_voltage_gauge);
-		bar_graph_gauge_update_canvas(&s_house_voltage_gauge);
-		bar_graph_gauge_update_canvas(&s_solar_voltage_gauge);
+	// Force canvas updates to make data visible
+	bar_graph_gauge_update_canvas(&s_starter_voltage_gauge);
+	bar_graph_gauge_update_canvas(&s_house_voltage_gauge);
+	bar_graph_gauge_update_canvas(&s_solar_voltage_gauge);
 
 	// Mark view as initialized
 	s_view_initialized = true;
-}
 }
 
 // Reset view state when view is destroyed
@@ -385,11 +351,6 @@ void power_monitor_power_grid_view_update_data(void)
 	// printf("[I] power_grid_view: Power grid view render complete, view initialized\n");
 }
 
-
-const char* power_monitor_power_grid_view_get_title(void)
-{
-	return "Power Grid";
-}
 
 void power_monitor_reset_static_gauges(void)
 {

@@ -240,8 +240,6 @@ void device_state_save(void) {
 		return;
 	}
 
-	printf("[I] device_state: Saving device state to JSON file\n");
-
 	// Ensure directory exists
 	ensure_state_directory_exists();
 
@@ -270,8 +268,6 @@ void device_state_save(void) {
 
 	fwrite(json_string, strlen(json_string), 1, file);
 	fclose(file);
-
-	printf("[I] device_state: Device state saved successfully\n");
 
 	free(json_string);
 }

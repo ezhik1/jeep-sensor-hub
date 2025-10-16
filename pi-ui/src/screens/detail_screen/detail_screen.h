@@ -2,7 +2,6 @@
 #define DETAIL_SCREEN_H
 
 #include <lvgl.h>
-#include "../../displayModules/power-monitor/power-monitor.h"
 
 // Forward declaration for overlay (not used in Pi port)
 // typedef struct overlay_instance overlay_instance_t; // Removed to avoid conflicts
@@ -46,9 +45,7 @@ typedef struct {
 	int setting_buttons_count;           // Number of settings buttons
 	lv_obj_t* status_container;          // Status indicators container
 
-	// Sensor data labels (owned by detail screen)
-	lv_obj_t* sensor_labels[15];         // 15 labels total: 3 groups of 5 labels each
-	bool sensor_labels_created;          // Flag to track if sensor labels are created
+	// Sensor data labels removed - modules should handle their own data display
 
 	// Module-specific data
 	const char* module_name;             // Module identifier
@@ -61,6 +58,9 @@ typedef struct {
 	// Callbacks
 	void (*on_back_clicked)(void);       // Back button callback
 	void (*on_view_clicked)(void);       // Current view click callback (for cycling)
+	void (*on_current_view_created)(lv_obj_t* container); // Callback when current view container is ready
+	void (*on_gauges_created)(lv_obj_t* container);       // Callback when gauges container is ready
+	void (*on_sensor_data_created)(lv_obj_t* container);  // Callback when sensor data container is ready
 } detail_screen_t;
 
 /**
@@ -82,6 +82,9 @@ typedef struct {
 	// Callbacks
 	void (*on_back_clicked)(void);       // Back button handler
 	void (*on_view_clicked)(void);       // View click handler
+	void (*on_current_view_created)(lv_obj_t* container); // Callback when current view container is ready
+	void (*on_gauges_created)(lv_obj_t* container);       // Callback when gauges container is ready
+	void (*on_sensor_data_created)(lv_obj_t* container);  // Callback when sensor data container is ready
 
 	// Overlay configuration
 	lv_obj_t* (*overlay_creator)(lv_obj_t* parent, void* user_data); // Overlay content creator
@@ -110,9 +113,9 @@ void detail_screen_hide(detail_screen_t* detail);
 /**
  * @brief Update detail screen with new data
  * @param detail Detail screen instance
- * @param data Module data
+ * @param data Generic module data (void* for flexibility)
  */
-void detail_screen_update(detail_screen_t* detail, const power_monitor_data_t* data);
+void detail_screen_update(detail_screen_t* detail, const void* data);
 
 /**
  * @brief Destroy detail screen
@@ -127,25 +130,7 @@ void detail_screen_destroy(detail_screen_t* detail);
  */
 lv_obj_t* detail_screen_get_current_view_container(detail_screen_t* detail);
 
-/**
- * @brief Create sensor data labels in the sensor data section
- * @param detail Detail screen instance
- */
-void detail_screen_create_sensor_labels(detail_screen_t* detail);
-
-/**
- * @brief Update sensor data labels with current values
- * @param detail Detail screen instance
- * @param data Power monitor data
- */
-void detail_screen_update_sensor_labels(detail_screen_t* detail, const power_monitor_data_t* data);
-
-/**
- * @brief Apply alert flashing effects to sensor labels
- * @param detail Detail screen instance
- * @param lerp_data_ptr LERP data for threshold checking
- */
-void detail_screen_apply_alert_flashing(detail_screen_t* detail, const void* lerp_data_ptr);
+// Sensor-specific functions removed - modules should implement their own data display
 
 /**
  * @brief Get the gauges container for additional widgets
@@ -160,6 +145,19 @@ lv_obj_t* detail_screen_get_gauges_container(detail_screen_t* detail);
  * @return Status container
  */
 lv_obj_t* detail_screen_get_status_container(detail_screen_t* detail);
+
+/**
+ * @brief Restore current view container styling after clean operation
+ * @param container The current view container to restore styling for
+ */
+void detail_screen_restore_current_view_styling(lv_obj_t* container);
+
+/**
+ * @brief Prepare current view container layout for content creation
+ * @param detail Detail screen instance
+ * @return true if layout preparation was successful, false otherwise
+ */
+bool detail_screen_prepare_current_view_layout(detail_screen_t* detail);
 
 #ifdef __cplusplus
 }
