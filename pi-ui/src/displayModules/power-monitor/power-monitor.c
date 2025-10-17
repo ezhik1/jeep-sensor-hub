@@ -92,6 +92,7 @@ static bool s_rendering_in_progress = false;
 // Removed navigation callbacks - using direct function calls
 static bool s_reset_in_progress = false;
 
+
 // Global current view containers for this module
 
 // Guard to prevent recursive calls
@@ -337,60 +338,97 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	lv_obj_set_flex_align(container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 	lv_obj_set_style_pad_row(container, gauge_padding, 0); // Vertical gap between gauges
 
-	// Row 1: Starter Battery Voltage
-	bar_graph_gauge_init(&detail_starter_voltage_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
-	// Gauge uses fixed height calculated above (1/6 of available space)
+	// Get gauge initial configuration values from device state
+	// Voltage gauges
 	float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
 	float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
 	float starter_max = device_state_get_float("power_monitor.starter_max_voltage_v");
+
+	float house_baseline = device_state_get_float("power_monitor.house_baseline_voltage_v");
+	float house_min = device_state_get_float("power_monitor.house_min_voltage_v");
+	float house_max = device_state_get_float("power_monitor.house_max_voltage_v");
+
+	float solar_min = device_state_get_float("power_monitor.solar_min_voltage_v");
+	float solar_max = device_state_get_float("power_monitor.solar_max_voltage_v");
+
+	// Current gauges
+	float starter_current_baseline = device_state_get_float("power_monitor.starter_baseline_current_a");
+	float starter_current_min = device_state_get_float("power_monitor.starter_min_current_a");
+	float starter_current_max = device_state_get_float("power_monitor.starter_max_current_a");
+	float house_current_baseline = device_state_get_float("power_monitor.house_baseline_current_a");
+	float house_current_min = device_state_get_float("power_monitor.house_min_current_a");
+	float house_current_max = device_state_get_float("power_monitor.house_max_current_a");
+	float solar_current_baseline = device_state_get_float("power_monitor.solar_baseline_current_a");
+	float solar_current_min = device_state_get_float("power_monitor.solar_min_current_a");
+	float solar_current_max = device_state_get_float("power_monitor.solar_max_current_a");
+
+
+	// Row 1: Starter Battery Voltage
+	bar_graph_gauge_init(&detail_starter_voltage_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
+	// Gauge uses fixed height calculated above (1/6 of available space
+
 	bar_graph_gauge_configure_advanced(
-		&detail_starter_voltage_gauge,
-		BAR_GRAPH_MODE_BIPOLAR,
-		starter_baseline,
-		starter_min,
-		starter_max,
-		"STARTER BATTERY", "V", "V", 0x00FF00,
-		true, true, true // Show title, Show Y-axis, Show border
+		&detail_starter_voltage_gauge, // gauge pointer
+		BAR_GRAPH_MODE_BIPOLAR, // graph mode
+		starter_baseline, starter_min, starter_max, // bounds: baseline, min, max
+		"STARTER BATTERY", "V", "V", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
+		true, true, true // Show title, Show Y-axis, Show Border
 	);
 	bar_graph_gauge_set_update_interval(&detail_starter_voltage_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 2: Starter Battery Current
 	bar_graph_gauge_init(&detail_starter_current_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
-	bar_graph_gauge_configure_advanced(&detail_starter_current_gauge,
-		BAR_GRAPH_MODE_BIPOLAR, 0.0f, -50.0f, 50.0f,
-		"STARTER BATTERY", "A", "A", 0x0080FF, true, true, true);
+	bar_graph_gauge_configure_advanced(
+		&detail_starter_current_gauge, // gauge pointer
+		BAR_GRAPH_MODE_BIPOLAR, // graph mode
+		starter_current_baseline, starter_current_min, starter_current_max, // bounds: baseline, min, max
+		"STARTER CURRENT", "A", "A", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
+		true, true, true // Show title, Show Y-axis, Show Border
+	);
 	bar_graph_gauge_set_update_interval(&detail_starter_current_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 3: House Battery Voltage
 	bar_graph_gauge_init(&detail_house_voltage_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
-	float house_baseline = device_state_get_float("power_monitor.house_baseline_voltage_v");
-	float house_min = device_state_get_float("power_monitor.house_min_voltage_v");
-	float house_max = device_state_get_float("power_monitor.house_max_voltage_v");
-
-	bar_graph_gauge_configure_advanced(&detail_house_voltage_gauge,
-		BAR_GRAPH_MODE_BIPOLAR, house_baseline, house_min, house_max,
-		"HOUSE BATTERY", "V", "V", 0x00FF00, true, true, true);
+	bar_graph_gauge_configure_advanced(
+		&detail_house_voltage_gauge, // gauge pointer
+		BAR_GRAPH_MODE_BIPOLAR, // graph mode
+		house_baseline, house_min, house_max, // bounds: baseline, min, max
+		"HOUSE BATTERY", "V", "V", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
+		true, true, true // Show title, Show Y-axis, Show Border
+	);
 	bar_graph_gauge_set_update_interval(&detail_house_voltage_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 4: House Battery Current
 	bar_graph_gauge_init(&detail_house_current_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
-	bar_graph_gauge_configure_advanced(&detail_house_current_gauge,
-		BAR_GRAPH_MODE_BIPOLAR, 0.0f, -50.0f, 50.0f,
-		"HOUSE BATTERY", "A", "A", 0x0080FF, true, true, true);
+	bar_graph_gauge_configure_advanced(
+		&detail_house_current_gauge, // gauge pointer
+		BAR_GRAPH_MODE_BIPOLAR, // graph mode
+		house_current_baseline, house_current_min, house_current_max, // bounds: baseline, min, max
+		"HOUSE CURRENT", "A", "A", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
+		true, true, true // Show title, Show Y-axis, Show Border
+	);
 	bar_graph_gauge_set_update_interval(&detail_house_current_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 5: Solar Input Voltage
 	bar_graph_gauge_init(&detail_solar_voltage_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
-	bar_graph_gauge_configure_advanced(&detail_solar_voltage_gauge,
-		BAR_GRAPH_MODE_POSITIVE_ONLY, 0.0f, 0.0f, 25.0f,
-		"SOLAR VOLTS", "V", "V", 0xFF8000, true, true, true);
+	bar_graph_gauge_configure_advanced(
+		&detail_solar_voltage_gauge, // gauge pointer
+		BAR_GRAPH_MODE_POSITIVE_ONLY, // graph mode
+		0.0f, 0.0f, 25.0f, // bounds: baseline, min, max
+		"SOLAR VOLTS", "V", "V", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
+		true, true, true // Show title, Show Y-axis, Show Border
+	);
 	bar_graph_gauge_set_update_interval(&detail_solar_voltage_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Row 6: Solar Input Current
 	bar_graph_gauge_init(&detail_solar_current_gauge, container, 0, 0, gauge_width, gauge_height, 3, 1);
-	bar_graph_gauge_configure_advanced(&detail_solar_current_gauge,
-		BAR_GRAPH_MODE_POSITIVE_ONLY, 0.0f, 0.0f, 10.0f,
-		"SOLAR CURRENT", "A", "A", 0xFF8000, true, true, true);
+	bar_graph_gauge_configure_advanced(
+		&detail_solar_current_gauge, // gauge pointer
+		BAR_GRAPH_MODE_BIPOLAR, // graph mode
+		solar_current_baseline, solar_current_min, solar_current_max, // bounds: baseline, min, max
+		"SOLAR CURRENT", "A", "A", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
+		true, true, true // Show title, Show Y-axis, Show Border
+	);
 	bar_graph_gauge_set_update_interval(&detail_solar_current_gauge, 0); // No rate limiting - gauge calculates its own rate
 
 	// Update labels and ticks for all gauges
@@ -414,15 +452,9 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 // Apply alert flashing for current view values
 static void power_monitor_apply_current_view_alert_flashing(void)
 {
-	// Only apply current view alert flashing if we have detail screen
-	if (!detail_screen) {
-		return; // No detail screen, skip current view alert flashing
-	}
-
 	// Get current data
 	power_monitor_data_t *data = power_monitor_get_data();
 	if (!data) {
-
 		return;
 	}
 
@@ -440,17 +472,14 @@ static void power_monitor_apply_current_view_alert_flashing(void)
 	int tick_ms = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 	bool blink_on = (tick_ms % 1500) < 1000;
 
-	// Apply alert flashing only to the currently active view
+	// Apply alert flashing to the currently active view (works for both home and detail screen)
 	power_monitor_view_type_t current_view = get_current_view_type();
 	if (current_view == POWER_MONITOR_VIEW_BAR_GRAPH) {
-
 		power_monitor_power_grid_view_apply_alert_flashing(data, starter_lo, starter_hi, house_lo, house_hi, solar_lo, solar_hi, blink_on);
 	} else if (current_view == POWER_MONITOR_VIEW_NUMERICAL) {
-
 		power_monitor_starter_voltage_view_apply_alert_flashing(data, starter_lo, starter_hi, house_lo, house_hi, solar_lo, solar_hi, blink_on);
 	} else {
-
-		printf("[W] power_monitor: Unknown view type: %d, skipping alert flashing, current_view\n");
+		printf("[W] power_monitor: Unknown view type: %d, skipping alert flashing\n", current_view);
 	}
 }
 
@@ -500,6 +529,10 @@ static void power_monitor_update_detail_gauges(void)
 	if (detail_solar_current_gauge.initialized) {
 
 		bar_graph_gauge_add_data_point(&detail_solar_current_gauge, lerp_value_get_display(&lerp_data.solar_current));
+	}
+
+	if (detail_screen->sensor_data_section) {
+		power_monitor_update_sensor_labels_in_detail_screen(detail_screen->sensor_data_section, &lerp_data);
 	}
 }
 
@@ -571,6 +604,7 @@ void power_monitor_update_detail_gauge_ranges(void)
 	}
 
 	// Get current gauge range values from device state
+	// Voltage gauges
 	float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
 	float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
 	float starter_max = device_state_get_float("power_monitor.starter_max_voltage_v");
@@ -580,6 +614,17 @@ void power_monitor_update_detail_gauge_ranges(void)
 	float solar_min = device_state_get_float("power_monitor.solar_min_voltage_v");
 	float solar_max = device_state_get_float("power_monitor.solar_max_voltage_v");
 
+	// Current gauges
+	float starter_current_baseline = device_state_get_float("power_monitor.starter_baseline_current_a");
+	float starter_current_min = device_state_get_float("power_monitor.starter_min_current_a");
+	float starter_current_max = device_state_get_float("power_monitor.starter_max_current_a");
+	float house_current_baseline = device_state_get_float("power_monitor.house_baseline_current_a");
+	float house_current_min = device_state_get_float("power_monitor.house_min_current_a");
+	float house_current_max = device_state_get_float("power_monitor.house_max_current_a");
+	float solar_current_baseline = device_state_get_float("power_monitor.solar_baseline_current_a");
+	float solar_current_min = device_state_get_float("power_monitor.solar_min_current_a");
+	float solar_current_max = device_state_get_float("power_monitor.solar_max_current_a");
+
 	// Update detail screen gauge ranges
 	if (detail_starter_voltage_gauge.initialized) {
 		bar_graph_gauge_configure_advanced(
@@ -588,7 +633,7 @@ void power_monitor_update_detail_gauge_ranges(void)
 			starter_baseline,
 			starter_min,
 			starter_max,
-			"STARTER BATTERY", "V", "V", 0x00FF00,
+			"STARTER BATTERY", "V", "V", PALETTE_WARM_WHITE,
 			true, true, true
 		);
 	}
@@ -600,7 +645,7 @@ void power_monitor_update_detail_gauge_ranges(void)
 			house_baseline,
 			house_min,
 			house_max,
-			"HOUSE BATTERY", "V", "V", 0x0080FF,
+			"HOUSE BATTERY", "V", "V", PALETTE_WARM_WHITE,
 			true, true, true
 		);
 	}
@@ -612,7 +657,44 @@ void power_monitor_update_detail_gauge_ranges(void)
 			0.0f,
 			solar_min,
 			solar_max,
-			"SOLAR INPUT", "V", "V", 0xFF8000,
+			"SOLAR INPUT", "V", "V", PALETTE_WARM_WHITE,
+			true, true, true
+		);
+	}
+
+	// Update current gauge ranges
+	if (detail_starter_current_gauge.initialized) {
+		bar_graph_gauge_configure_advanced(
+			&detail_starter_current_gauge,
+			BAR_GRAPH_MODE_BIPOLAR,
+			starter_current_baseline,
+			starter_current_min,
+			starter_current_max,
+			"STARTER CURRENT", "A", "A", PALETTE_WARM_WHITE,
+			true, true, true
+		);
+	}
+
+	if (detail_house_current_gauge.initialized) {
+		bar_graph_gauge_configure_advanced(
+			&detail_house_current_gauge,
+			BAR_GRAPH_MODE_BIPOLAR,
+			house_current_baseline,
+			house_current_min,
+			house_current_max,
+			"HOUSE CURRENT", "A", "A", PALETTE_WARM_WHITE,
+			true, true, true
+		);
+	}
+
+	if (detail_solar_current_gauge.initialized) {
+		bar_graph_gauge_configure_advanced(
+			&detail_solar_current_gauge,
+			BAR_GRAPH_MODE_BIPOLAR,
+			solar_current_baseline,
+			solar_current_min,
+			solar_current_max,
+			"SOLAR CURRENT", "A", "A", PALETTE_WARM_WHITE,
 			true, true, true
 		);
 	}
@@ -639,18 +721,6 @@ void power_monitor_update_data_only(void)
 	power_monitor_power_grid_view_update_data();
 	power_monitor_starter_voltage_view_update_data();
 
-	// Update sensor labels in detail screen (if detail screen exists)
-	extern detail_screen_t* detail_screen;
-	if (detail_screen) {
-		power_monitor_data_t* data = power_monitor_get_data();
-		if (data) {
-		// Update sensor labels using power monitor's own function
-		if (detail_screen->sensor_data_section) {
-			power_monitor_update_sensor_labels_in_detail_screen(detail_screen->sensor_data_section, data);
-		}
-		}
-	}
-
 	// Current view alert flashing (still handled by power monitor)
 	power_monitor_apply_current_view_alert_flashing();
 }
@@ -675,7 +745,6 @@ typedef struct {
 // Initialize power monitor defaults in device state only if values don't exist
 static void power_monitor_init_defaults(void)
 {
-
 	// Map all default settings
 	power_monitor_default_t defaults[] = {
 		// Gauge timeline settings - named properties for each gauge
@@ -704,6 +773,13 @@ static void power_monitor_init_defaults(void)
 		{"power_monitor.starter_min_voltage_v", (double)POWER_MONITOR_DEFAULT_STARTER_MIN_VOLTAGE_V},
 		{"power_monitor.starter_max_voltage_v", (double)POWER_MONITOR_DEFAULT_STARTER_MAX_VOLTAGE_V},
 
+		// Starter current settings
+		{"power_monitor.starter_alert_low_current_a", (double)-30.0f},
+		{"power_monitor.starter_alert_high_current_a", (double)30.0f},
+		{"power_monitor.starter_baseline_current_a", (double)0.0f},
+		{"power_monitor.starter_min_current_a", (double)-40.0f},
+		{"power_monitor.starter_max_current_a", (double)40.0f},
+
 		// House battery settings
 		{"power_monitor.house_alert_low_voltage_v", (double)POWER_MONITOR_DEFAULT_HOUSE_ALERT_LOW_VOLTAGE_V},
 		{"power_monitor.house_alert_high_voltage_v", (double)POWER_MONITOR_DEFAULT_HOUSE_ALERT_HIGH_VOLTAGE_V},
@@ -711,11 +787,25 @@ static void power_monitor_init_defaults(void)
 		{"power_monitor.house_min_voltage_v", (double)POWER_MONITOR_DEFAULT_HOUSE_MIN_VOLTAGE_V},
 		{"power_monitor.house_max_voltage_v", (double)POWER_MONITOR_DEFAULT_HOUSE_MAX_VOLTAGE_V},
 
+		// House current settings
+		{"power_monitor.house_alert_low_current_a", (double)-30.0f},
+		{"power_monitor.house_alert_high_current_a", (double)30.0f},
+		{"power_monitor.house_baseline_current_a", (double)0.0f},
+		{"power_monitor.house_min_current_a", (double)-40.0f},
+		{"power_monitor.house_max_current_a", (double)40.0f},
+
 		// Solar settings
 		{"power_monitor.solar_alert_low_voltage_v", (double)POWER_MONITOR_DEFAULT_SOLAR_ALERT_LOW_VOLTAGE_V},
 		{"power_monitor.solar_alert_high_voltage_v", (double)POWER_MONITOR_DEFAULT_SOLAR_ALERT_HIGH_VOLTAGE_V},
 		{"power_monitor.solar_min_voltage_v", (double)POWER_MONITOR_DEFAULT_SOLAR_MIN_VOLTAGE_V},
 		{"power_monitor.solar_max_voltage_v", (double)POWER_MONITOR_DEFAULT_SOLAR_MAX_VOLTAGE_V},
+
+		// Solar current settings
+		{"power_monitor.solar_alert_low_current_a", (double)-30.0f},
+		{"power_monitor.solar_alert_high_current_a", (double)30.0f},
+		{"power_monitor.solar_baseline_current_a", (double)0.0f},
+		{"power_monitor.solar_min_current_a", (double)-40.0f},
+		{"power_monitor.solar_max_current_a", (double)40.0f},
 	};
 
 	// Process all defaults
@@ -926,8 +1016,8 @@ void power_monitor_create_sensor_labels_in_detail_screen(lv_obj_t* container)
 	printf("[I] power_monitor: Creating sensor data labels in detail screen\n");
 
 	// Create sensor data labels with horizontal layout (label: value on same line)
-	lv_color_t labelColor = lv_color_hex(0x00bbe6);
-	lv_color_t valueColor = lv_color_hex(0x39ab00);
+	lv_color_t labelColor = PALETTE_GRAY;
+	lv_color_t valueColor = PALETTE_GREEN;
 	lv_color_t groupColor = PALETTE_WHITE;
 
 	// Sensor data layout: Group headers + horizontal label:value pairs
@@ -936,6 +1026,7 @@ void power_monitor_create_sensor_labels_in_detail_screen(lv_obj_t* container)
 
 	// Create 3 groups (Starter, House, Solar)
 	for (int group = 0; group < 3; group++) {
+
 		// Group header
 		lv_obj_t* group_label = lv_label_create(container);
 		lv_obj_set_style_text_font(group_label, &lv_font_montserrat_16, 0);
@@ -945,6 +1036,7 @@ void power_monitor_create_sensor_labels_in_detail_screen(lv_obj_t* container)
 
 		// Create 2 value pairs (Volts, Amperes) for each group
 		for (int value_type = 0; value_type < 2; value_type++) {
+
 			// Create horizontal container for label:value pair
 			lv_obj_t* value_row = lv_obj_create(container);
 			lv_obj_set_size(value_row, LV_PCT(100), LV_SIZE_CONTENT);
@@ -971,8 +1063,20 @@ void power_monitor_create_sensor_labels_in_detail_screen(lv_obj_t* container)
 			lv_obj_set_style_text_align(value, LV_TEXT_ALIGN_RIGHT, 0);
 			lv_label_set_text(value, "0.0");
 
-			// Store reference for updates (you might want to store these in a structure)
-			// For now, we'll find them by traversing the container
+			// Store reference for direct updates to data
+			if (group == 0) { // Starter Battery
+
+				if (value_type == 0) power_data.sensor_labels.starter_voltage = value;
+				else power_data.sensor_labels.starter_current = value;
+			} else if (group == 1) { // House Battery
+
+				if (value_type == 0) power_data.sensor_labels.house_voltage = value;
+				else power_data.sensor_labels.house_current = value;
+			} else if (group == 2) { // Solar Input
+
+				if (value_type == 0) power_data.sensor_labels.solar_voltage = value;
+				else power_data.sensor_labels.solar_current = value;
+			}
 		}
 	}
 
@@ -980,59 +1084,79 @@ void power_monitor_create_sensor_labels_in_detail_screen(lv_obj_t* container)
 }
 
 // Power monitor specific sensor label update function
-void power_monitor_update_sensor_labels_in_detail_screen(lv_obj_t* sensor_section, const power_monitor_data_t* data)
+void power_monitor_update_sensor_labels_in_detail_screen(lv_obj_t* sensor_section, const lerp_power_monitor_data_t* lerp_data)
 {
-	if (!sensor_section || !data) {
+	if (!lerp_data) {
 		return;
 	}
 
-	// Get LERP data for smooth display values
-	lerp_power_monitor_data_t lerp_data;
-	lerp_data_get_current(&lerp_data);
+	// Get alert thresholds for voltage values
+	int starter_lo = device_state_get_int("power_monitor.starter_alert_low_voltage_v");
+	int starter_hi = device_state_get_int("power_monitor.starter_alert_high_voltage_v");
+	int house_lo = device_state_get_int("power_monitor.house_alert_low_voltage_v");
+	int house_hi = device_state_get_int("power_monitor.house_alert_high_voltage_v");
+	int solar_lo = device_state_get_int("power_monitor.solar_alert_low_voltage_v");
+	int solar_hi = device_state_get_int("power_monitor.solar_alert_high_voltage_v");
 
-	// Update values by finding labels in the container
-	// This is a basic implementation - you might want to improve this
+	// Get alert thresholds for current values
+	int starter_current_lo = device_state_get_int("power_monitor.starter_alert_low_current_a");
+	int starter_current_hi = device_state_get_int("power_monitor.starter_alert_high_current_a");
+	int house_current_lo = device_state_get_int("power_monitor.house_alert_low_current_a");
+	int house_current_hi = device_state_get_int("power_monitor.house_alert_high_current_a");
+	int solar_current_lo = device_state_get_int("power_monitor.solar_alert_low_current_a");
+	int solar_current_hi = device_state_get_int("power_monitor.solar_alert_high_current_a");
+
+	// Get raw values for threshold checking
+	float starter_v_raw = lerp_value_get_raw(&lerp_data->starter_voltage);
+	float house_v_raw = lerp_value_get_raw(&lerp_data->house_voltage);
+	float solar_v_raw = lerp_value_get_raw(&lerp_data->solar_voltage);
+	float starter_c_raw = lerp_value_get_raw(&lerp_data->starter_current);
+	float house_c_raw = lerp_value_get_raw(&lerp_data->house_current);
+	float solar_c_raw = lerp_value_get_raw(&lerp_data->solar_current);
+
+	// Check if values are outside alert thresholds
+	bool starter_alert = (starter_v_raw <= (float)starter_lo) || (starter_v_raw >= (float)starter_hi);
+	bool house_alert = (house_v_raw <= (float)house_lo) || (house_v_raw >= (float)house_hi);
+	bool solar_alert = (solar_v_raw <= (float)solar_lo) || (solar_v_raw >= (float)solar_hi);
+	bool starter_current_alert = (starter_c_raw <= (float)starter_current_lo) || (starter_c_raw >= (float)starter_current_hi);
+	bool house_current_alert = (house_c_raw <= (float)house_current_lo) || (house_c_raw >= (float)house_current_hi);
+	bool solar_current_alert = (solar_c_raw <= (float)solar_current_lo) || (solar_c_raw >= (float)solar_current_hi);
+
+	// Update values using direct references - much cleaner!
 	char sensor_text[32];
-	int value_index = 0;
 
-	// Traverse children to find value labels (every 3rd label starting from index 2)
-	for (int i = 0; i < lv_obj_get_child_cnt(sensor_section); i++) {
-		lv_obj_t* child = lv_obj_get_child(sensor_section, i);
-		if (child && lv_obj_get_class(child) == &lv_label_class) {
-			// Check if this is a value label (has numeric content)
-			const char* text = lv_label_get_text(child);
-			if (text && (strstr(text, ".") || strstr(text, "0"))) {
-				// This is likely a value label, update it
-				switch (value_index) {
-					case 0: // Starter voltage
-						snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data.starter_voltage));
-						lv_label_set_text(child, sensor_text);
-						break;
-					case 1: // Starter current
-						snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data.starter_current));
-						lv_label_set_text(child, sensor_text);
-						break;
-					case 2: // House voltage
-						snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data.house_voltage));
-						lv_label_set_text(child, sensor_text);
-						break;
-					case 3: // House current
-						snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data.house_current));
-						lv_label_set_text(child, sensor_text);
-						break;
-					case 4: // Solar voltage
-						snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data.solar_voltage));
-						lv_label_set_text(child, sensor_text);
-						break;
-					case 5: // Solar current
-						snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data.solar_current));
-						lv_label_set_text(child, sensor_text);
-						break;
-				}
-				value_index++;
-			}
-		}
-	}
+	// Update starter battery values
+	snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data->starter_voltage));
+	lv_label_set_text(power_data.sensor_labels.starter_voltage, sensor_text);
+	lv_obj_set_style_text_color(power_data.sensor_labels.starter_voltage,
+		starter_alert ? PALETTE_YELLOW : PALETTE_WHITE, 0);
+
+	snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data->starter_current));
+	lv_label_set_text(power_data.sensor_labels.starter_current, sensor_text);
+	lv_obj_set_style_text_color(power_data.sensor_labels.starter_current,
+		starter_current_alert ? PALETTE_YELLOW : PALETTE_WHITE, 0);
+
+	// Update house battery values
+	snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data->house_voltage));
+	lv_label_set_text(power_data.sensor_labels.house_voltage, sensor_text);
+	lv_obj_set_style_text_color(power_data.sensor_labels.house_voltage,
+		house_alert ? PALETTE_YELLOW : PALETTE_WHITE, 0);
+
+	snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data->house_current));
+	lv_label_set_text(power_data.sensor_labels.house_current, sensor_text);
+	lv_obj_set_style_text_color(power_data.sensor_labels.house_current,
+		house_current_alert ? PALETTE_YELLOW : PALETTE_WHITE, 0);
+
+	// Update solar input values
+	snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data->solar_voltage));
+	lv_label_set_text(power_data.sensor_labels.solar_voltage, sensor_text);
+	lv_obj_set_style_text_color(power_data.sensor_labels.solar_voltage,
+		solar_alert ? PALETTE_YELLOW : PALETTE_WHITE, 0);
+
+	snprintf(sensor_text, sizeof(sensor_text), "%.1f", lerp_value_get_display(&lerp_data->solar_current));
+	lv_label_set_text(power_data.sensor_labels.solar_current, sensor_text);
+	lv_obj_set_style_text_color(power_data.sensor_labels.solar_current,
+		solar_current_alert ? PALETTE_YELLOW : PALETTE_WHITE, 0);
 }
 
 // Detail screen management
@@ -1100,7 +1224,9 @@ void power_monitor_show_detail_screen(void)
 void power_monitor_destroy_detail_screen(void)
 {
 	printf("[I] power_monitor: === DESTROY DETAIL SCREEN ===\n");
-	// No cleanup needed - everything will be created fresh
+
+	// Clear sensor label references
+	memset(&power_data.sensor_labels, 0, sizeof(power_monitor_sensor_labels_t));
 }
 
 // Touch event handler for detail screen

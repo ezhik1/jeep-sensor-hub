@@ -9,6 +9,7 @@
 
 #include "../../shared/gauges/bar_graph_gauge.h"
 
+#include "../../shared/palette.h"
 #include "../../../fonts/lv_font_noplato_24.h"
 
 static const char *TAG = "power_grid_view";
@@ -134,8 +135,11 @@ static void create_gauge_row(
 	int gauge_width = (container_width * BAR_GRAPH_PERCENT) / 100 - 6;
 	bar_graph_gauge_init(gauge, gauge_container, 0, 0, gauge_width, gauge_height, 3, 1);
 	bar_graph_gauge_configure_advanced(
-		gauge, mode, baseline, min_val, max_val,
-		"", "V", "V", lv_color_to_int(color), false, true, false // No border for current view
+		gauge, // gauge pointer
+		mode, // graph mode
+		baseline, min_val, max_val, // bounds: baseline, min, max
+		"", "V", "V", color, // title, unit, y-axis unit, color
+		false, true, false // Show title, Show Y-axis, Show Border
 	);
 }
 
@@ -225,7 +229,7 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 	create_gauge_row(
 		container, &s_starter_voltage_gauge,
 		&s_starter_value_label, &s_starter_title_label,
-		"CABIN\n(V)", lv_color_hex(0x00FF00),
+		"CABIN\n(V)", PALETTE_WARM_WHITE,
 		container_width, gauge_height,
 		starter_baseline, starter_min, starter_max,
 		BAR_GRAPH_MODE_BIPOLAR, &lv_font_noplato_24, 0
@@ -234,7 +238,7 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 	create_gauge_row(
 		container, &s_house_voltage_gauge,
 		&s_house_value_label, &s_house_title_label,
-		"HOUSE\n(V)", lv_color_hex(0x0080FF),
+		"HOUSE\n(V)", PALETTE_WARM_WHITE,
 		container_width, gauge_height,
 		house_baseline, house_min, house_max,
 		BAR_GRAPH_MODE_BIPOLAR, &lv_font_noplato_24, 1
@@ -243,7 +247,7 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 	create_gauge_row(
 		container, &s_solar_voltage_gauge,
 		&s_solar_value_label, &s_solar_title_label,
-		"SOLAR\n(V)", lv_color_hex(0xFF8000),
+		"SOLAR\n(V)", PALETTE_WARM_WHITE,
 		container_width, gauge_height,
 		0.0f, solar_min, solar_max,
 		BAR_GRAPH_MODE_POSITIVE_ONLY, &lv_font_noplato_24, 2
@@ -411,13 +415,13 @@ void power_monitor_power_grid_view_apply_alert_flashing(const power_monitor_data
 	if (starter_alert && s_starter_value_label) {
 		// Only change color, no hiding/showing to prevent layout shifts
 		if (blink_on) {
-			lv_obj_set_style_text_color(s_starter_value_label, lv_color_hex(0xFF3333), 0); // Red when blinking
+			lv_obj_set_style_text_color(s_starter_value_label, PALETTE_YELLOW, 0); // Red when blinking
 		} else {
-			lv_obj_set_style_text_color(s_starter_value_label, lv_color_hex(0x00FF00), 0); // Green when not blinking
+			lv_obj_set_style_text_color(s_starter_value_label, PALETTE_WHITE, 0);
 		}
 	} else if (s_starter_value_label) {
 		// Normal state - always green
-		lv_obj_set_style_text_color(s_starter_value_label, lv_color_hex(0x00FF00), 0);
+		lv_obj_set_style_text_color(s_starter_value_label, PALETTE_WHITE, 0);
 	}
 
 	// Apply alert flashing to house voltage value - use raw value for threshold checking
@@ -427,13 +431,13 @@ void power_monitor_power_grid_view_apply_alert_flashing(const power_monitor_data
 	if (house_alert && s_house_value_label) {
 		// Only change color, no hiding/showing to prevent layout shifts
 		if (blink_on) {
-			lv_obj_set_style_text_color(s_house_value_label, lv_color_hex(0xFF3333), 0); // Red when blinking
+			lv_obj_set_style_text_color(s_house_value_label, PALETTE_YELLOW, 0); // Red when blinking
 		} else {
-			lv_obj_set_style_text_color(s_house_value_label, lv_color_hex(0x0080FF), 0); // Blue when not blinking
+			lv_obj_set_style_text_color(s_house_value_label, PALETTE_WHITE, 0);
 		}
 	} else if (s_house_value_label) {
 		// Normal state - always blue
-		lv_obj_set_style_text_color(s_house_value_label, lv_color_hex(0x0080FF), 0);
+		lv_obj_set_style_text_color(s_house_value_label, PALETTE_WHITE, 0);
 	}
 
 	// Apply alert flashing to solar voltage value - use raw value for threshold checking
@@ -443,13 +447,13 @@ void power_monitor_power_grid_view_apply_alert_flashing(const power_monitor_data
 	if (solar_alert && s_solar_value_label) {
 		// Only change color, no hiding/showing to prevent layout shifts
 		if (blink_on) {
-			lv_obj_set_style_text_color(s_solar_value_label, lv_color_hex(0xFF3333), 0); // Red when blinking
+			lv_obj_set_style_text_color(s_solar_value_label, PALETTE_YELLOW, 0); // Red when blinking
 		} else {
-			lv_obj_set_style_text_color(s_solar_value_label, lv_color_hex(0xFF8000), 0); // Orange when not blinking
+			lv_obj_set_style_text_color(s_solar_value_label, PALETTE_WHITE, 0);
 		}
 	} else if (s_solar_value_label) {
 		// Normal state - always orange
-		lv_obj_set_style_text_color(s_solar_value_label, lv_color_hex(0xFF8000), 0);
+		lv_obj_set_style_text_color(s_solar_value_label, PALETTE_WHITE, 0);
 	}
 }
 
@@ -475,7 +479,7 @@ void power_monitor_power_grid_view_update_configuration(void)
 
 		bar_graph_gauge_configure_advanced(&s_starter_voltage_gauge,
 			BAR_GRAPH_MODE_BIPOLAR, starter_baseline, starter_min, starter_max,
-			"", "V", "V", 0x00FF00, false, true, false // No border for current view
+			"", "V", "V", PALETTE_WARM_WHITE, false, true, false // No border for current view
 		);
 	}
 
@@ -484,7 +488,7 @@ void power_monitor_power_grid_view_update_configuration(void)
 
 		bar_graph_gauge_configure_advanced(&s_house_voltage_gauge,
 			BAR_GRAPH_MODE_BIPOLAR, house_baseline, house_min, house_max,
-			"", "V", "V", 0x0080FF, false, true, false // No border for current view
+			"", "V", "V", PALETTE_WARM_WHITE, false, true, false // No border for current view
 		);
 	}
 
@@ -493,7 +497,7 @@ void power_monitor_power_grid_view_update_configuration(void)
 
 		bar_graph_gauge_configure_advanced(&s_solar_voltage_gauge,
 			BAR_GRAPH_MODE_POSITIVE_ONLY, 0.0f, solar_min, solar_max,
-			"", "V", "V", 0xFF8000, false, true, false // No border for current view
+			"", "V", "V", PALETTE_WARM_WHITE, false, true, false // No border for current view
 		);
 	}
 }

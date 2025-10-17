@@ -10,8 +10,8 @@
 extern "C" {
 #endif
 
-// Voltage-specific gauge configuration
-extern const alerts_modal_gauge_config_t voltage_gauge_configs[3];
+// Voltage and Current gauge configuration
+extern const alerts_modal_gauge_config_t voltage_gauge_configs[6];
 
 // Voltage-specific modal configuration
 extern const alerts_modal_config_t voltage_alerts_config;

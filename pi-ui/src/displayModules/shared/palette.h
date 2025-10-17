@@ -9,6 +9,7 @@ extern "C" {
 
 // Global Color Palette
 #define PALETTE_WHITE lv_color_hex(0xFFFFFF)
+#define PALETTE_WARM_WHITE lv_color_hex(0xF6E7D2)
 #define PALETTE_BLACK lv_color_hex(0x000000)
 #define PALETTE_GRAY lv_color_hex(0x8c8c8c)
 #define PALETTE_YELLOW lv_color_hex(0xFFD700)

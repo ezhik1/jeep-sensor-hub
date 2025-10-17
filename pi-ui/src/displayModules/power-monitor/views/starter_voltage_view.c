@@ -1,13 +1,18 @@
 #include <stdio.h>
+#include <string.h>
+
 #include "starter_voltage_view.h"
-#include "../../../state/device_state.h"
+
 #include "../power-monitor.h"
 #include "../../shared/gauges/bar_graph_gauge.h"
+
+#include "../../../state/device_state.h"
+
 #include "../../../data/lerp_data/lerp_data.h"
+
+#include "../../shared/palette.h"
 #include "../../../fonts/lv_font_zector_72.h"
 
-#include <stdio.h>
-#include <string.h>
 
 static const char *TAG = "starter_voltage_view";
 
@@ -43,27 +48,6 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 	lv_coord_t container_width = lv_obj_get_width(container);
 	lv_coord_t container_height = lv_obj_get_height(container);
 
-	// Container dimensions
-
-	// Container layout properties (removed verbose logs)
-
-	// // If container is still 0x0 after layout updates, this indicates a problem
-	// if (container_width == 0 || container_height == 0) {
-	// 	printf("[E] starter_voltage_view: Container has invalid dimensions %dx%d - layout calculation failed\n", container_width, container_height);
-	// 	// Force a layout update and try again
-	// 	lv_obj_update_layout(container);
-	// 	container_width = lv_obj_get_width(container);
-	// 	container_height = lv_obj_get_height(container);
-	// 	printf("[I] starter_voltage_view: After forced layout update: %dx%d\n", container_width, container_height);
-
-	// 	// If still invalid, use fallback but log as error
-	// 	if (container_width == 0 || container_height == 0) {
-	// 		printf("[E] starter_voltage_view: Layout calculation completely failed, using fallback dimensions\n");
-	// 		container_width = 238;  // Same as home screen module
-	// 		container_height = 189; // Same as home screen module
-	// 		lv_obj_set_size(container, container_width, container_height);
-	// 	}
-	// }
 
 	// Set container background to black (border is handled by parent container)
 	lv_obj_set_style_bg_color(container, lv_color_hex(0x000000), 0);
@@ -157,18 +141,18 @@ void power_monitor_starter_voltage_view_render(lv_obj_t *container)
 			return;
 		}
 
-		// Gauge initialized
-
 		// Configure gauge for voltage display
 		float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
 		float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
 		float starter_max = device_state_get_float("power_monitor.starter_max_voltage_v");
 
 		bar_graph_gauge_configure_advanced(
-			&s_voltage_gauge,
-			BAR_GRAPH_MODE_BIPOLAR, starter_baseline, starter_min, starter_max,
-			"", "", "", 0x00FF00, false, true, false
-		); // No labels, just bars and scale, no border for current view
+			&s_voltage_gauge, // gauge pointer
+			BAR_GRAPH_MODE_BIPOLAR, // graph mode
+			starter_baseline, starter_min, starter_max, // bounds: baseline, min, max
+			"", "", "", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
+			false, true, false // Show title, Show Y-axis, Show Border
+		);
 
 		// Set update interval
 		bar_graph_gauge_set_update_interval(&s_voltage_gauge, 33); // 30 FPS for high performance
@@ -240,10 +224,34 @@ void power_monitor_starter_voltage_view_apply_alert_flashing(const power_monitor
 		float current_voltage = lerp_value_get_display(&lerp_data.starter_voltage);
 
 		if (blink_on && (current_voltage < starter_lo || current_voltage > starter_hi)) {
-			lv_obj_set_style_text_color(s_voltage_value_label, lv_color_hex(0xFF0000), 0);
+			lv_obj_set_style_text_color(s_voltage_value_label, PALETTE_YELLOW, 0);
 		} else {
-			lv_obj_set_style_text_color(s_voltage_value_label, lv_color_hex(0x00FF00), 0);
+			lv_obj_set_style_text_color(s_voltage_value_label, PALETTE_WHITE, 0);
 		}
 	}
+}
+
+// Update starter voltage view gauge configuration when range values change
+void power_monitor_starter_voltage_view_update_configuration(void)
+{
+	if (!s_voltage_gauge.initialized) {
+		return;
+	}
+
+	// Read actual gauge configuration values from device state
+	float starter_baseline = device_state_get_float("power_monitor.starter_baseline_voltage_v");
+	float starter_min = device_state_get_float("power_monitor.starter_min_voltage_v");
+	float starter_max = device_state_get_float("power_monitor.starter_max_voltage_v");
+
+	// Update gauge configuration
+	bar_graph_gauge_configure_advanced(
+		&s_voltage_gauge, // gauge pointer
+		BAR_GRAPH_MODE_BIPOLAR, // graph mode
+		starter_baseline, starter_min, starter_max, // bounds: baseline, min, max
+		"", "", "", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
+		false, true, false // Show title, Show Y-axis, Show Border
+	);
+
+	bar_graph_gauge_update_labels_and_ticks(&s_voltage_gauge);
 }
 

@@ -6,9 +6,20 @@
 #include <lvgl.h>
 #include "displayModules/shared/gauges/bar_graph_gauge.h"
 #include "gauge_types.h"
+#include "../../data/lerp_data/lerp_data.h"
 
 // Forward declaration - will be defined in detail_screen.h
 struct detail_screen_t;
+
+// Structure to store sensor value label references
+typedef struct {
+	lv_obj_t* starter_voltage;
+	lv_obj_t* starter_current;
+	lv_obj_t* house_voltage;
+	lv_obj_t* house_current;
+	lv_obj_t* solar_voltage;
+	lv_obj_t* solar_current;
+} power_monitor_sensor_labels_t;
 
 // View type enumeration
 typedef enum {
@@ -44,6 +55,9 @@ typedef struct {
 	battery_data_t house_battery;
 	battery_data_t solar_input;
 	bool ignition_on;
+
+	// Sensor label references for detail screen
+	power_monitor_sensor_labels_t sensor_labels;
 } power_monitor_data_t;
 
 // Module interface functions
@@ -126,7 +140,7 @@ void power_monitor_update_gauge_timeline(power_monitor_gauge_type_t gauge_type, 
 
 // Detail screen sensor label functions
 void power_monitor_create_sensor_labels_in_detail_screen(lv_obj_t* container);
-void power_monitor_update_sensor_labels_in_detail_screen(lv_obj_t* sensor_section, const power_monitor_data_t* data);
+void power_monitor_update_sensor_labels_in_detail_screen(lv_obj_t* sensor_section, const lerp_power_monitor_data_t* lerp_data);
 
 #ifdef __cplusplus
 }

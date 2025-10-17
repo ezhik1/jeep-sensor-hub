@@ -112,7 +112,7 @@ typedef struct {
 // Gauge names, field names, and group names are now provided by configuration
 
 // Global warning data array for all fields
-static warning_data_t g_warning_data[15]; // 3 gauges * 5 fields = 15 total fields
+static warning_data_t g_warning_data[30]; // 6 gauges * 5 fields = 30 total fields
 
 // Forward declarations
 static void close_button_cb(lv_event_t *e);
@@ -386,6 +386,13 @@ static void update_all_field_borders(alerts_modal_t* modal)
 
 			data->title_color = DEFAULT_FIELD_VALUE_TITLE_COLOR;
 			data->title_background_color = DEFAULT_FIELD_VALUE_TITLE_BACKGROUND_COLOR;
+		} else if( data->is_warning_highlighted ){ // Warning highlighted field (yellow highlighting) - HIGH PRIORITY
+
+			printf("[I] alerts_modal: Applying warning highlight to field %d\n", field_id);
+			data->border_color = UPDATED_WARNING_BORDER_COLOR;
+			data->title_background_color = UPDATED_WARNING_TITLE_BACKGROUND_COLOR;
+			data->title_color = UPDATED_WARNING_TITLE_BORDER_COLOR;
+			data->border_width = 3;
 		} else if( does_modal_have_active_field ){  // field should be dimmed gray since there is an active one somewhere
 
 			data->text_color = DIM_FIELD_VALUE_COLOR;
@@ -606,8 +613,6 @@ static void highlight_field_for_warning(alerts_modal_t* modal, int field_id)
 
 	// Update all field borders to apply styling
 	update_all_field_borders(modal);
-
-	printf("[I] alerts_modal: Highlighted field %d for warning (border and text)\n", field_id);
 }
 
 
@@ -759,9 +764,13 @@ static void field_click_handler(lv_event_t *e)
 // Close button callback
 static void close_button_cb(lv_event_t *e)
 {
+	printf("[I] alerts_modal: Close button clicked\n");
 	alerts_modal_t* modal = (alerts_modal_t*)lv_event_get_user_data(e);
 
-	if (!modal) return;
+	if (!modal) {
+		printf("[E] alerts_modal: Close button - modal is NULL\n");
+		return;
+	}
 
 	close_current_field(modal);
 
@@ -777,9 +786,13 @@ static void close_button_cb(lv_event_t *e)
 // Cancel button callback - reverts all changes and closes modal
 static void cancel_button_cb(lv_event_t *e)
 {
+	printf("[I] alerts_modal: Cancel button clicked\n");
 	alerts_modal_t* modal = (alerts_modal_t*)lv_event_get_user_data(e);
 
-	if (!modal) return;
+	if (!modal) {
+		printf("[E] alerts_modal: Cancel button - modal is NULL\n");
+		return;
+	}
 
 	// Close any currently editing field first
 	close_current_field(modal);
@@ -871,6 +884,13 @@ static void numberpad_value_changed(const char* value, void* user_data)
 
 	// Always store the actual input value for display
 	data->current_value = new_value;
+
+	// Clear any existing warning when user starts entering a new value
+	if (modal->field_data[modal->current_field_id].is_out_of_range) {
+		hide_out_of_range_warning(modal, modal->current_field_id);
+		modal->field_data[modal->current_field_id].is_out_of_range = false;
+		printf("[I] alerts_modal: Cleared existing warning for field %d - user is entering new value\n", modal->current_field_id);
+	}
 
 	// For baseline fields, check against current LOW and HIGH values instead of min/max
 	if (data->field_index == FIELD_GAUGE_BASELINE) {
@@ -1151,6 +1171,18 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 			is_above_max = (out_of_range_value > data->max_value); // Use gauge RAW MAX
 			is_below_min = (out_of_range_value < current_alert_low);
 		}
+	} else if (data->field_index == FIELD_GAUGE_BASELINE) {
+		// GAUGE BASELINE: check against current GAUGE LOW and HIGH values
+		int gauge_index = data->gauge_index;
+		int low_field_id = gauge_index * 5 + FIELD_GAUGE_LOW;
+		int high_field_id = gauge_index * 5 + FIELD_GAUGE_HIGH;
+		if (low_field_id >= 0 && low_field_id < modal->total_field_count &&
+			high_field_id >= 0 && high_field_id < modal->total_field_count) {
+			float current_gauge_low = modal->field_data[low_field_id].current_value;
+			float current_gauge_high = modal->field_data[high_field_id].current_value;
+			is_above_max = (out_of_range_value > current_gauge_high);
+			is_below_min = (out_of_range_value < current_gauge_low);
+		}
 	} else {
 		// For other fields, use simple config values
 		is_above_max = (out_of_range_value > data->max_value);
@@ -1160,7 +1192,7 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 	// Get field type to determine if it's a baseline warning
 	bool is_baseline_warning = false;
 	int highlighted_field_id = -1;
-		if (field_id >= 0 && field_id < modal->total_field_count) {
+	if (field_id >= 0 && field_id < modal->total_field_count) {
 		int gauge_index = field_id / 5; // 5 fields per gauge
 		int field_index = field_id % 5;
 		is_baseline_warning = (field_index == FIELD_GAUGE_BASELINE);
@@ -1388,7 +1420,11 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 
 	// Highlight the corresponding field for baseline warnings
 	if (is_baseline_warning && highlighted_field_id >= 0) {
-		highlight_field_for_warning(modal, highlighted_field_id);
+		// Set the warning highlighted flag on the target field (low/high), not the baseline field
+		modal->field_data[highlighted_field_id].is_warning_highlighted = true;
+
+		// Update all field borders to apply styling
+		update_all_field_borders(modal);
 	}
 
 	// Create timer to hide warning after 2 seconds
@@ -1658,24 +1694,29 @@ alerts_modal_t* alerts_modal_create(const alerts_modal_config_t* config, void (*
 	lv_obj_set_style_border_width(modal->background, 0, 0);
 	lv_obj_set_style_pad_all(modal->background, 0, 0);
 
-	// Create content container - truly full width, no padding from background
+	// Create scrollable content container - leave space for fixed button container at bottom
 	modal->content_container = lv_obj_create(modal->background);
-	lv_obj_set_size(modal->content_container, LV_PCT(100), LV_PCT(100));
-	lv_obj_align(modal->content_container, LV_ALIGN_CENTER, 0, 0);
+	lv_obj_set_size(modal->content_container, LV_PCT(100), 740); // Height = 800 - 60 (button height)
+	lv_obj_set_pos(modal->content_container, 0, 0);
 	lv_obj_set_style_bg_color(modal->content_container, PALETTE_BLACK, 0);
 	lv_obj_set_style_border_color(modal->content_container, PALETTE_BLACK, 0);
 	lv_obj_set_style_border_width(modal->content_container, 0, 0);
 	lv_obj_set_style_pad_all(modal->content_container, 0, 10);
 
-	// Create gauge sections
+	// Enable scrolling for the content container (no scrollbar to save space)
+	lv_obj_set_scrollbar_mode(modal->content_container, LV_SCROLLBAR_MODE_OFF);
+	lv_obj_set_scroll_dir(modal->content_container, LV_DIR_VER);
+	lv_obj_clear_flag(modal->content_container, LV_OBJ_FLAG_SCROLL_ELASTIC);
+
+	// Create gauge sections with appropriate spacing for 6 gauges
 		for (int i = 0; i < config->gauge_count; i++) {
-		create_gauge_section(modal, i, modal->content_container, i * 240);  // Increased for better visual separation
+		create_gauge_section(modal, i, modal->content_container, i * 240);  // Reduced spacing for 6 gauges
 	}
 
-	// Button Container - standardized layout
-	lv_obj_t* button_container = lv_obj_create(modal->content_container);
+	// Button Container - fixed at bottom of screen (not scrollable)
+	lv_obj_t* button_container = lv_obj_create(modal->background);
 	lv_obj_set_size(button_container, LV_PCT(100), 60);
-	lv_obj_align(button_container, LV_ALIGN_BOTTOM_MID, 0, -10);
+	lv_obj_set_pos(button_container, 0, 740); // Fixed at bottom of screen (800 - 60 = 740)
 	lv_obj_set_layout(button_container, LV_LAYOUT_FLEX);
 	lv_obj_set_flex_flow(button_container, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(button_container, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -1720,6 +1761,12 @@ alerts_modal_t* alerts_modal_create(const alerts_modal_config_t* config, void (*
 	lv_obj_t* close_label = lv_label_create(modal->close_button);
 	lv_label_set_text(close_label, "DONE");
 	lv_obj_center(close_label);
+
+	// Force layout update to ensure buttons are properly positioned
+	lv_obj_update_layout(modal->content_container);
+
+	// Debug: Log button positions
+	printf("[I] alerts_modal: Button container fixed at bottom of screen (y=740, height=60)\n");
 
 	// Add field click handler to modal containers to handle all clicks
 	lv_obj_add_event_cb(modal->background, field_click_handler, LV_EVENT_CLICKED, modal);
@@ -1874,31 +1921,84 @@ void alerts_modal_destroy(alerts_modal_t* modal)
 		return;
 	}
 
-	printf("[I] alerts_modal: Destroying properly refactored alerts modal\n");
-
-	// Clear all warnings and destroy timers
+	// Clear all warnings and destroy timers first (without updating borders)
 	for (int field_id = 0; field_id < modal->total_field_count; field_id++) {
-		hide_out_of_range_warning(modal, field_id);
+		// Bounds check to prevent array overflow
+		if (field_id >= 30) {
+			printf("[E] alerts_modal: Field ID %d exceeds warning data array bounds (max 29)\n", field_id);
+			break;
+		}
+
+		// Clear warning data directly without calling update_all_field_borders
+		if (g_warning_data[field_id].text_label) {
+			lv_obj_add_flag(g_warning_data[field_id].text_label, LV_OBJ_FLAG_HIDDEN);
+		}
+		if (g_warning_data[field_id].container) {
+			lv_obj_add_flag(g_warning_data[field_id].container, LV_OBJ_FLAG_HIDDEN);
+		}
+		if (g_warning_data[field_id].value_label) {
+			lv_obj_add_flag(g_warning_data[field_id].value_label, LV_OBJ_FLAG_HIDDEN);
+		}
+		if (g_warning_data[field_id].timer) {
+			lv_timer_del(g_warning_data[field_id].timer);
+			g_warning_data[field_id].timer = NULL;
+		}
+		// Clear warning data
+		g_warning_data[field_id].text_label = NULL;
+		g_warning_data[field_id].container = NULL;
+		g_warning_data[field_id].value_label = NULL;
+		g_warning_data[field_id].highlighted_field_id = -1;
+		g_warning_data[field_id].is_baseline_warning = false;
+		g_warning_data[field_id].modal = NULL;
 	}
 
+	// Hide and destroy numberpad first
 	if (modal->numberpad) {
 		numberpad_hide(modal->numberpad);
+		// Note: Don't destroy numberpad here as it's managed by the modal's background
 	}
 
+	// Destroy the background and all its children
 	if (modal->background) {
-		lv_obj_del_async(modal->background);
+		lv_obj_del(modal->background);
+		modal->background = NULL; // Prevent double-free
 	}
 
-	// Free dynamically allocated arrays
-	free(modal->gauge_sections);
-	free(modal->alert_groups);
-	free(modal->gauge_groups);
-	free(modal->gauge_titles);
-	free(modal->alert_titles);
-	free(modal->gauge_group_title);
-	free(modal->field_ui);
-	free(modal->field_data);
+	// Free dynamically allocated arrays with null checks
+	if (modal->gauge_sections) {
+		free(modal->gauge_sections);
+		modal->gauge_sections = NULL;
+	}
+	if (modal->alert_groups) {
+		free(modal->alert_groups);
+		modal->alert_groups = NULL;
+	}
+	if (modal->gauge_groups) {
+		free(modal->gauge_groups);
+		modal->gauge_groups = NULL;
+	}
+	if (modal->gauge_titles) {
+		free(modal->gauge_titles);
+		modal->gauge_titles = NULL;
+	}
+	if (modal->alert_titles) {
+		free(modal->alert_titles);
+		modal->alert_titles = NULL;
+	}
+	if (modal->gauge_group_title) {
+		free(modal->gauge_group_title);
+		modal->gauge_group_title = NULL;
+	}
+	if (modal->field_ui) {
+		free(modal->field_ui);
+		modal->field_ui = NULL;
+	}
+	if (modal->field_data) {
+		free(modal->field_data);
+		modal->field_data = NULL;
+	}
 
+	printf("[I] alerts_modal: Modal destruction complete\n");
 	free(modal);
 }
 

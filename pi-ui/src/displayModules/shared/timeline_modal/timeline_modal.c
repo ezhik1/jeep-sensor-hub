@@ -1,17 +1,20 @@
-#include "timeline_modal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <lvgl.h>
 #include <math.h>
+
+#include "timeline_modal.h"
+
 #include "../../../state/device_state.h"
+
+// UI Style
+#include "../palette.h"
 #include "../../../fonts/lv_font_noplato_10.h"
 #include "../../../fonts/lv_font_noplato_14.h"
 #include "../../../fonts/lv_font_noplato_18.h"
 #include "../../../fonts/lv_font_noplato_24.h"
-#include "../palette.h"
 #include "../utils/animation.h"
-#include "../../../state/device_state.h"
-#include <lvgl.h>
 
 
 // #### Default State Colors ####
@@ -106,6 +109,9 @@
 static void timeline_click_handler(lv_event_t* e);
 static void close_button_clicked(lv_event_t* e);
 static void cancel_button_clicked(lv_event_t* e);
+// Helper function to create a view container with H, M, S labels
+static void create_view_container(timeline_modal_t* modal, int gauge, bool is_current_view);
+
 static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* parent);
 static void update_gauge_value(timeline_modal_t* modal, int gauge, float value, bool is_current_view);
 static void update_timeline_display(timeline_modal_t* modal, int gauge, bool is_current_view);
@@ -175,179 +181,139 @@ static void create_gauge_section(timeline_modal_t* modal, int gauge, lv_obj_t* p
 	modal->gauge_ui[gauge].current_view_duration = 0.0f;  // Default to realtime
 	modal->gauge_ui[gauge].detail_view_duration = 0.0f;   // Default to realtime
 
-	// Create Current View group - similar to ALERTS group in alerts modal
-	modal->gauge_ui[gauge].current_view_group = lv_obj_create(modal->gauge_sections[gauge]);
-	lv_obj_set_size(modal->gauge_ui[gauge].current_view_group, LV_PCT(37), 60);
-	lv_obj_set_pos(modal->gauge_ui[gauge].current_view_group, 10, 20);
-	lv_obj_set_layout(modal->gauge_ui[gauge].current_view_group, LV_LAYOUT_FLEX);
-	lv_obj_set_flex_flow(modal->gauge_ui[gauge].current_view_group, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(modal->gauge_ui[gauge].current_view_group, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_bg_color(modal->gauge_ui[gauge].current_view_group, PALETTE_BLACK, 0);
-	lv_obj_set_style_bg_opa(modal->gauge_ui[gauge].current_view_group, LV_OPA_COVER, 0);
-	lv_obj_set_style_border_width(modal->gauge_ui[gauge].current_view_group, DEFAULT_GROUP_BORDER_WIDTH, 0);
-	lv_obj_set_style_border_color(modal->gauge_ui[gauge].current_view_group, DEFAULT_GROUP_BORDER_COLOR, 0);
-	lv_obj_set_style_radius(modal->gauge_ui[gauge].current_view_group, 5, 0);
-	lv_obj_set_style_pad_all(modal->gauge_ui[gauge].current_view_group, 0, 0);
-	lv_obj_clear_flag(modal->gauge_ui[gauge].current_view_group, LV_OBJ_FLAG_SCROLLABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_group, LV_OBJ_FLAG_EVENT_BUBBLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_group, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_event_cb(modal->gauge_ui[gauge].current_view_group, timeline_click_handler, LV_EVENT_CLICKED, modal);
-
-	// Current View group title
-	modal->gauge_ui[gauge].current_view_title = lv_label_create(modal->gauge_sections[gauge]);
-	lv_label_set_text(modal->gauge_ui[gauge].current_view_title, "CURRENT VIEW");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_title, DEFAULT_CURRENT_VIEW_TITLE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_title, &lv_font_montserrat_12, 0);
-	lv_obj_set_style_bg_color(modal->gauge_ui[gauge].current_view_title, DEFAULT_CURRENT_VIEW_TITLE_BACKGROUND_COLOR, 0);
-	lv_obj_set_style_bg_opa(modal->gauge_ui[gauge].current_view_title, LV_OPA_COVER, 0);
-	lv_obj_set_style_pad_left(modal->gauge_ui[gauge].current_view_title, 8, 0);
-	lv_obj_set_style_pad_right(modal->gauge_ui[gauge].current_view_title, 8, 0);
-	lv_obj_set_style_pad_top(modal->gauge_ui[gauge].current_view_title, 2, 0);
-	lv_obj_set_style_pad_bottom(modal->gauge_ui[gauge].current_view_title, 2, 0);
-	lv_obj_set_style_radius(modal->gauge_ui[gauge].current_view_title, 3, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].current_view_title, modal->gauge_ui[gauge].current_view_group, LV_ALIGN_OUT_TOP_LEFT, 10, 10);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_title, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	// Create Detail View group - similar to GAUGE group in alerts modal
-	modal->gauge_ui[gauge].detail_view_group = lv_obj_create(modal->gauge_sections[gauge]);
-	lv_obj_set_size(modal->gauge_ui[gauge].detail_view_group, LV_PCT(56), 60);
-	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_group, modal->gauge_ui[gauge].current_view_group, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
-	lv_obj_set_layout(modal->gauge_ui[gauge].detail_view_group, LV_LAYOUT_FLEX);
-	lv_obj_set_flex_flow(modal->gauge_ui[gauge].detail_view_group, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(modal->gauge_ui[gauge].detail_view_group, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_bg_color(modal->gauge_ui[gauge].detail_view_group, PALETTE_BLACK, 0);
-	lv_obj_set_style_bg_opa(modal->gauge_ui[gauge].detail_view_group, LV_OPA_COVER, 0);
-	lv_obj_set_style_border_width(modal->gauge_ui[gauge].detail_view_group, DEFAULT_GROUP_BORDER_WIDTH, 0);
-	lv_obj_set_style_border_color(modal->gauge_ui[gauge].detail_view_group, DEFAULT_GROUP_BORDER_COLOR, 0);
-	lv_obj_set_style_radius(modal->gauge_ui[gauge].detail_view_group, 5, 0);
-	lv_obj_set_style_pad_all(modal->gauge_ui[gauge].detail_view_group, 0, 0);
-	lv_obj_clear_flag(modal->gauge_ui[gauge].detail_view_group, LV_OBJ_FLAG_SCROLLABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_group, LV_OBJ_FLAG_EVENT_BUBBLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_group, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_event_cb(modal->gauge_ui[gauge].detail_view_group, timeline_click_handler, LV_EVENT_CLICKED, modal);
-
-	// Detail View group title
-	modal->gauge_ui[gauge].detail_view_title = lv_label_create(modal->gauge_sections[gauge]);
-	lv_label_set_text(modal->gauge_ui[gauge].detail_view_title, "DETAIL VIEW");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_title, DEFAULT_DETAIL_VIEW_TITLE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_title, &lv_font_montserrat_12, 0);
-	lv_obj_set_style_bg_color(modal->gauge_ui[gauge].detail_view_title, DEFAULT_DETAIL_VIEW_TITLE_BACKGROUND_COLOR, 0);
-	lv_obj_set_style_bg_opa(modal->gauge_ui[gauge].detail_view_title, LV_OPA_COVER, 0);
-	lv_obj_set_style_pad_left(modal->gauge_ui[gauge].detail_view_title, 8, 0);
-	lv_obj_set_style_pad_right(modal->gauge_ui[gauge].detail_view_title, 8, 0);
-	lv_obj_set_style_pad_top(modal->gauge_ui[gauge].detail_view_title, 2, 0);
-	lv_obj_set_style_pad_bottom(modal->gauge_ui[gauge].detail_view_title, 2, 0);
-	lv_obj_set_style_radius(modal->gauge_ui[gauge].detail_view_title, 3, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_title, modal->gauge_ui[gauge].detail_view_group, LV_ALIGN_OUT_TOP_LEFT, 10, 10);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_title, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	// Create individual H, M, S labels for Current View
-	// Hours
-	modal->gauge_ui[gauge].current_view_hours_label = lv_label_create(modal->gauge_ui[gauge].current_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].current_view_hours_label, "0");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_hours_label, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_hours_label, &lv_font_noplato_24, 0);
-	// Positioned by flexbox parent container
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_hours_label, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_hours_label, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	modal->gauge_ui[gauge].current_view_hours_letter = lv_label_create(modal->gauge_ui[gauge].current_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].current_view_hours_letter, "H");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_hours_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_hours_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].current_view_hours_letter, modal->gauge_ui[gauge].current_view_hours_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_hours_letter, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_hours_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	// Minutes
-	modal->gauge_ui[gauge].current_view_minutes_label = lv_label_create(modal->gauge_ui[gauge].current_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].current_view_minutes_label, "0");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_minutes_label, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_minutes_label, &lv_font_noplato_24, 0);
-	// Positioned by flexbox parent container
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_minutes_label, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_minutes_label, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	modal->gauge_ui[gauge].current_view_minutes_letter = lv_label_create(modal->gauge_ui[gauge].current_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].current_view_minutes_letter, "M");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_minutes_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_minutes_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].current_view_minutes_letter, modal->gauge_ui[gauge].current_view_minutes_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_minutes_letter, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_minutes_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	// Seconds
-	modal->gauge_ui[gauge].current_view_seconds_label = lv_label_create(modal->gauge_ui[gauge].current_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].current_view_seconds_label, "30");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_seconds_label, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_seconds_label, &lv_font_noplato_24, 0);
-	// Positioned by flexbox parent container
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_seconds_label, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_seconds_label, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	modal->gauge_ui[gauge].current_view_seconds_letter = lv_label_create(modal->gauge_ui[gauge].current_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].current_view_seconds_letter, "S");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].current_view_seconds_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].current_view_seconds_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].current_view_seconds_letter, modal->gauge_ui[gauge].current_view_seconds_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_seconds_letter, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].current_view_seconds_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	// Create individual H, M, S labels for Detail View
-	// Hours
-	modal->gauge_ui[gauge].detail_view_hours_label = lv_label_create(modal->gauge_ui[gauge].detail_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].detail_view_hours_label, "0");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_hours_label, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_hours_label, &lv_font_noplato_24, 0);
-	// Positioned by flexbox parent container
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_hours_label, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_hours_label, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	modal->gauge_ui[gauge].detail_view_hours_letter = lv_label_create(modal->gauge_ui[gauge].detail_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].detail_view_hours_letter, "H");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_hours_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_hours_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_hours_letter, modal->gauge_ui[gauge].detail_view_hours_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_hours_letter, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_hours_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	// Minutes
-	modal->gauge_ui[gauge].detail_view_minutes_label = lv_label_create(modal->gauge_ui[gauge].detail_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].detail_view_minutes_label, "0");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_minutes_label, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_minutes_label, &lv_font_noplato_24, 0);
-	// Positioned by flexbox parent container
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_minutes_label, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_minutes_label, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	modal->gauge_ui[gauge].detail_view_minutes_letter = lv_label_create(modal->gauge_ui[gauge].detail_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].detail_view_minutes_letter, "M");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_minutes_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_minutes_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_minutes_letter, modal->gauge_ui[gauge].detail_view_minutes_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_minutes_letter, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_minutes_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	// Seconds
-	modal->gauge_ui[gauge].detail_view_seconds_label = lv_label_create(modal->gauge_ui[gauge].detail_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].detail_view_seconds_label, "30");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_seconds_label, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_seconds_label, &lv_font_noplato_24, 0);
-	// Positioned by flexbox parent container
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_seconds_label, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_seconds_label, LV_OBJ_FLAG_EVENT_BUBBLE);
-
-	modal->gauge_ui[gauge].detail_view_seconds_letter = lv_label_create(modal->gauge_ui[gauge].detail_view_group);
-	lv_label_set_text(modal->gauge_ui[gauge].detail_view_seconds_letter, "S");
-	lv_obj_set_style_text_color(modal->gauge_ui[gauge].detail_view_seconds_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
-	lv_obj_set_style_text_font(modal->gauge_ui[gauge].detail_view_seconds_letter, &lv_font_montserrat_16, 0);
-	lv_obj_align_to(modal->gauge_ui[gauge].detail_view_seconds_letter, modal->gauge_ui[gauge].detail_view_seconds_label, LV_ALIGN_OUT_RIGHT_MID, 2, 0);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_seconds_letter, LV_OBJ_FLAG_CLICKABLE);
-	lv_obj_add_flag(modal->gauge_ui[gauge].detail_view_seconds_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
+	// Create view containers using helper function
+	create_view_container(modal, gauge, true);   // Current view
+	create_view_container(modal, gauge, false);  // Detail view
 
 	// Update the display to show the initial values (should be "REAL TIME" for 0 seconds)
 	update_timeline_display(modal, gauge, true);  // Current view
 	update_timeline_display(modal, gauge, false); // Detail view
+}
+
+
+// Helper function to create a view container with H, M, S labels
+static void create_view_container(timeline_modal_t* modal, int gauge, bool is_current_view)
+{
+	lv_obj_t** group;
+	lv_obj_t** title;
+	lv_obj_t** hours_label;
+	lv_obj_t** hours_letter;
+	lv_obj_t** minutes_label;
+	lv_obj_t** minutes_letter;
+	lv_obj_t** seconds_label;
+	lv_obj_t** seconds_letter;
+
+	// Set up pointers based on view type
+	if (is_current_view) {
+		group = &modal->gauge_ui[gauge].current_view_group;
+		title = &modal->gauge_ui[gauge].current_view_title;
+		hours_label = &modal->gauge_ui[gauge].current_view_hours_label;
+		hours_letter = &modal->gauge_ui[gauge].current_view_hours_letter;
+		minutes_label = &modal->gauge_ui[gauge].current_view_minutes_label;
+		minutes_letter = &modal->gauge_ui[gauge].current_view_minutes_letter;
+		seconds_label = &modal->gauge_ui[gauge].current_view_seconds_label;
+		seconds_letter = &modal->gauge_ui[gauge].current_view_seconds_letter;
+	} else {
+		group = &modal->gauge_ui[gauge].detail_view_group;
+		title = &modal->gauge_ui[gauge].detail_view_title;
+		hours_label = &modal->gauge_ui[gauge].detail_view_hours_label;
+		hours_letter = &modal->gauge_ui[gauge].detail_view_hours_letter;
+		minutes_label = &modal->gauge_ui[gauge].detail_view_minutes_label;
+		minutes_letter = &modal->gauge_ui[gauge].detail_view_minutes_letter;
+		seconds_label = &modal->gauge_ui[gauge].detail_view_seconds_label;
+		seconds_letter = &modal->gauge_ui[gauge].detail_view_seconds_letter;
+	}
+
+	// Create group container
+	*group = lv_obj_create(modal->gauge_sections[gauge]);
+	lv_obj_set_size(*group, is_current_view ? LV_PCT(37) : LV_PCT(56), 60);
+
+	if (is_current_view) {
+		lv_obj_set_pos(*group, 10, 20);
+	} else {
+		lv_obj_align_to(*group, modal->gauge_ui[gauge].current_view_group, LV_ALIGN_OUT_RIGHT_MID, 10, 0);
+	}
+
+	lv_obj_set_layout(*group, LV_LAYOUT_FLEX);
+	lv_obj_set_flex_flow(*group, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(*group, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_bg_color(*group, PALETTE_BLACK, 0);
+	lv_obj_set_style_bg_opa(*group, LV_OPA_COVER, 0);
+	lv_obj_set_style_border_width(*group, DEFAULT_GROUP_BORDER_WIDTH, 0);
+	lv_obj_set_style_border_color(*group, DEFAULT_GROUP_BORDER_COLOR, 0);
+	lv_obj_set_style_radius(*group, 5, 0);
+	lv_obj_set_style_pad_all(*group, 0, 0);
+	lv_obj_clear_flag(*group, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_add_flag(*group, LV_OBJ_FLAG_EVENT_BUBBLE);
+	lv_obj_add_flag(*group, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_event_cb(*group, timeline_click_handler, LV_EVENT_CLICKED, modal);
+
+	// Create group title
+	*title = lv_label_create(modal->gauge_sections[gauge]);
+	lv_label_set_text(*title, is_current_view ? "CURRENT VIEW" : "DETAIL VIEW");
+	lv_obj_set_style_text_color(*title, is_current_view ? DEFAULT_CURRENT_VIEW_TITLE_TEXT_COLOR : DEFAULT_DETAIL_VIEW_TITLE_TEXT_COLOR, 0);
+	lv_obj_set_style_text_font(*title, &lv_font_montserrat_12, 0);
+	lv_obj_set_style_bg_color(*title, is_current_view ? DEFAULT_CURRENT_VIEW_TITLE_BACKGROUND_COLOR : DEFAULT_DETAIL_VIEW_TITLE_BACKGROUND_COLOR, 0);
+	lv_obj_set_style_bg_opa(*title, LV_OPA_COVER, 0);
+	lv_obj_set_style_pad_left(*title, 8, 0);
+	lv_obj_set_style_pad_right(*title, 8, 0);
+	lv_obj_set_style_pad_top(*title, 2, 0);
+	lv_obj_set_style_pad_bottom(*title, 2, 0);
+	lv_obj_set_style_radius(*title, 3, 0);
+	lv_obj_align_to(*title, *group, LV_ALIGN_OUT_TOP_LEFT, 10, 10);
+	lv_obj_add_flag(*title, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+	// Create H, M, S labels
+	// Hours
+	*hours_label = lv_label_create(*group);
+	lv_label_set_text(*hours_label, "0");
+	lv_obj_set_style_text_color(*hours_label, DEFAULT_VALUE_TEXT_COLOR, 0);
+	lv_obj_set_style_text_font(*hours_label, &lv_font_noplato_24, 0);
+	lv_obj_add_flag(*hours_label, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_flag(*hours_label, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+	*hours_letter = lv_label_create(*group);
+	lv_label_set_text(*hours_letter, "H");
+	lv_obj_set_style_text_color(*hours_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
+	lv_obj_set_style_text_font(*hours_letter, &lv_font_montserrat_16, 0);
+	lv_obj_set_style_translate_x(*hours_letter, -8, 0);
+	lv_obj_set_style_translate_y(*hours_letter, -1, 0);
+	lv_obj_add_flag(*hours_letter, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_flag(*hours_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+	// Minutes
+	*minutes_label = lv_label_create(*group);
+	lv_label_set_text(*minutes_label, "0");
+	lv_obj_set_style_text_color(*minutes_label, DEFAULT_VALUE_TEXT_COLOR, 0);
+	lv_obj_set_style_text_font(*minutes_label, &lv_font_noplato_24, 0);
+	lv_obj_add_flag(*minutes_label, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_flag(*minutes_label, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+	*minutes_letter = lv_label_create(*group);
+	lv_label_set_text(*minutes_letter, "M");
+	lv_obj_set_style_text_color(*minutes_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
+	lv_obj_set_style_text_font(*minutes_letter, &lv_font_montserrat_16, 0);
+	lv_obj_set_style_translate_x(*minutes_letter, -8, 0);
+	lv_obj_set_style_translate_y(*minutes_letter, -1, 0);
+	lv_obj_add_flag(*minutes_letter, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_flag(*minutes_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+	// Seconds
+	*seconds_label = lv_label_create(*group);
+	lv_label_set_text(*seconds_label, is_current_view ? "30" : "30");
+	lv_obj_set_style_text_color(*seconds_label, DEFAULT_VALUE_TEXT_COLOR, 0);
+	lv_obj_set_style_text_font(*seconds_label, &lv_font_noplato_24, 0);
+	lv_obj_add_flag(*seconds_label, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_flag(*seconds_label, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+	*seconds_letter = lv_label_create(*group);
+	lv_label_set_text(*seconds_letter, "S");
+	lv_obj_set_style_text_color(*seconds_letter, DEFAULT_VALUE_TEXT_COLOR, 0);
+	lv_obj_set_style_text_font(*seconds_letter, &lv_font_montserrat_16, 0);
+	lv_obj_set_style_translate_x(*seconds_letter, -8, 0);
+	lv_obj_set_style_translate_y(*seconds_letter, -1, 0);
+	lv_obj_add_flag(*seconds_letter, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_flag(*seconds_letter, LV_OBJ_FLAG_EVENT_BUBBLE);
 }
 
 // Create timeline option button for a specific gauge - flat data structure like alerts_modal
@@ -662,6 +628,8 @@ static void update_timeline_display(timeline_modal_t* modal, int gauge, bool is_
 	char seconds_text[8];
 	snprintf(seconds_text, sizeof(seconds_text), "%d", seconds);
 	lv_label_set_text(seconds_label, seconds_text);
+	// Restore the correct font for seconds (same as hours and minutes)
+	lv_obj_set_style_text_font(seconds_label, &lv_font_noplato_24, 0);
 	lv_obj_clear_flag(seconds_label, LV_OBJ_FLAG_HIDDEN);
 	lv_obj_clear_flag(seconds_letter, LV_OBJ_FLAG_HIDDEN);
 

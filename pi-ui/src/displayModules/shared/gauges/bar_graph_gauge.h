@@ -78,12 +78,16 @@ typedef struct {
 	bool range_values_changed; // Flag to track when min/max/baseline values change
 	uint32_t canvas_padding;
 	// Cached performance values
-	lv_color_t cached_bar_color;
+	lv_color_t bar_color;
 	int cached_draw_width;
 	int cached_draw_height;
 	// Cached range for performance (constant for non-auto-scaling)
 	float cached_range;
 	uint32_t last_invalidate_time; // Last time widget was invalidated (for rate limiting)
+
+	// Data averaging during interval periods
+	double accumulated_value; // Sum of values during current interval (double for precision)
+	uint32_t sample_count;    // Number of samples during current interval (unsigned for safety)
 
 } bar_graph_gauge_t;
 
@@ -111,7 +115,7 @@ void bar_graph_gauge_configure_advanced(
 	const char *title,
 	const char *unit,
 	const char *y_axis_unit,
-	uint32_t color,
+	lv_color_t color,
 	bool show_title,
 	bool show_y_axis,
 	bool show_border);

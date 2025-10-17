@@ -52,7 +52,7 @@ void bar_graph_gauge_init(
 	gauge->range_values_changed = true; // Initial values need label update
 	gauge->canvas_padding = gauge->show_y_axis ? 20 : 0; // Y-axis labels container is 20px wide for canvas calculation
 
-	gauge->cached_bar_color = lv_color_hex(0x00FF00); // Normal green color
+	gauge->bar_color = PALETTE_WHITE; // Default to WHITE
 	gauge->max_data_points = (gauge->width - gauge->canvas_padding) / (gauge->bar_width + gauge->bar_gap);
 
 	if (gauge->max_data_points < 5) gauge->max_data_points = 5;
@@ -417,8 +417,23 @@ void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, float value)
 	// Check if enough time has passed to add a new data point
 	if (data_interval_ms > 0 &&
 		(current_time - gauge->last_data_time) < data_interval_ms) {
-		// Not enough time has passed, skip this data point
+		// Not enough time has passed, accumulate this value for averaging
+		gauge->accumulated_value += value;
+		gauge->sample_count++;
 		return;
+	}
+
+	// Time interval has passed, calculate average if we have accumulated samples
+	float final_value = value;
+	if (gauge->sample_count > 0) {
+		// Calculate average of accumulated values plus current value
+		// Use double precision for calculation, then convert to float
+		double average = (gauge->accumulated_value + (double)value) / (gauge->sample_count + 1);
+		final_value = (float)average;
+
+		// Reset accumulation for next interval
+		gauge->accumulated_value = 0.0;
+		gauge->sample_count = 0;
 	}
 
 	// Update last data time
@@ -433,8 +448,8 @@ void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, float value)
 		gauge->head = (gauge->head + 1) % gauge->max_data_points;
 	}
 
-	// Store new data at the new head position
-	gauge->data_points[gauge->head] = value;
+	// Store averaged data at the new head position
+	gauge->data_points[gauge->head] = final_value;
 
 	// Mark that data was added
 	gauge->data_added = true;
@@ -512,7 +527,7 @@ void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 	int top_y = 2; // Match L shape top line
 	int bottom_y = gauge->cached_draw_height - 5; // Match L shape bottom line
 	int h = bottom_y - top_y + 1; // Effective drawing height between L shape lines
-	int bar_spacing = gauge->bar_width + gauge->bar_gap;
+	int bar_spacing = (gauge->bar_width + gauge->bar_gap);
 
 	// Calculate how many bars actually fit in the canvas width
 	int max_bars_that_fit = canvas_width / (gauge->bar_width + gauge->bar_gap);
@@ -553,14 +568,19 @@ void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 
 	int baseline_y;
 	float scale;
+	float scale_min = 1.0f;
+	float scale_max = 1.0f;
 
 	if (gauge->mode == BAR_GRAPH_MODE_BIPOLAR) {
 		float dist_min = gauge->baseline_value - gauge->init_min_value;
 		float dist_max = gauge->init_max_value - gauge->baseline_value;
-		float max_dist = (dist_min > dist_max) ? dist_min : dist_max;
-		if (max_dist <= 0) max_dist = 1;
-		scale = (float)(h - 2) / (2.0f * max_dist);
-		baseline_y = h - 1 - (int)((gauge->baseline_value - gauge->init_min_value) * scale);
+
+		// Use the actual range for each direction, not the maximum distance
+		// This ensures proper scaling for both above and below baseline
+		scale_min = (dist_min > 0) ? (float)(h - 2) / (2.0f * dist_min) : 1.0f;
+		scale_max = (dist_max > 0) ? (float)(h - 2) / (2.0f * dist_max) : 1.0f;
+
+		baseline_y = h / 2; // Center the baseline in the middle of the drawing area
 	} else {
 		float range = gauge->init_max_value - gauge->init_min_value;
 		scale = (float)(h - 2) / range;
@@ -577,13 +597,13 @@ void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 	} else {
 		// Bipolar: bars centered on baseline
 		if (val >= gauge->baseline_value) {
-
-			int bar_height = (int)((val - gauge->baseline_value) * scale);
+			// Use scale_max for values above baseline
+			int bar_height = (int)((val - gauge->baseline_value) * scale_max);
 			y1 = baseline_y - bar_height;
 			y2 = baseline_y;
 		} else {
-
-			int bar_height = (int)((gauge->baseline_value - val) * scale);
+			// Use scale_min for values below baseline
+			int bar_height = (int)((gauge->baseline_value - val) * scale_min);
 			y1 = baseline_y;
 			y2 = baseline_y + bar_height;
 		}
@@ -591,7 +611,7 @@ void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 
 	lv_draw_rect_dsc_t rect_dsc;
 	lv_draw_rect_dsc_init(&rect_dsc);
-	rect_dsc.bg_color = gauge->cached_bar_color;
+	rect_dsc.bg_color = gauge->bar_color;
 	rect_dsc.bg_opa = LV_OPA_COVER;
 
 	// Draw new bar at rightmost position within bar area
@@ -609,107 +629,107 @@ void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 	lv_canvas_finish_layer(gauge->canvas, &layer);
 }
 
-// Redraw entire canvas from buffer, right-aligning the latest head
-void bar_graph_gauge_redraw_full(bar_graph_gauge_t *gauge)
-{
-	if (!gauge || !gauge->initialized || !gauge->data_points) return;
+// // Redraw entire canvas from buffer, right-aligning the latest head
+// void bar_graph_gauge_redraw_full(bar_graph_gauge_t *gauge)
+// {
+// 	if (!gauge || !gauge->initialized || !gauge->data_points) return;
 
-	int canvas_width = gauge->cached_draw_width;
-	// Adjust drawing area to match L shape boundaries
-	int top_y = 2; // Match L shape top line
-	int bottom_y = gauge->cached_draw_height - 5; // Match L shape bottom line
-	int h = bottom_y - top_y + 1; // Effective drawing height between L shape lines
-	int bar_spacing = gauge->bar_width + gauge->bar_gap;
-	int max_bars_that_fit = canvas_width / (gauge->bar_width + gauge->bar_gap);
-	int count = (gauge->max_data_points < max_bars_that_fit) ? gauge->max_data_points : max_bars_that_fit;
-	int bar_area_width = canvas_width; // Use full canvas width for bar area
+// 	int canvas_width = gauge->cached_draw_width;
+// 	// Adjust drawing area to match L shape boundaries
+// 	int top_y = 2; // Match L shape top line
+// 	int bottom_y = gauge->cached_draw_height - 5; // Match L shape bottom line
+// 	int h = bottom_y - top_y + 1; // Effective drawing height between L shape lines
+// 	int bar_spacing = gauge->bar_width + gauge->bar_gap;
+// 	int max_bars_that_fit = canvas_width / (gauge->bar_width + gauge->bar_gap);
+// 	int count = (gauge->max_data_points < max_bars_that_fit) ? gauge->max_data_points : max_bars_that_fit;
+// 	int bar_area_width = canvas_width; // Use full canvas width for bar area
 
-	// Clear canvas (only the drawing area between L shape lines)
-	for (int row = 0; row < h; row++) {
+// 	// Clear canvas (only the drawing area between L shape lines)
+// 	for (int row = 0; row < h; row++) {
 
-		int actual_row = top_y + row; // Offset to match L shape boundaries
+// 		int actual_row = top_y + row; // Offset to match L shape boundaries
 
-		for (int col = 0; col < canvas_width; col++) {
+// 		for (int col = 0; col < canvas_width; col++) {
 
-			gauge->canvas_buffer[actual_row * canvas_width + col] = PALETTE_BLACK;
-		}
-	}
+// 			gauge->canvas_buffer[actual_row * canvas_width + col] = PALETTE_BLACK;
+// 		}
+// 	}
 
-	// Precompute scale
-	float scale;
-	int baseline_y;
+// 	// Precompute scale
+// 	float scale;
+// 	int baseline_y;
 
-	if (gauge->mode == BAR_GRAPH_MODE_BIPOLAR) {
+// 	if (gauge->mode == BAR_GRAPH_MODE_BIPOLAR) {
 
-		float dist_min = gauge->baseline_value - gauge->init_min_value;
-		float dist_max = gauge->init_max_value - gauge->baseline_value;
-		float max_dist = (dist_min > dist_max) ? dist_min : dist_max;
+// 		float dist_min = gauge->baseline_value - gauge->init_min_value;
+// 		float dist_max = gauge->init_max_value - gauge->baseline_value;
+// 		float max_dist = (dist_min > dist_max) ? dist_min : dist_max;
 
-		if (max_dist <= 0) max_dist = 1;
-		scale = (float)(h - 2) / (2.0f * max_dist);
-		baseline_y = h - 1 - (int)((gauge->baseline_value - gauge->init_min_value) * scale);
-	} else {
+// 		if (max_dist <= 0) max_dist = 1;
+// 		scale = (float)(h - 2) / (2.0f * max_dist);
+// 		baseline_y = h - 1 - (int)((gauge->baseline_value - gauge->init_min_value) * scale);
+// 	} else {
 
-		scale = (float)(h - 2) / (gauge->init_max_value - gauge->init_min_value);
-		baseline_y = h - 1;
-	}
+// 		scale = (float)(h - 2) / (gauge->init_max_value - gauge->init_min_value);
+// 		baseline_y = h - 1;
+// 	}
 
-	lv_draw_rect_dsc_t rect_dsc;
-	lv_draw_rect_dsc_init(&rect_dsc);
-	rect_dsc.bg_color = gauge->cached_bar_color;
-	rect_dsc.bg_opa = LV_OPA_COVER;
+// 	lv_draw_rect_dsc_t rect_dsc;
+// 	lv_draw_rect_dsc_init(&rect_dsc);
+// 	rect_dsc.bg_color = gauge->bar_color;
+// 	rect_dsc.bg_opa = LV_OPA_COVER;
 
-	// Draw bars from oldest to newest into the right-aligned area
-	int x = bar_area_width - bar_spacing;
-	int index = gauge->head;
+// 	// Draw bars from oldest to newest into the right-aligned area
+// 	int x = bar_area_width - bar_spacing;
+// 	int index = gauge->head;
 
-	for (int i = 0; i < count; i++) {
+// 	for (int i = 0; i < count; i++) {
 
-		// walk backward through data points
-		float val = gauge->data_points[index];
-		if (val < gauge->init_min_value) val = gauge->init_min_value;
-		if (val > gauge->init_max_value) val = gauge->init_max_value;
+// 		// walk backward through data points
+// 		float val = gauge->data_points[index];
+// 		if (val < gauge->init_min_value) val = gauge->init_min_value;
+// 		if (val > gauge->init_max_value) val = gauge->init_max_value;
 
-		int y1, y2;
+// 		int y1, y2;
 
-		if (gauge->mode == BAR_GRAPH_MODE_POSITIVE_ONLY) {
+// 		if (gauge->mode == BAR_GRAPH_MODE_POSITIVE_ONLY) {
 
-			int bar_height = (int)((val - gauge->init_min_value) * scale);
-			y1 = h - bar_height;
-			y2 = h;
-		} else {
+// 			int bar_height = (int)((val - gauge->init_min_value) * scale);
+// 			y1 = h - bar_height;
+// 			y2 = h;
+// 		} else {
 
-			if (val >= gauge->baseline_value) {
+// 			if (val >= gauge->baseline_value) {
 
-				int bar_height = (int)((val - gauge->baseline_value) * scale);
-				y1 = baseline_y - bar_height;
-				y2 = baseline_y;
-			} else {
+// 				int bar_height = (int)((val - gauge->baseline_value) * scale);
+// 				y1 = baseline_y - bar_height;
+// 				y2 = baseline_y;
+// 			} else {
 
-				int bar_height = (int)((gauge->baseline_value - val) * scale);
-				y1 = baseline_y;
-				y2 = baseline_y + bar_height;
-			}
-		}
+// 				int bar_height = (int)((gauge->baseline_value - val) * scale);
+// 				y1 = baseline_y;
+// 				y2 = baseline_y + bar_height;
+// 			}
+// 		}
 
-		// Create area for rectangle (adjust coordinates for L shape offset)
-		lv_area_t rect_area;
-		rect_area.x1 = x;
-		rect_area.y1 = top_y + y1; // Offset to match L shape boundaries
-		rect_area.x2 = x + gauge->bar_width - 1;
-		rect_area.y2 = top_y + y2 - 1; // Offset to match L shape boundaries
+// 		// Create area for rectangle (adjust coordinates for L shape offset)
+// 		lv_area_t rect_area;
+// 		rect_area.x1 = x;
+// 		rect_area.y1 = top_y + y1; // Offset to match L shape boundaries
+// 		rect_area.x2 = x + gauge->bar_width - 1;
+// 		rect_area.y2 = top_y + y2 - 1; // Offset to match L shape boundaries
 
-		// Initialize canvas layer and draw rectangle
-		lv_layer_t layer;
-		lv_canvas_init_layer(gauge->canvas, &layer);
-		lv_draw_rect(&layer, &rect_dsc, &rect_area);
-		lv_canvas_finish_layer(gauge->canvas, &layer);
-		x -= bar_spacing;
+// 		// Initialize canvas layer and draw rectangle
+// 		lv_layer_t layer;
+// 		lv_canvas_init_layer(gauge->canvas, &layer);
+// 		lv_draw_rect(&layer, &rect_dsc, &rect_area);
+// 		lv_canvas_finish_layer(gauge->canvas, &layer);
+// 		x -= bar_spacing;
 
-		if (--index < 0) index = gauge->max_data_points - 1;
-		if (x < 0) break;
-	}
-}
+// 		if (--index < 0) index = gauge->max_data_points - 1;
+// 		if (x < 0) break;
+// 	}
+// }
 
 void bar_graph_gauge_cleanup(bar_graph_gauge_t *gauge)
 {
@@ -785,7 +805,7 @@ void bar_graph_gauge_configure_advanced(
 	const char *title,
 	const char *unit,
 	const char *y_axis_unit,
-	uint32_t color,
+	lv_color_t color,
 	bool show_title,
 	bool show_y_axis,
 	bool show_border
@@ -811,16 +831,10 @@ void bar_graph_gauge_configure_advanced(
 	gauge->show_title = show_title;
 	gauge->show_y_axis = show_y_axis;
 	gauge->show_border = show_border;
-
-	// Store color for drawing and cache the LVGL color
-	gauge->color = color;
-	// Convert to 16-bit color for better performance
-	gauge->cached_bar_color = lv_color_hex(color);
+	gauge->bar_color = color;
 
 	// Cache the range for performance
 	gauge->cached_range = gauge->max_value - gauge->min_value;
-
-	// Y-axis labels will be updated when range values change
 
 	// Update title with unit
 	if (title && gauge->title_label) {
