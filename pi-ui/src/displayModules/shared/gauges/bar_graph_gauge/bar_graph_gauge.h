@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// Use void* to avoid circular dependency
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -53,17 +55,17 @@ typedef struct {
 	int bar_gap;
 
 	// Update control
-	uint32_t update_interval_ms;
 	uint32_t last_data_time;
 
 	// Timeline control
 	uint32_t timeline_duration_ms;  // How long it takes for data to move across the gauge
 
-	// Data
-	int head;
-	int max_data_points; // Maximum number of data points to store
-	float *data_points;
-	int actual_bars_to_draw; // Number of bars that actually fit in the canvas
+	// Data - reference to external history (not owned by gauge)
+	int history_type;  // power_monitor_gauge_type_t or -1 if not using persistent history
+	int last_rendered_head;  // Last head position from ring buffer that we rendered
+	uint32_t last_render_time_ms;  // Last time we rendered (for throttling)
+	uint32_t last_update_ms;  // Last time we updated (for cutover logic)
+	bool just_seeded;  // Flag: we just seeded, catchup on first add_data_point
 	bool initialized;
 	float min_value;
 	float max_value;
@@ -89,6 +91,33 @@ typedef struct {
 	double accumulated_value; // Sum of values during current interval (double for precision)
 	uint32_t sample_count;    // Number of samples during current interval (unsigned for safety)
 
+	// Smooth scrolling state
+	int scroll_offset_px;       // 0..(bar_width + bar_gap - 1)
+	float prev_value;           // last committed value
+	float next_value;           // upcoming value for current bar
+	uint32_t last_tick_ms;      // last smooth tick timestamp
+	float pixels_per_second;    // derived from timeline duration
+	float pixel_accumulator;    // subpixel accumulator for smooth advance
+	lv_timer_t *smooth_timer;   // 60Hz timer driving 1px shifts
+	// Discrete animation per data point
+	uint32_t animation_duration_ms; // how long one shift (bar_spacing) should take
+	uint32_t animation_cutover_ms; // if data interval <= this, skip smooth and jump
+	uint32_t anim_start_ms;
+	uint32_t anim_end_ms;
+	int anim_pixels_moved;      // number of pixels shifted in current animation
+	bool animating;
+	float anim_px_accum;        // fractional pixel accumulator for discrete animation
+	float anim_progress;        // 0..1 progress across current animation window
+	// Per-bar cached draw value to keep uniform height across bar width
+	bool bar_draw_value_valid;
+	float bar_draw_value;
+	// Immediate jump state for cutover
+	bool cutover_jump_active;
+
+	// Pending new sample buffering (to apply after shift completes)
+	bool has_pending_sample;
+	float pending_value;
+
 } bar_graph_gauge_t;
 
 // Core functions
@@ -97,15 +126,18 @@ void bar_graph_gauge_init(
 	int x, int y, int width, int height,
 	int bar_width, int bar_gap);
 
-void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, float value);
-// Background feed: update data buffer without triggering canvas draw
-void bar_graph_gauge_push_data(bar_graph_gauge_t *gauge, float value);
-// Draw canvas from current data buffer (no shifting), right-aligned
-void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge);
+// Set which persistent history this gauge should render from
+void bar_graph_gauge_set_history_type(bar_graph_gauge_t *gauge, int history_type);
+
+void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, void* gauge_data_history);
+
+void bar_graph_gauge_draw_all_data(bar_graph_gauge_t *gauge, void* gauge_data_history);
+void bar_graph_gauge_draw_all_data_snapshot(bar_graph_gauge_t *gauge, int snapshot_head, void* gauge_data_history_ptr);
 
 void bar_graph_gauge_cleanup(bar_graph_gauge_t *gauge);
-void bar_graph_gauge_set_update_interval(bar_graph_gauge_t *gauge, uint32_t interval_ms);
 void bar_graph_gauge_set_timeline_duration(bar_graph_gauge_t *gauge, uint32_t duration_ms);
+// Set per-sample animation duration (ms) for smooth shift; 0 = immediate shift
+void bar_graph_gauge_set_animation_duration(bar_graph_gauge_t *gauge, uint32_t duration_ms);
 void bar_graph_gauge_configure_advanced(
 	bar_graph_gauge_t *gauge,
 	bar_graph_mode_t mode,
@@ -120,6 +152,9 @@ void bar_graph_gauge_configure_advanced(
 	bool show_y_axis,
 	bool show_border);
 void bar_graph_gauge_update_labels_and_ticks(bar_graph_gauge_t *gauge);
+
+// Force complete current animation (useful for interrupting smooth animations)
+void bar_graph_gauge_force_complete_animation(bar_graph_gauge_t *gauge);
 
 #ifdef __cplusplus
 }

@@ -1,13 +1,224 @@
 #include <stdio.h>
 #include "bar_graph_gauge.h"
-#include "../palette.h"
+#include "../../palette.h"
+#include "../../../../app_data_store.h"
 
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <time.h>
 
 static const char *TAG = "bar_graph_gauge";
+
+// Forward declaration
+static void bar_graph_gauge_shift_one_px(bar_graph_gauge_t *gauge);
+
+// Force complete current animation by fast-forwarding to end state
+void bar_graph_gauge_force_complete_animation(bar_graph_gauge_t *gauge)
+{
+	if (!gauge || !gauge->animating) return;
+
+	// Calculate how many pixels we need to advance to complete the animation
+	int bar_spacing = gauge->bar_width + gauge->bar_gap;
+	int remaining_px = bar_spacing - gauge->scroll_offset_px;
+
+	if (remaining_px > 0) {
+		// Fast-forward by completing all remaining pixel shifts
+		for (int step = 0; step < remaining_px; step++) {
+			bar_graph_gauge_shift_one_px(gauge);
+		}
+	}
+
+	// Complete the animation state
+	gauge->animating = false;
+	gauge->has_pending_sample = false;
+	gauge->anim_progress = 1.0f;
+	gauge->bar_draw_value_valid = false;
+
+	// Update last_rendered_head to reflect the completed animation
+	if (gauge->history_type >= 0) {
+		app_data_store_t* store = app_data_store_get();
+		if (store && gauge->history_type < POWER_MONITOR_GAUGE_COUNT) {
+			persistent_gauge_history_t* gauge_data_history = &store->power_monitor_gauge_histories[gauge->history_type];
+			gauge->last_rendered_head = gauge_data_history->head;
+		}
+	}
+}
+
+static void bar_graph_gauge_shift_one_px(bar_graph_gauge_t *gauge)
+{
+	int canvas_width = gauge->cached_draw_width;
+	int top_y = 2;
+	int bottom_y = gauge->cached_draw_height - 5;
+	int h = bottom_y - top_y + 1;
+	int bar_area_width = canvas_width;
+
+	// shift left by 1 pixel across visible rows
+	for (int row = 0; row < h; row++) {
+		int actual_row = top_y + row;
+		memmove(
+			&gauge->canvas_buffer[actual_row * canvas_width],
+			&gauge->canvas_buffer[actual_row * canvas_width + 1],
+			(bar_area_width - 1) * sizeof(lv_color_t)
+		);
+		// Clear rightmost pixel
+		gauge->canvas_buffer[actual_row * canvas_width + (bar_area_width - 1)] = PALETTE_BLACK;
+	}
+
+	// Debug: show current scroll state before drawing
+	// logging removed
+
+	// Draw rightmost column using time-based easing per bar: constant height for all columns in this bar
+	int x = bar_area_width - 1; // rightmost column index
+	int bar_start = gauge->bar_gap;
+	int bar_end = gauge->bar_gap + gauge->bar_width; // exclusive
+	if (gauge->scroll_offset_px >= bar_start && gauge->scroll_offset_px < bar_end) {
+		// First column of this bar span: compute and cache a uniform value from time-based easing
+		if (!gauge->bar_draw_value_valid || gauge->scroll_offset_px == bar_start) {
+			float t_time = gauge->anim_progress;
+			if (t_time < 0.0f) t_time = 0.0f; if (t_time > 1.0f) t_time = 1.0f;
+			float v = gauge->prev_value + (gauge->next_value - gauge->prev_value) * t_time;
+			// Clamp
+			if (v < gauge->init_min_value) v = gauge->init_min_value;
+			if (v > gauge->init_max_value) v = gauge->init_max_value;
+			gauge->bar_draw_value = v;
+			gauge->bar_draw_value_valid = true;
+			// logging removed
+		}
+
+		float val = gauge->bar_draw_value;
+
+		// Clamp to visible range
+		if (val < gauge->init_min_value) val = gauge->init_min_value;
+		if (val > gauge->init_max_value) val = gauge->init_max_value;
+
+		int baseline_y;
+		float scale = 1.0f;
+		float scale_min = 1.0f, scale_max = 1.0f;
+		if (gauge->mode == BAR_GRAPH_MODE_BIPOLAR) {
+			float dist_min = gauge->baseline_value - gauge->init_min_value;
+			float dist_max = gauge->init_max_value - gauge->baseline_value;
+			scale_min = (dist_min > 0) ? (float)(h - 2) / (2.0f * dist_min) : 1.0f;
+			scale_max = (dist_max > 0) ? (float)(h - 2) / (2.0f * dist_max) : 1.0f;
+			baseline_y = h / 2;
+		} else {
+			float range = gauge->init_max_value - gauge->init_min_value;
+			scale = (float)(h - 2) / (range > 0 ? range : 1.0f);
+			baseline_y = h - 1;
+		}
+
+		int y1, y2;
+		if (gauge->mode == BAR_GRAPH_MODE_POSITIVE_ONLY) {
+			int bar_height = (int)((val - gauge->init_min_value) * scale);
+			y1 = h - bar_height;
+			y2 = h;
+		} else {
+			if (val >= gauge->baseline_value) {
+				int bar_height = (int)((val - gauge->baseline_value) * scale_max);
+				y1 = baseline_y - bar_height;
+				y2 = baseline_y;
+			} else {
+				int bar_height = (int)((gauge->baseline_value - val) * scale_min);
+				y1 = baseline_y;
+				y2 = baseline_y + bar_height;
+			}
+		}
+
+		// Detailed diagnostics for skewed height investigation
+		// logging removed
+
+		int y_start = top_y + y1;
+		int y_end = top_y + y2;
+		if (y_start < top_y) y_start = top_y;
+		if (y_end > top_y + h) y_end = top_y + h;
+		// logging removed
+		for (int yy = y_start; yy < y_end; yy++) {
+			gauge->canvas_buffer[yy * canvas_width + x] = gauge->bar_color;
+		}
+		// If we just drew the last column of the bar span, clear cache for next bar
+		if (gauge->scroll_offset_px + 1 >= bar_end) {
+			gauge->bar_draw_value_valid = false;
+		}
+	}
+
+	gauge->scroll_offset_px++;
+}
+static void bar_graph_gauge_tick_cb(lv_timer_t *timer)
+{
+	bar_graph_gauge_t *gauge = (bar_graph_gauge_t*)lv_timer_get_user_data(timer);
+	if (!gauge || !gauge->initialized) return;
+
+	// Safety: ensure LVGL objects and buffers are valid before any canvas ops
+	if (!gauge->container || !lv_obj_is_valid(gauge->container) ||
+		!gauge->canvas_container || !lv_obj_is_valid(gauge->canvas_container) ||
+		!gauge->canvas || !lv_obj_is_valid(gauge->canvas) ||
+		!gauge->canvas_buffer) {
+		if (gauge->smooth_timer) {
+			lv_timer_del(gauge->smooth_timer);
+			gauge->smooth_timer = NULL;
+		}
+		gauge->animating = false;
+		return;
+	}
+
+	// Discrete animation mode: advance proportional to elapsed time in this animation
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	uint32_t now_ms = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+	uint32_t elapsed_ms = (gauge->last_tick_ms == 0) ? 0 : (now_ms - gauge->last_tick_ms);
+	gauge->last_tick_ms = now_ms;
+
+	if (!gauge->animating || gauge->animation_duration_ms == 0) {
+		return;
+	}
+
+	int bar_spacing = gauge->bar_width + gauge->bar_gap;
+	uint32_t anim_total = gauge->animation_duration_ms;
+	uint32_t anim_elapsed = (now_ms > gauge->anim_start_ms) ? (now_ms - gauge->anim_start_ms) : 0;
+	if (anim_elapsed > anim_total) anim_elapsed = anim_total;
+
+	// Accumulate fractional pixel progress based on time slice
+	float step_px = ((float)bar_spacing) * ((float)elapsed_ms / (float)anim_total);
+	gauge->anim_px_accum += step_px;
+	int advance_px = (int)gauge->anim_px_accum;
+	if (advance_px <= 0) {
+		// logging removed
+		return;
+	}
+	gauge->anim_px_accum -= (float)advance_px;
+
+	// Do not attempt to move past the end of this animation
+	int remaining_px = bar_spacing - gauge->scroll_offset_px;
+	if (remaining_px <= 0) {
+		// finalize below
+		advance_px = 0;
+	} else if (advance_px > remaining_px) {
+		advance_px = remaining_px;
+	}
+
+	// logging removed
+
+	for (int step = 0; step < advance_px; step++) {
+		if (gauge->scroll_offset_px >= bar_spacing) break; // safety
+		bar_graph_gauge_shift_one_px(gauge);
+		gauge->anim_pixels_moved++;
+	}
+
+	if (gauge->scroll_offset_px >= bar_spacing) {
+		gauge->animating = false;
+		gauge->has_pending_sample = false;
+
+		// Update last_rendered_head to reflect the new data
+		if (gauge->history_type >= 0) {
+			app_data_store_t* store = app_data_store_get();
+		if (store && gauge->history_type < POWER_MONITOR_GAUGE_COUNT) {
+			persistent_gauge_history_t* gauge_data_history = &store->power_monitor_gauge_histories[gauge->history_type];
+			gauge->last_rendered_head = gauge_data_history->head;
+		}
+		}
+	}
+}
 
 void bar_graph_gauge_init(
 	bar_graph_gauge_t *gauge,
@@ -40,7 +251,6 @@ void bar_graph_gauge_init(
 	gauge->show_title = true; // Default to true, can be overridden by configure_advanced
 	gauge->show_y_axis = true; // Enable Y-axis by default for detail screen gauges
 	gauge->show_border = false; // Default to no border, can be overridden by configure_advanced
-	gauge->update_interval_ms = 0; // No rate limiting
 	gauge->timeline_duration_ms = 1000; // Default one second timeline
 	gauge->data_added = false; // No data added yet
 	gauge->bar_width = bar_width;
@@ -53,16 +263,36 @@ void bar_graph_gauge_init(
 	gauge->canvas_padding = gauge->show_y_axis ? 20 : 0; // Y-axis labels container is 20px wide for canvas calculation
 
 	gauge->bar_color = PALETTE_WHITE; // Default to WHITE
-	gauge->max_data_points = (gauge->width - gauge->canvas_padding) / (gauge->bar_width + gauge->bar_gap);
 
-	if (gauge->max_data_points < 5) gauge->max_data_points = 5;
-	if (gauge->max_data_points > 200) gauge->max_data_points = 200;
+	// No local data storage - gauge renders from persistent history
+	gauge->history_type = -1;  // Not linked to any history by default
+	gauge->last_rendered_head = -1;  // Haven't rendered anything yet
+	gauge->last_render_time_ms = 0;  // No render yet
+	gauge->last_update_ms = 0;  // No update yet
+	gauge->just_seeded = false;  // Not seeded yet
 
-	// Data points calculated
-	gauge->data_points = malloc(gauge->max_data_points * sizeof(float));
-
-	memset(gauge->data_points, 0, gauge->max_data_points * sizeof(float));
-	gauge->head = -1;
+	// Smooth scrolling init
+	gauge->scroll_offset_px = 0;
+	gauge->prev_value = 0.0f;
+	gauge->next_value = 0.0f;
+	gauge->last_tick_ms = 0;
+	gauge->pixels_per_second = 0.0f; // set later from timeline
+	gauge->pixel_accumulator = 0.0f;
+	// Default to a modest animation so it works out-of-the-box
+	gauge->animation_duration_ms = 300;
+	gauge->animation_cutover_ms = 100; // if updates faster than 150ms, jump full bar
+	gauge->anim_start_ms = 0;
+	gauge->anim_end_ms = 0;
+	gauge->anim_pixels_moved = 0;
+	gauge->animating = false;
+	gauge->has_pending_sample = false;
+	gauge->pending_value = 0.0f;
+	gauge->anim_px_accum = 0.0f;
+	gauge->anim_progress = 0.0f;
+	gauge->bar_draw_value_valid = false;
+	gauge->bar_draw_value = 0.0f;
+	gauge->cutover_jump_active = false;
+	// Defer timer creation until end of successful init
 
 	// MAIN Gauge Container
 	gauge->container = lv_obj_create(parent);
@@ -391,83 +621,207 @@ void bar_graph_gauge_init(
 	}
 
 	gauge->initialized = true;
+
+	// Create animation timer only after successful initialization and valid buffers/objects
+	if (!gauge->smooth_timer) {
+		gauge->smooth_timer = lv_timer_create( bar_graph_gauge_tick_cb, 16, gauge ); // ~60Hz
+	}
 }
 
-void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, float value)
+// Set which persistent history this gauge should render from
+void bar_graph_gauge_set_history_type(bar_graph_gauge_t *gauge, int history_type)
 {
+	if (!gauge) return;
+	gauge->history_type = history_type;
+}
 
-	// Timeline control: only add data based on timeline duration
-	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	uint32_t current_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000; // Convert to milliseconds
+void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, void* gauge_data_history_ptr)
+{
+	// Safety check: don't access uninitialized gauge
+	if (!gauge || !gauge->initialized) return;
 
-	// Calculate how often to add data points based on timeline duration
-	// We need to add enough data points to fill the gauge over the timeline duration
-	int canvas_width = gauge->cached_draw_width;
-	int bar_spacing = gauge->bar_width + gauge->bar_gap;
-	int total_bars = canvas_width / bar_spacing;
-
-	uint32_t data_interval_ms = 0;
-
-	if (gauge->timeline_duration_ms > 0 && total_bars > 0) {
-		// Calculate how often to add a data point to fill the gauge over the timeline duration
-		data_interval_ms = gauge->timeline_duration_ms / total_bars;
-	}
-
-	// Check if enough time has passed to add a new data point
-	if (data_interval_ms > 0 &&
-		(current_time - gauge->last_data_time) < data_interval_ms) {
-		// Not enough time has passed, accumulate this value for averaging
-		gauge->accumulated_value += value;
-		gauge->sample_count++;
+	// Safety check: don't access null history
+	if (!gauge_data_history_ptr) {
+		printf("[W] bar_graph_gauge: add_data_point called with null history\n");
 		return;
 	}
 
-	// Time interval has passed, calculate average if we have accumulated samples
-	float final_value = value;
-	if (gauge->sample_count > 0) {
-		// Calculate average of accumulated values plus current value
-		// Use double precision for calculation, then convert to float
-		double average = (gauge->accumulated_value + (double)value) / (gauge->sample_count + 1);
-		final_value = (float)average;
+	// Cast to the actual type
+	persistent_gauge_history_t* gauge_data_history = (persistent_gauge_history_t*)gauge_data_history_ptr;
 
-		// Reset accumulation for next interval
-		gauge->accumulated_value = 0.0;
-		gauge->sample_count = 0;
-	}
 
-	// Update last data time
-	gauge->last_data_time = current_time;
-
-	// Advance head in circular buffer
-	if (gauge->head == -1) {
-
-		gauge->head = 0;  // first sample
+	// Calculate how many new samples based on head movement
+	int new_samples = 0;
+	if (gauge->last_rendered_head == -1) {
+		// First render - draw everything
+		new_samples = gauge_data_history->max_count;
 	} else {
-
-		gauge->head = (gauge->head + 1) % gauge->max_data_points;
+		// Calculate circular distance from last rendered head
+		new_samples = (gauge_data_history->head - gauge->last_rendered_head + gauge_data_history->max_count) % gauge_data_history->max_count;
 	}
 
-	// Store averaged data at the new head position
-	gauge->data_points[gauge->head] = final_value;
+	// First render: draw all historical data
+	if (gauge->last_rendered_head == -1) {
 
-	// Mark that data was added
-	gauge->data_added = true;
+		// last_rendered_head is set by draw_all_data
+		bar_graph_gauge_draw_all_data(gauge, gauge_data_history);
+		return;
+	}
 
-	// Use efficient incremental update instead of expensive full redraw
-	bar_graph_gauge_update_canvas(gauge);
-}
+	// Handle new samples with animation
+	if (new_samples > 0) {
 
-// Background feed: update FIFO and head without canvas draw
-void bar_graph_gauge_push_data(bar_graph_gauge_t *gauge, float value)
-{
-	if (!gauge || !gauge->initialized || !gauge->data_points ) return;
+		// If we're currently animating, fast-forward to completion before processing new data
+		if (gauge->animating) {
+			bar_graph_gauge_force_complete_animation(gauge);
+		}
 
-	// Advance head
-	gauge->head = (gauge->head + 1) % gauge->max_data_points;
-	gauge->data_points[gauge->head] = value;
-	// Mark data added but skip canvas ops
-	gauge->data_added = true;
+		// Get the latest value from history for animation
+		float latest_value = gauge_data_history->values[ gauge_data_history->head ];
+		if( latest_value < gauge->init_min_value) latest_value = gauge->init_min_value;
+		if( latest_value > gauge->init_max_value) latest_value = gauge->init_max_value;
+
+		// Store previous value for smooth transition
+		gauge->prev_value = gauge->next_value;
+		gauge->next_value = latest_value;
+
+		// Check if we should use cutover jump (immediate shift) or smooth animation
+		struct timespec ts;
+		clock_gettime(CLOCK_MONOTONIC, &ts);
+		uint32_t now_ms = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+		uint32_t since_last_ms = (gauge->last_update_ms == 0) ? 0 : (now_ms - gauge->last_update_ms);
+		gauge->last_update_ms = now_ms;
+
+		bool per_sample_cutover = (since_last_ms <= gauge->animation_cutover_ms);
+
+		if (per_sample_cutover || gauge->animation_duration_ms == 0) {
+
+			// Immediate shift - no animation
+			int bar_spacing = gauge->bar_width + gauge->bar_gap;
+			int canvas_width = gauge->cached_draw_width;
+			int top_y = 2;
+			int bottom_y = gauge->cached_draw_height - 5;
+			int h = bottom_y - top_y + 1;
+			int shift_amount = bar_spacing * new_samples;
+
+			// Shift canvas left
+			for (int row = 0; row < h; row++) {
+
+				int actual_row = top_y + row;
+
+				if (shift_amount < canvas_width) {
+
+					memmove(
+						&gauge->canvas_buffer[actual_row * canvas_width],
+						&gauge->canvas_buffer[actual_row * canvas_width + shift_amount],
+						(canvas_width - shift_amount) * sizeof(lv_color_t)
+					);
+
+					// Clear the rightmost area
+					memset(
+						&gauge->canvas_buffer[actual_row * canvas_width + (canvas_width - shift_amount)],
+						0,
+						shift_amount * sizeof(lv_color_t)
+					);
+				} else {
+
+					// Shift amount >= canvas width, just clear entire row
+					memset(&gauge->canvas_buffer[actual_row * canvas_width], 0, canvas_width * sizeof(lv_color_t));
+				}
+			}
+
+			// Draw the new bars on the right
+			for (int i = 0; i < new_samples; i++) {
+
+				int offset = new_samples - 1 - i;
+				int hist_index = (gauge_data_history->head - offset + gauge_data_history->max_count) % gauge_data_history->max_count;
+				float val = gauge_data_history->values[hist_index];
+				if (val < gauge->init_min_value) val = gauge->init_min_value;
+				if (val > gauge->init_max_value) val = gauge->init_max_value;
+
+				// Calculate bar position (from right edge)
+				int x_start = canvas_width - gauge->bar_width - (i * bar_spacing);
+				int x_end = x_start + gauge->bar_width;
+				if (x_start < 0 || x_start >= canvas_width) continue;
+				if (x_end > canvas_width) x_end = canvas_width;
+
+				// Calculate bar height
+				int baseline_y, y1, y2;
+				float scale, scale_min = 1.0f, scale_max = 1.0f;
+
+				if (gauge->mode == BAR_GRAPH_MODE_BIPOLAR) {
+
+					float dist_min = gauge->baseline_value - gauge->init_min_value;
+					float dist_max = gauge->init_max_value - gauge->baseline_value;
+					scale_min = (dist_min > 0) ? (float)(h - 2) / (2.0f * dist_min) : 1.0f;
+					scale_max = (dist_max > 0) ? (float)(h - 2) / (2.0f * dist_max) : 1.0f;
+					baseline_y = h / 2;
+				} else {
+
+					float range = gauge->init_max_value - gauge->init_min_value;
+					scale = (float)(h - 2) / (range > 0 ? range : 1.0f);
+					baseline_y = h - 1;
+				}
+
+				if (gauge->mode == BAR_GRAPH_MODE_POSITIVE_ONLY) {
+
+					int bar_height = (int)((val - gauge->init_min_value) * scale);
+					y1 = h - bar_height;
+					y2 = h;
+				} else {
+
+					if (val >= gauge->baseline_value) {
+
+						int bar_height = (int)((val - gauge->baseline_value) * scale_max);
+						y1 = baseline_y - bar_height;
+						y2 = baseline_y;
+					} else {
+
+						int bar_height = (int)((gauge->baseline_value - val) * scale_min);
+						y1 = baseline_y;
+						y2 = baseline_y + bar_height;
+					}
+				}
+
+				// Draw the bar
+				int y_start = top_y + y1;
+				int y_end = top_y + y2;
+				if (y_start < top_y) y_start = top_y;
+				if (y_end > top_y + h) y_end = top_y + h;
+				if (y_end > y_start) {
+
+					lv_color_t color = gauge->bar_color;
+
+					for (int yy = y_start; yy < y_end; yy++) {
+
+						lv_color_t *row_ptr = &gauge->canvas_buffer[yy * canvas_width];
+
+						for (int xx = x_start; xx < x_end; xx++) {
+
+							row_ptr[xx] = color;
+						}
+					}
+				}
+			}
+
+			gauge->last_rendered_head = gauge_data_history->head;
+			gauge->data_added = true;
+		} else {
+
+			// Start smooth animation
+			gauge->animating = true;
+			gauge->has_pending_sample = true;
+			gauge->pending_value = latest_value;
+			gauge->anim_start_ms = now_ms;
+			gauge->anim_end_ms = now_ms + gauge->animation_duration_ms;
+			gauge->scroll_offset_px = 0;
+			gauge->anim_px_accum = 0.0f;
+			gauge->anim_pixels_moved = 0;
+			gauge->bar_draw_value_valid = false;
+			gauge->anim_progress = 0.0f;
+		}
+	}
+
 }
 
 void bar_graph_gauge_update_labels_and_ticks(bar_graph_gauge_t *gauge)
@@ -518,10 +872,45 @@ void bar_graph_gauge_update_labels_and_ticks(bar_graph_gauge_t *gauge)
 	gauge->range_values_changed = false;
 }
 
-void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
+// Draw all historical data to canvas at once using provided head snapshot
+void bar_graph_gauge_draw_all_data_snapshot(bar_graph_gauge_t *gauge, int head_snapshot, void* gauge_data_history_ptr)
 {
+	if (!gauge || !gauge->initialized || !gauge->canvas_buffer) return;
 
-	// Use the actual canvas width for buffer operations (this matches the allocated buffer)
+	// Use the provided history
+	persistent_gauge_history_t* gauge_data_history = NULL;
+	if (gauge_data_history_ptr) {
+		gauge_data_history = (persistent_gauge_history_t*)gauge_data_history_ptr;
+	}
+
+	// If no persistent history available or no real data, nothing to draw
+	if (!gauge_data_history) {
+		// Clear canvas
+		int canvas_width = gauge->cached_draw_width;
+		int top_y = 2;
+		int bottom_y = gauge->cached_draw_height - 5;
+		int h = bottom_y - top_y + 1;
+		for (int row = 0; row < h; row++) {
+			int actual_row = top_y + row;
+			memset(&gauge->canvas_buffer[actual_row * canvas_width], 0, canvas_width * sizeof(lv_color_t));
+		}
+		return;
+	}
+
+	if (!gauge_data_history->has_real_data) {
+		// Clear canvas
+		int canvas_width = gauge->cached_draw_width;
+		int top_y = 2;
+		int bottom_y = gauge->cached_draw_height - 5;
+		int h = bottom_y - top_y + 1;
+		for (int row = 0; row < h; row++) {
+			int actual_row = top_y + row;
+			memset(&gauge->canvas_buffer[actual_row * canvas_width], 0, canvas_width * sizeof(lv_color_t));
+		}
+		return;
+	}
+
+	// Use the actual canvas width for buffer operations
 	int canvas_width = gauge->cached_draw_width;
 	// Adjust drawing area to match L shape boundaries
 	int top_y = 2; // Match L shape top line
@@ -530,42 +919,52 @@ void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 	int bar_spacing = (gauge->bar_width + gauge->bar_gap);
 
 	// Calculate how many bars actually fit in the canvas width
-	int max_bars_that_fit = canvas_width / (gauge->bar_width + gauge->bar_gap);
-	int actual_bars_to_draw = (gauge->max_data_points < max_bars_that_fit) ? gauge->max_data_points : max_bars_that_fit;
-
-	// Ensure we don't exceed canvas boundaries
-	if (actual_bars_to_draw * (gauge->bar_width + gauge->bar_gap) > canvas_width) {
-		actual_bars_to_draw = canvas_width / (gauge->bar_width + gauge->bar_gap);
-	}
-
-	int bar_area_width = canvas_width;
-
-	// Shift canvas left by bar_spacing pixels
-	for (int row = 0; row < h; row++) {
-
-		int actual_row = top_y + row; // Offset to match L shape boundaries
-		// Shift within the bar drawing area
-		memmove(
-			&gauge->canvas_buffer[actual_row * canvas_width], // dest (start at beginning of row)
-			&gauge->canvas_buffer[actual_row * canvas_width + bar_spacing], // src (start at bar_spacing offset)
-			(bar_area_width - bar_spacing) * sizeof(lv_color_t) // bytes (bar area width minus one bar)
-		);
-
-		// Clear the rightmost bar_spacing pixels in the bar drawing area
-		for (int col = bar_area_width - bar_spacing; col < bar_area_width; col++) {
-			gauge->canvas_buffer[actual_row * canvas_width + col] = PALETTE_BLACK;
+	int max_bars_that_fit = canvas_width / bar_spacing;
+	// Count how many real data points we have
+	int real_data_count = 0;
+	for (int i = 0; i < gauge_data_history->max_count; i++) {
+		if (!isnan(gauge_data_history->values[i])) {
+			real_data_count++;
 		}
 	}
+	// Only draw as many bars as we have real data for
+	int actual_bars_to_draw = (real_data_count < max_bars_that_fit) ? real_data_count : max_bars_that_fit;
 
-	// Canvas should auto-refresh after drawing operations
+	// Clear the entire canvas first
+	for (int row = 0; row < h; row++) {
+		int actual_row = top_y + row;
+		memset(&gauge->canvas_buffer[actual_row * canvas_width], 0, canvas_width * sizeof(lv_color_t));
+	}
 
-	// Draw the latest bar on the right
-	int index = gauge->head;
-	float val = gauge->data_points[ index ];
-	// Clamp value to the visible range (between L shape lines)
-	if (val < gauge->init_min_value) val = gauge->init_min_value;
-	if (val > gauge->init_max_value) val = gauge->init_max_value;
+	// Draw all bars from left to right (most recent data on the right)
+	// printf("[D] bar_graph_gauge: Drawing %d bars, head_snapshot=%d\n", actual_bars_to_draw, head_snapshot);
+	for (int bar_index = 0; bar_index < actual_bars_to_draw; bar_index++) {
+		// Calculate which history entry to use from ring buffer
+		// Walk backwards from SNAPSHOT head to get the most recent N bars
+		int offset = actual_bars_to_draw - 1 - bar_index;
+		int hist_index = (head_snapshot - offset + gauge_data_history->max_count) % gauge_data_history->max_count;
+		float val = gauge_data_history->values[hist_index];
 
+		// printf("[D] bar_graph_gauge: bar %d: hist_index=%d, val=%.2f\n", bar_index, hist_index, val);
+
+		// Skip drawing if value is NaN (empty/uninitialized)
+		if (isnan(val)) {
+			// printf("[D] bar_graph_gauge: Skipping bar %d - NaN value\n", bar_index);
+			continue;
+		}
+
+		// Clamp value to the visible range
+		if (val < gauge->init_min_value) val = gauge->init_min_value;
+		if (val > gauge->init_max_value) val = gauge->init_max_value;
+
+		// Calculate bar position (from right edge)
+		int x_start = canvas_width - gauge->bar_width - (bar_index * bar_spacing);
+		int x_end = x_start + gauge->bar_width;
+		if (x_start >= canvas_width) break; // Don't draw beyond canvas
+		if (x_end > canvas_width) x_end = canvas_width;
+
+
+		// Calculate bar height based on mode
 	int baseline_y;
 	float scale;
 	float scale_min = 1.0f;
@@ -574,162 +973,67 @@ void bar_graph_gauge_update_canvas(bar_graph_gauge_t *gauge)
 	if (gauge->mode == BAR_GRAPH_MODE_BIPOLAR) {
 		float dist_min = gauge->baseline_value - gauge->init_min_value;
 		float dist_max = gauge->init_max_value - gauge->baseline_value;
-
-		// Use the actual range for each direction, not the maximum distance
-		// This ensures proper scaling for both above and below baseline
 		scale_min = (dist_min > 0) ? (float)(h - 2) / (2.0f * dist_min) : 1.0f;
 		scale_max = (dist_max > 0) ? (float)(h - 2) / (2.0f * dist_max) : 1.0f;
-
-		baseline_y = h / 2; // Center the baseline in the middle of the drawing area
+			baseline_y = h / 2;
 	} else {
 		float range = gauge->init_max_value - gauge->init_min_value;
-		scale = (float)(h - 2) / range;
+			scale = (float)(h - 2) / (range > 0 ? range : 1.0f);
 		baseline_y = h - 1;
-		// Scale calculated
 	}
 
 	int y1, y2;
 	if (gauge->mode == BAR_GRAPH_MODE_POSITIVE_ONLY) {
-		// Positive only: bars go from min to max (bottom to top)
 		int bar_height = (int)((val - gauge->init_min_value) * scale);
 		y1 = h - bar_height;
 		y2 = h;
 	} else {
-		// Bipolar: bars centered on baseline
 		if (val >= gauge->baseline_value) {
-			// Use scale_max for values above baseline
 			int bar_height = (int)((val - gauge->baseline_value) * scale_max);
 			y1 = baseline_y - bar_height;
 			y2 = baseline_y;
 		} else {
-			// Use scale_min for values below baseline
 			int bar_height = (int)((gauge->baseline_value - val) * scale_min);
 			y1 = baseline_y;
 			y2 = baseline_y + bar_height;
 		}
 	}
 
-	lv_draw_rect_dsc_t rect_dsc;
-	lv_draw_rect_dsc_init(&rect_dsc);
-	rect_dsc.bg_color = gauge->bar_color;
-	rect_dsc.bg_opa = LV_OPA_COVER;
-
-	// Draw new bar at rightmost position within bar area
-	// Create area for rectangle (adjust coordinates for L shape offset)
-	lv_area_t rect_area;
-	rect_area.x1 = bar_area_width - bar_spacing;
-	rect_area.y1 = top_y + y1; // Offset to match L shape boundaries
-	rect_area.x2 = rect_area.x1 + gauge->bar_width - 1;
-	rect_area.y2 = top_y + y2 - 1; // Offset to match L shape boundaries
-
-	// Initialize canvas layer and draw rectangle
-	lv_layer_t layer;
-	lv_canvas_init_layer(gauge->canvas, &layer);
-	lv_draw_rect(&layer, &rect_dsc, &rect_area);
-	lv_canvas_finish_layer(gauge->canvas, &layer);
+		// Draw the bar
+	int y_start = top_y + y1;
+		int y_end = top_y + y2;
+	if (y_start < top_y) y_start = top_y;
+	if (y_end > top_y + h) y_end = top_y + h;
+	if (y_end > y_start) {
+		lv_color_t color = gauge->bar_color;
+		for (int yy = y_start; yy < y_end; yy++) {
+			lv_color_t *row_ptr = &gauge->canvas_buffer[yy * canvas_width];
+			for (int xx = x_start; xx < x_end; xx++) {
+				row_ptr[xx] = color;
+			}
+		}
+	}
+	}
 }
 
-// // Redraw entire canvas from buffer, right-aligning the latest head
-// void bar_graph_gauge_redraw_full(bar_graph_gauge_t *gauge)
-// {
-// 	if (!gauge || !gauge->initialized || !gauge->data_points) return;
+// Draw all historical data
+void bar_graph_gauge_draw_all_data(bar_graph_gauge_t *gauge, void* gauge_data_history_ptr)
+{
+	if (!gauge || !gauge->initialized) return;
 
-// 	int canvas_width = gauge->cached_draw_width;
-// 	// Adjust drawing area to match L shape boundaries
-// 	int top_y = 2; // Match L shape top line
-// 	int bottom_y = gauge->cached_draw_height - 5; // Match L shape bottom line
-// 	int h = bottom_y - top_y + 1; // Effective drawing height between L shape lines
-// 	int bar_spacing = gauge->bar_width + gauge->bar_gap;
-// 	int max_bars_that_fit = canvas_width / (gauge->bar_width + gauge->bar_gap);
-// 	int count = (gauge->max_data_points < max_bars_that_fit) ? gauge->max_data_points : max_bars_that_fit;
-// 	int bar_area_width = canvas_width; // Use full canvas width for bar area
+	// Snapshot head ONCE before drawing
+	int head_at_draw_start = -1;
+	if (gauge_data_history_ptr) {
+		persistent_gauge_history_t* gauge_data_history = (persistent_gauge_history_t*)gauge_data_history_ptr;
+		head_at_draw_start = gauge_data_history->head;
+	}
 
-// 	// Clear canvas (only the drawing area between L shape lines)
-// 	for (int row = 0; row < h; row++) {
+	// Draw using the snapshot we took
+	bar_graph_gauge_draw_all_data_snapshot(gauge, head_at_draw_start, gauge_data_history_ptr);
 
-// 		int actual_row = top_y + row; // Offset to match L shape boundaries
-
-// 		for (int col = 0; col < canvas_width; col++) {
-
-// 			gauge->canvas_buffer[actual_row * canvas_width + col] = PALETTE_BLACK;
-// 		}
-// 	}
-
-// 	// Precompute scale
-// 	float scale;
-// 	int baseline_y;
-
-// 	if (gauge->mode == BAR_GRAPH_MODE_BIPOLAR) {
-
-// 		float dist_min = gauge->baseline_value - gauge->init_min_value;
-// 		float dist_max = gauge->init_max_value - gauge->baseline_value;
-// 		float max_dist = (dist_min > dist_max) ? dist_min : dist_max;
-
-// 		if (max_dist <= 0) max_dist = 1;
-// 		scale = (float)(h - 2) / (2.0f * max_dist);
-// 		baseline_y = h - 1 - (int)((gauge->baseline_value - gauge->init_min_value) * scale);
-// 	} else {
-
-// 		scale = (float)(h - 2) / (gauge->init_max_value - gauge->init_min_value);
-// 		baseline_y = h - 1;
-// 	}
-
-// 	lv_draw_rect_dsc_t rect_dsc;
-// 	lv_draw_rect_dsc_init(&rect_dsc);
-// 	rect_dsc.bg_color = gauge->bar_color;
-// 	rect_dsc.bg_opa = LV_OPA_COVER;
-
-// 	// Draw bars from oldest to newest into the right-aligned area
-// 	int x = bar_area_width - bar_spacing;
-// 	int index = gauge->head;
-
-// 	for (int i = 0; i < count; i++) {
-
-// 		// walk backward through data points
-// 		float val = gauge->data_points[index];
-// 		if (val < gauge->init_min_value) val = gauge->init_min_value;
-// 		if (val > gauge->init_max_value) val = gauge->init_max_value;
-
-// 		int y1, y2;
-
-// 		if (gauge->mode == BAR_GRAPH_MODE_POSITIVE_ONLY) {
-
-// 			int bar_height = (int)((val - gauge->init_min_value) * scale);
-// 			y1 = h - bar_height;
-// 			y2 = h;
-// 		} else {
-
-// 			if (val >= gauge->baseline_value) {
-
-// 				int bar_height = (int)((val - gauge->baseline_value) * scale);
-// 				y1 = baseline_y - bar_height;
-// 				y2 = baseline_y;
-// 			} else {
-
-// 				int bar_height = (int)((gauge->baseline_value - val) * scale);
-// 				y1 = baseline_y;
-// 				y2 = baseline_y + bar_height;
-// 			}
-// 		}
-
-// 		// Create area for rectangle (adjust coordinates for L shape offset)
-// 		lv_area_t rect_area;
-// 		rect_area.x1 = x;
-// 		rect_area.y1 = top_y + y1; // Offset to match L shape boundaries
-// 		rect_area.x2 = x + gauge->bar_width - 1;
-// 		rect_area.y2 = top_y + y2 - 1; // Offset to match L shape boundaries
-
-// 		// Initialize canvas layer and draw rectangle
-// 		lv_layer_t layer;
-// 		lv_canvas_init_layer(gauge->canvas, &layer);
-// 		lv_draw_rect(&layer, &rect_dsc, &rect_area);
-// 		lv_canvas_finish_layer(gauge->canvas, &layer);
-// 		x -= bar_spacing;
-
-// 		if (--index < 0) index = gauge->max_data_points - 1;
-// 		if (x < 0) break;
-// 	}
-// }
+	// Set tracking to the head we captured BEFORE drawing
+	gauge->last_rendered_head = head_at_draw_start;
+}
 
 void bar_graph_gauge_cleanup(bar_graph_gauge_t *gauge)
 {
@@ -739,18 +1043,17 @@ void bar_graph_gauge_cleanup(bar_graph_gauge_t *gauge)
 	// Mark as not initialized to prevent double cleanup
 	gauge->initialized = false;
 
+	// Delete timer FIRST to prevent ticks during teardown
+	if (gauge->smooth_timer) {
+		lv_timer_del(gauge->smooth_timer);
+		gauge->smooth_timer = NULL;
+	}
+
 	// Free canvas buffer if it exists
 	if (gauge->canvas_buffer) {
 
 		free(gauge->canvas_buffer);
 		gauge->canvas_buffer = NULL;
-	}
-
-	// Free data points if they exist
-	if (gauge->data_points) {
-
-		free(gauge->data_points);
-		gauge->data_points = NULL;
 	}
 
 	// Delete LVGL objects to prevent memory leaks
@@ -775,18 +1078,11 @@ void bar_graph_gauge_cleanup(bar_graph_gauge_t *gauge)
 	gauge->initialized = false;
 }
 
-void bar_graph_gauge_set_update_interval(bar_graph_gauge_t *gauge, uint32_t interval_ms)
+void bar_graph_gauge_set_animation_duration(bar_graph_gauge_t *gauge, uint32_t duration_ms)
 {
 	if (!gauge) return;
-	gauge->update_interval_ms = interval_ms;
-
-	// Initialize last_data_time if not set
-	if (gauge->last_data_time == 0) {
-
-		struct timespec ts;
-		clock_gettime(CLOCK_MONOTONIC, &ts);
-		gauge->last_data_time = ts.tv_sec * 1000 + ts.tv_nsec / 1000000; // Convert to milliseconds
-	}
+	gauge->animation_duration_ms = duration_ms;
+	// logging removed
 }
 
 void bar_graph_gauge_set_timeline_duration(bar_graph_gauge_t *gauge, uint32_t duration_ms)
@@ -794,6 +1090,24 @@ void bar_graph_gauge_set_timeline_duration(bar_graph_gauge_t *gauge, uint32_t du
 	if (!gauge) return;
 
 	gauge->timeline_duration_ms = duration_ms;
+
+	// Derive pixels per second so that a full bar spacing traverses in one data interval
+	int canvas_width = gauge->cached_draw_width > 0 ? gauge->cached_draw_width : (gauge->width - (gauge->show_y_axis ? 22 : 0));
+	int bar_spacing = gauge->bar_width + gauge->bar_gap;
+	int total_bars = (bar_spacing > 0) ? (canvas_width / bar_spacing) : 0;
+	if (duration_ms > 0 && total_bars > 0) {
+		float data_interval_ms = (float)duration_ms / (float)total_bars;
+		gauge->pixels_per_second = (float)bar_spacing / (data_interval_ms / 1000.0f);
+		if (gauge->pixels_per_second < 1.0f) gauge->pixels_per_second = 1.0f;
+		if (gauge->pixels_per_second > 1000.0f) gauge->pixels_per_second = 1000.0f;
+		// Cutover: if updates are very frequent, mark for full-distance jump per sample
+		gauge->cutover_jump_active = ((uint32_t)data_interval_ms <= gauge->animation_cutover_ms);
+	}
+	else {
+		// For discrete animation mode, pixels_per_second is unused; keep a sane default
+		gauge->pixels_per_second = (float)(bar_spacing) * 60.0f;
+	}
+
 }
 
 void bar_graph_gauge_configure_advanced(

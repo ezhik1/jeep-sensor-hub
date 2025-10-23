@@ -7,6 +7,167 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Simple modal tracking - only store modal pointers, read state from modal itself
+typedef struct {
+	char name[32];
+	void* modal_ptr;
+	void (*destroy_func)(void* modal);
+	bool (*is_visible_func)(void* modal); // Function to check if modal is visible
+} modal_tracking_t;
+
+#define MAX_MODALS 10
+static modal_tracking_t modal_tracking[MAX_MODALS] = {0};
+static int modal_count = 0;
+
+// Find modal tracking slot
+static int detail_screen_find_modal_slot(const char* modal_name)
+{
+	for (int i = 0; i < modal_count; i++) {
+		if (strcmp(modal_tracking[i].name, modal_name) == 0) {
+			return i;
+		}
+	}
+	return -1; // Not found
+}
+
+// Allocate new modal tracking slot
+static int detail_screen_allocate_modal_slot(const char* modal_name)
+{
+	if (modal_count >= MAX_MODALS) {
+		printf("[E] detail_screen: Maximum number of modals reached\n");
+		return -1;
+	}
+
+	int slot = modal_count++;
+	strncpy(modal_tracking[slot].name, modal_name, sizeof(modal_tracking[slot].name) - 1);
+	modal_tracking[slot].name[sizeof(modal_tracking[slot].name) - 1] = '\0';
+	modal_tracking[slot].modal_ptr = NULL;
+	modal_tracking[slot].destroy_func = NULL;
+	modal_tracking[slot].is_visible_func = NULL;
+
+	return slot;
+}
+
+// Callback to clear modal pointer when modal is destroyed externally
+static void detail_screen_modal_destroyed_callback(const char* modal_name)
+{
+	printf("[I] detail_screen: Modal destroyed callback for: %s\n", modal_name);
+
+	int slot = detail_screen_find_modal_slot(modal_name);
+	if (slot != -1) {
+		modal_tracking[slot].modal_ptr = NULL;
+		printf("[I] detail_screen: Modal %s pointer cleared\n", modal_name);
+	}
+}
+
+// Wrapper callbacks for each modal type
+static void detail_screen_timeline_modal_destroyed_wrapper(void)
+{
+	// Find the modal and hide it before clearing the pointer
+	int slot = detail_screen_find_modal_slot("timeline");
+	if (slot != -1 && modal_tracking[slot].modal_ptr) {
+		extern void timeline_modal_hide(void* modal);
+		timeline_modal_hide(modal_tracking[slot].modal_ptr);
+	}
+	detail_screen_modal_destroyed_callback("timeline");
+}
+
+static void detail_screen_alerts_modal_destroyed_wrapper(void)
+{
+	// Find the modal and hide it before clearing the pointer
+	int slot = detail_screen_find_modal_slot("alerts");
+	if (slot != -1 && modal_tracking[slot].modal_ptr) {
+		extern void alerts_modal_hide(void* modal);
+		alerts_modal_hide(modal_tracking[slot].modal_ptr);
+	}
+	detail_screen_modal_destroyed_callback("alerts");
+}
+
+void detail_screen_toggle_modal(const char* modal_name,
+	void* (*create_func)(void* config, void (*on_close)(void)),
+	void (*destroy_func)(void* modal),
+	void (*show_func)(void* modal),
+	bool (*is_visible_func)(void* modal), // Function to check modal visibility
+	void* config,
+	void (*on_close_callback)(void))
+{
+	printf("[I] detail_screen: Toggling modal: %s\n", modal_name);
+
+	int slot = detail_screen_find_modal_slot(modal_name);
+	if (slot == -1) {
+		slot = detail_screen_allocate_modal_slot(modal_name);
+		if (slot == -1) return;
+	}
+
+	// Check if modal exists and is visible by reading from modal itself
+	bool is_visible = false;
+	if (modal_tracking[slot].modal_ptr && modal_tracking[slot].is_visible_func) {
+		printf("[D] detail_screen: Checking modal visibility for %s, modal_ptr=%p\n", modal_name, modal_tracking[slot].modal_ptr);
+		is_visible = modal_tracking[slot].is_visible_func(modal_tracking[slot].modal_ptr);
+		printf("[D] detail_screen: Modal %s visibility: %s\n", modal_name, is_visible ? "visible" : "hidden");
+	} else {
+		printf("[D] detail_screen: Modal %s not found or invalid (ptr=%p, func=%p)\n", modal_name, modal_tracking[slot].modal_ptr, modal_tracking[slot].is_visible_func);
+	}
+
+	if (is_visible) {
+		// Close modal
+		if (modal_tracking[slot].modal_ptr && modal_tracking[slot].destroy_func) {
+			modal_tracking[slot].destroy_func(modal_tracking[slot].modal_ptr);
+		}
+		modal_tracking[slot].modal_ptr = NULL;
+		printf("[I] detail_screen: Modal %s closed\n", modal_name);
+	} else {
+		// Open modal - use appropriate wrapper callback
+		void (*wrapper_callback)(void) = NULL;
+		if (strcmp(modal_name, "timeline") == 0) {
+			wrapper_callback = detail_screen_timeline_modal_destroyed_wrapper;
+		} else if (strcmp(modal_name, "alerts") == 0) {
+			wrapper_callback = detail_screen_alerts_modal_destroyed_wrapper;
+		}
+
+		modal_tracking[slot].destroy_func = destroy_func;
+		modal_tracking[slot].is_visible_func = is_visible_func;
+		printf("[D] detail_screen: Creating modal %s with config=%p, callback=%p\n", modal_name, config, wrapper_callback);
+		modal_tracking[slot].modal_ptr = create_func(config, wrapper_callback);
+		printf("[D] detail_screen: Modal %s created, ptr=%p\n", modal_name, modal_tracking[slot].modal_ptr);
+		if (modal_tracking[slot].modal_ptr) {
+			printf("[D] detail_screen: Showing modal %s\n", modal_name);
+			show_func(modal_tracking[slot].modal_ptr);
+			printf("[I] detail_screen: Modal %s opened\n", modal_name);
+		} else {
+			printf("[E] detail_screen: Failed to create modal %s\n", modal_name);
+		}
+	}
+}
+
+bool detail_screen_is_modal_visible(const char* modal_name)
+{
+	int slot = detail_screen_find_modal_slot(modal_name);
+	if (slot == -1 || !modal_tracking[slot].modal_ptr || !modal_tracking[slot].is_visible_func) {
+		return false;
+	}
+	return modal_tracking[slot].is_visible_func(modal_tracking[slot].modal_ptr);
+}
+
+// Reset modal tracking system (call when detail screen is recreated)
+void detail_screen_reset_modal_tracking(void)
+{
+	printf("[I] detail_screen: Resetting modal tracking system\n");
+	for (int i = 0; i < modal_count; i++) {
+		if (modal_tracking[i].modal_ptr && modal_tracking[i].destroy_func) {
+			printf("[I] detail_screen: Destroying existing modal %s\n", modal_tracking[i].name);
+			// Call destroy function and immediately clear the pointer to prevent double-free
+			void* modal_ptr = modal_tracking[i].modal_ptr;
+			modal_tracking[i].modal_ptr = NULL;
+			modal_tracking[i].destroy_func(modal_ptr);
+		}
+		modal_tracking[i].modal_ptr = NULL;
+		modal_tracking[i].destroy_func = NULL;
+		modal_tracking[i].is_visible_func = NULL;
+	}
+	modal_count = 0;
+}
+
 static const char *TAG = "detail_screen_template";
 
 // ============================================================================
@@ -110,6 +271,9 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		printf("[E] detail_screen: Invalid configuration for detail screen\n");
 		return NULL;
 	}
+
+	// Reset modal tracking system when creating new detail screen
+	detail_screen_reset_modal_tracking();
 
 	detail_screen_t* detail = malloc(sizeof(detail_screen_t));
 	if (!detail) {
@@ -596,8 +760,6 @@ void detail_screen_destroy(detail_screen_t* detail)
 {
 	if (!detail) return;
 
-	// Destroy overlay
-	// Overlay functionality not implemented in Pi port
 
 	// Free dynamic buttons array
 	if (detail->setting_buttons) {

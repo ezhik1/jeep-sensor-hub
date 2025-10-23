@@ -3,8 +3,8 @@
 
 #include <lvgl.h>
 #include <stdbool.h>
-#include "../time_input/time_input.h"
-#include "../utils/animation.h"
+#include "../../time_input/time_input.h"
+#include "../../utils/animation/animation.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -132,6 +132,13 @@ void timeline_modal_show(timeline_modal_t* modal);
  * @param modal Pointer to the modal
  */
 void timeline_modal_hide(timeline_modal_t* modal);
+
+/**
+ * @brief Check if the timeline modal is visible
+ * @param modal Timeline modal instance
+ * @return true if visible, false otherwise
+ */
+bool timeline_modal_is_visible(timeline_modal_t* modal);
 
 /**
  * @brief Get the current timeline duration

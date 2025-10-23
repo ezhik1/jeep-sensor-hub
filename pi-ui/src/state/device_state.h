@@ -33,6 +33,11 @@ bool device_state_path_exists(const char* path);
 // Generic setter that handles both int and float automatically
 void device_state_set_value(const char* path, double value);
 
+// Arrays (batch set/get). When save_now is true, persists immediately
+void device_state_set_float_array(const char* path, const float* values, int count, bool save_now);
+// Returns number of elements copied into out_values (<= max_count)
+int device_state_get_float_array(const char* path, float* out_values, int max_count);
+
 // Save/load
 void device_state_save(void);
 void device_state_load(void);

@@ -5,10 +5,12 @@
 
 #include "state/device_state.h"
 #include "displayModules/shared/module_interface.h"
+#include "app_data_store.h"
 
 #include "data/config.h"
 #include "data/mock_data/mock_data.h"
 #include "data/real_data/real_data.h"
+#include "data/lerp_data/lerp_data.h"
 
 #include "utils/crash_handler.h"
 
@@ -24,16 +26,14 @@ static const char *TAG = "main";
    ========================= */
 void ui_update_timer_callback(lv_timer_t *timer)
 {
+	// 1. Update central app data store (all module data)
+	app_data_store_update();
 
-	// Update all display modules (data only, no UI structure changes)
+	// 2. Update all display modules (includes data collection and UI rendering)
 	display_modules_update_all();
 
-	// View transitions are now handled by individual modules
-
-	// Handle screen transitions using screen manager
+	// 3. Handle screen transitions using screen manager
 	screen_manager_update();
-
-	// Note: Module updates are now handled by screen update functions to avoid double updates
 }
 
 /* =========================
@@ -95,7 +95,13 @@ void app_main(void)
 		printf("[I] main: Real data component initialized\n");
 	}
 
-	// Initialize all display modules via standardized interface
+	// 3) Initialize central app data store (all module data lives here)
+	app_data_store_init();
+
+	// 4) Initialize LERP data system
+	lerp_data_init();
+
+	// 5) Initialize all display modules via standardized interface
 	display_modules_init_all();
 
 	boot_screen_init();

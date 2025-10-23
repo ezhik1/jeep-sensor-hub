@@ -2,6 +2,7 @@
 #include "home_screen.h"
 #include "../../lvgl_port_pi.h"
 #include "../../displayModules/power-monitor/power-monitor.h"
+#include "../../displayModules/shared/display_module_base.h"
 #include "../../fonts/lv_font_noplato_10.h"
 #include "../../fonts/lv_font_noplato_18.h"
 #include <lvgl.h>
@@ -473,7 +474,7 @@ void home_screen_update_modules(void)
 		return;
 	}
 
-	// Update all display modules by directly calling their rendering functions
+	// Create module UIs on first render
 	for (int i = 0; i < module_count; i++) {
 		// Safety check - make sure the module is valid
 		if (i >= module_count || i < 0) {
@@ -483,18 +484,26 @@ void home_screen_update_modules(void)
 		// Get the module's container
 		lv_obj_t *module_container = display_modules[i].container;
 		if (module_container) {
-			// Only render the module once to avoid repeated reparenting of shared instances
+			// Only create the module UI once
 			if (!display_modules[i].rendered_once) {
 				if (strcmp(display_modules[i].module_name, "power-monitor") == 0) {
-					// Special case for power-monitor - use direct function call
-					power_monitor_show_in_container_home(module_container);
+					// Use display_module_base lifecycle for power-monitor
+					extern void power_monitor_create(void);
+					extern display_module_base_t* power_monitor_get_module_base(void);
+
+					// Ensure module is created (idempotent)
+					power_monitor_create();
+
+					// Create UI in container
+					display_module_base_t* base = power_monitor_get_module_base();
+					if (base) {
+						display_module_base_create(base, module_container);
+					}
 				} else if (display_modules[i].interface.renderCurrentView) {
-					// Use the module's renderCurrentView function
+					// Legacy modules - use old interface
 					display_modules[i].interface.renderCurrentView(module_container);
 				}
 				display_modules[i].rendered_once = true;
-
-				// No hitbox needed - current view template handles all touch events
 			}
 		}
 	}

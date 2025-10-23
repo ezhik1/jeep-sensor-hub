@@ -1,6 +1,6 @@
-#include "voltage_alerts_config.h"
+#include "power_alerts_config.h"
 #include "../../state/device_state.h"
-#include "../shared/gauges/bar_graph_gauge.h"
+#include "../shared/gauges/bar_graph_gauge/bar_graph_gauge.h"
 #include "../../screens/detail_screen/detail_screen.h"
 #include "power-monitor.h"
 
@@ -55,28 +55,28 @@ const alerts_modal_gauge_config_t voltage_gauge_configs[6] = {
 	{
 		.name = "STARTER (A)",
 		.unit = "A",
-		.raw_min_value = -50.0f,   // RAW_MIN: negative current (charging)
-		.raw_max_value = 50.0f,    // RAW_MAX: positive current (discharging)
+		.raw_min_value = -200.0f,   // RAW_MIN: negative current (discharging)
+		.raw_max_value = 200.0f,    // RAW_MAX: positive current (charging)
 		.fields = {
 			[FIELD_ALERT_LOW] = {
 				.name = "LOW",
-				.min_value = -50.0f,   // Clamped to RAW_MIN
-				.max_value = 50.0f,    // Clamped to RAW_MAX
-				.default_value = -30.0f, // Reasonable low alert for charging current
+				.min_value = -100.0f,   // Clamped to RAW_MIN
+				.max_value = 100.0f,    // Clamped to RAW_MAX
+				.default_value = -100.0f, // Reasonable low alert for discharging current
 				.is_baseline = false
 			},
 			[FIELD_ALERT_HIGH] = {
 				.name = "HIGH",
-				.min_value = -50.0f,   // Clamped to RAW_MIN
-				.max_value = 50.0f,    // Clamped to RAW_MAX
-				.default_value = 30.0f,  // Reasonable high alert for discharging current
+				.min_value = -100.0f,   // Clamped to RAW_MIN
+				.max_value = 100.0f,    // Clamped to RAW_MAX
+				.default_value = 100.0f,  // Reasonable high alert for charging current
 				.is_baseline = false
 			},
 			[FIELD_GAUGE_LOW] = {
 				.name = "LOW",
-				.min_value = -50.0f,   // Clamped to RAW_MIN
-				.max_value = 50.0f,    // Clamped to RAW_MAX
-				.default_value = -40.0f, // Reasonable gauge low for charging
+				.min_value = -100.0f,   // Clamped to RAW_MIN
+				.max_value = 100.0f,    // Clamped to RAW_MAX
+				.default_value = -100.0f, // Reasonable gauge low for discharging
 				.is_baseline = false
 			},
 			[FIELD_GAUGE_BASELINE] = {
@@ -88,9 +88,9 @@ const alerts_modal_gauge_config_t voltage_gauge_configs[6] = {
 			},
 			[FIELD_GAUGE_HIGH] = {
 				.name = "HIGH",
-				.min_value = -50.0f,   // Clamped to RAW_MIN
-				.max_value = 50.0f,    // Clamped to RAW_MAX
-				.default_value = 40.0f,  // Reasonable gauge high for discharging
+				.min_value = -100.0f,   // Clamped to RAW_MIN
+				.max_value = 100.0f,    // Clamped to RAW_MAX
+				.default_value = 100.0f,  // Reasonable gauge high for charging
 				.is_baseline = false
 			}
 		},
@@ -279,17 +279,17 @@ const alerts_modal_gauge_config_t voltage_gauge_configs[6] = {
 };
 
 // Voltage and Current modal configuration
-const alerts_modal_config_t voltage_alerts_config = {
+const alerts_modal_config_t power_alerts_config = {
 	.gauge_count = 6,
 	.gauges = (alerts_modal_gauge_config_t*)voltage_gauge_configs,
-	.get_value_cb = voltage_get_value_callback,
-	.set_value_cb = voltage_set_value_callback,
-	.refresh_cb = voltage_refresh_callback,
+	.get_value_cb = power_monitor_get_state_values,
+	.set_value_cb = power_monitor_set_state_values,
+	.refresh_cb = power_monitor_refresh_all_data_callback,
 	.modal_title = "Power Monitor Alerts & Gauges"
 };
 
 // Voltage and Current callback functions
-float voltage_get_value_callback(int gauge_index, int field_type)
+float power_monitor_get_state_values(int gauge_index, int field_type)
 {
 	// Gauges: 0=STARTER V, 1=STARTER A, 2=HOUSE V, 3=HOUSE A, 4=SOLAR V, 5=SOLAR A
 	if (field_type == FIELD_ALERT_LOW) {
@@ -331,7 +331,7 @@ float voltage_get_value_callback(int gauge_index, int field_type)
 	return 0.0f;
 }
 
-void voltage_set_value_callback(int gauge_index, int field_type, float value)
+void power_monitor_set_state_values(int gauge_index, int field_type, float value)
 {
 	// Gauges: 0=STARTER V, 1=STARTER A, 2=HOUSE V, 3=HOUSE A, 4=SOLAR V, 5=SOLAR A
 	if (field_type == FIELD_ALERT_LOW) {
@@ -372,8 +372,9 @@ void voltage_set_value_callback(int gauge_index, int field_type, float value)
 	}
 }
 
-void voltage_refresh_callback(void)
+void power_monitor_refresh_all_data_callback(void)
 {
+
 	// Update power grid view gauge configuration
 	extern void power_monitor_power_grid_view_update_configuration(void);
 	power_monitor_power_grid_view_update_configuration();
@@ -389,6 +390,10 @@ void voltage_refresh_callback(void)
 	// Update all power monitor data and gauges (this includes detail screen gauges)
 	extern void power_monitor_update_data_only(void);
 	power_monitor_update_data_only();
+
+	// Force all gauges to redraw from persistent history after modal changes
+	extern void power_monitor_force_gauge_redraw_from_history(void);
+	power_monitor_force_gauge_redraw_from_history();
 
 	// Update alert flashing
 	extern void power_monitor_power_grid_view_apply_alert_flashing(const power_monitor_data_t* data, int starter_lo, int starter_hi, int house_lo, int house_hi, int solar_lo, int solar_hi, bool blink_on);

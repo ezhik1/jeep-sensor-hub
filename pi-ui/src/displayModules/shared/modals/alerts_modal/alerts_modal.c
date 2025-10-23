@@ -1,16 +1,20 @@
 #include <stdio.h>
 #include "alerts_modal.h"
 
-#include "../../../fonts/lv_font_noplato_24.h"
-#include "../numberpad/numberpad.h"
-#include "../palette.h"
-#include "../../../state/device_state.h"
+#include "../../../../fonts/lv_font_noplato_24.h"
+#include "../../numberpad/numberpad.h"
+#include "../../palette.h"
+#include "../../../../state/device_state.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
 
 static const char *TAG = "alerts_modal";
+
+// Deferred destruction support (like timeline_modal)
+static lv_timer_t* s_alerts_destroy_timer = NULL;
+static bool s_alerts_destroy_pending = false;
 
 // #### Default State Colors ####
 
@@ -118,6 +122,8 @@ static warning_data_t g_warning_data[30]; // 6 gauges * 5 fields = 30 total fiel
 static void close_button_cb(lv_event_t *e);
 static void cancel_button_cb(lv_event_t *e);
 static void field_click_handler(lv_event_t *e);
+static void on_pressing(lv_event_t *e);
+static void scroll_handler(lv_event_t *e);
 static void initialize_field_data(field_data_t* field_data, int gauge, int field_type, const alerts_modal_config_t* config);
 static void update_field_display(alerts_modal_t* modal, int field_id);
 static void update_all_field_borders(alerts_modal_t* modal);
@@ -183,11 +189,13 @@ static void update_field_display(alerts_modal_t* modal, int field_id)
 
 	char value_str[16];
 
-	// If there's an active warning for this field, show the original out-of-range value
-	if (modal->field_data[field_id].is_out_of_range) {
+	// Format values: one decimal place for values under 100, no decimal places for 100 and above
+	// This applies regardless of sign (positive or negative)
+	float abs_value = fabs(data->current_value);
+	if (abs_value < 100.0f) {
 		snprintf(value_str, sizeof(value_str), "%.1f", data->current_value);
 	} else {
-		snprintf(value_str, sizeof(value_str), "%.1f", data->current_value);
+		snprintf(value_str, sizeof(value_str), "%.0f", data->current_value);
 	}
 
 	lv_label_set_text(ui->label, value_str);
@@ -643,11 +651,10 @@ static void close_current_field(alerts_modal_t* modal)
 	data->is_out_of_range = false;
 	data->has_changed = !field_value_equals_original(data);
 
-	// Save this field's value to device state
+	// Save this field's value to device state (in-memory only, no disk write)
 	set_device_state_value(modal, data->gauge_index, data->field_index, data->current_value);
-	device_state_save();
 
-	printf("[I] alerts_modal: Saved field[%d,%d] value: %.1f\n",
+	printf("[I] alerts_modal: Updated field[%d,%d] value: %.1f (in-memory)\n",
 		data->gauge_index, data->field_index, data->current_value);
 
 	// Check if this is a GAUGE LOW or HIGH field change that might affect baseline
@@ -656,7 +663,7 @@ static void close_current_field(alerts_modal_t* modal)
 	}
 
 	// Hide any warning for this field
-		hide_out_of_range_warning(modal, modal->current_field_id);
+	hide_out_of_range_warning(modal, modal->current_field_id);
 
 	modal->current_field_id = -1;
 
@@ -673,8 +680,6 @@ static void field_click_handler(lv_event_t *e)
 	alerts_modal_t* modal = (alerts_modal_t*)lv_event_get_user_data(e);
 	lv_obj_t* target = lv_event_get_target(e);
 
-	printf("[I] alerts_modal: field_click_handler called, target: %p\n", target);
-
 	if (!modal || !target) return;
 
 	// Find which field was clicked first
@@ -682,28 +687,51 @@ static void field_click_handler(lv_event_t *e)
 
 	// If a field is currently being edited, check if this click should close it
 	if (modal->current_field_id >= 0) {
-		printf("[I] alerts_modal: Field is being edited, checking if click is on numberpad\n");
-		printf("[I] alerts_modal: Numberpad exists: %d, visible: %d, target: %p, background: %p\n",
-			modal->numberpad != NULL,
-			modal->numberpad ? modal->numberpad->is_visible : 0,
-			target,
-			modal->numberpad ? modal->numberpad->background : NULL);
 
 		// Check if the target is the numberpad background container
 		if (modal->numberpad && modal->numberpad->is_visible && target == modal->numberpad->background) {
 
-			printf("[I] alerts_modal: Click is on numberpad background, letting numberpad handle it\n");
 			return; // This is a numberpad container click, let numberpad handle it
 		}
 
-		// If we get here, it's not a numberpad click, so close the current field
-		printf("[I] alerts_modal: Click is NOT on numberpad, closing current field\n");
-		close_current_field(modal);
+		// Check if we're in the middle of a field transition
+		if (modal->field_transition_in_progress) {
 
-		// If the click was on another field, continue to open it
+
+			modal->field_transition_in_progress = false; // Clear the flag
+			return;
+		}
+
+		// Check if the click is on the current field (toggle behavior)
+		if (field_id == modal->current_field_id) {
+
+			printf("[I] alerts_modal: Click is on current field %d, closing numberpad\n", field_id);
+			close_current_field(modal);
+			return;
+		}
+
+		// If the click was on another field, move numberpad to it and don't close the current field
 		if( field_id < 0 ){
 
-			printf("[I] alerts_modal: Click not on a field button, ignoring\n");
+			return;
+		} else {
+
+			// This is a different field, move numberpad to it
+			// Close the current field first
+			close_current_field(modal);
+
+			// Now open the new field
+			modal->current_field_id = field_id;
+			field_data_t* data = &modal->field_data[field_id];
+			data->is_being_edited = true;
+
+			// Update field borders to highlight the new field
+			update_all_field_borders(modal);
+
+			// Move numberpad to new field position
+			lv_obj_t* gauge_container = modal->gauge_sections[data->gauge_index];
+			numberpad_show_outside_container(modal->numberpad, target, gauge_container);
+
 			return;
 		}
 	} else if( field_id < 0 ){
@@ -727,7 +755,7 @@ static void field_click_handler(lv_event_t *e)
 	if( !modal->numberpad ){
 
 		numberpad_config_t numpad_config = NUMBERPAD_DEFAULT_CONFIG;
-		numpad_config.max_digits = 4;
+		numpad_config.max_digits = 5; // Allow 3 digits + decimal + 1 decimal place = 5 characters total
 		numpad_config.decimal_places = 1;
 		numpad_config.auto_decimal = true;
 		modal->numberpad = numberpad_create(&numpad_config, modal->background);
@@ -748,7 +776,7 @@ static void field_click_handler(lv_event_t *e)
 
 	if (modal->numberpad) {
 
-		// Set current value in numberpad
+		// Set current value in numberpad - preserve full precision for input
 		char value_str[16];
 		snprintf(value_str, sizeof(value_str), "%.1f", data->current_value);
 		numberpad_set_value(modal->numberpad, value_str);
@@ -760,6 +788,92 @@ static void field_click_handler(lv_event_t *e)
 	}
 }
 
+// Press handler - closes numberpad on press unless it's on numberpad or another field
+static void on_pressing(lv_event_t *e)
+{
+	alerts_modal_t* modal = (alerts_modal_t*)lv_event_get_user_data(e);
+	lv_obj_t* target = lv_event_get_target(e);
+
+	if (!modal || !modal->numberpad) return;
+
+	// Only act if numberpad is currently visible
+	if (!numberpad_is_visible(modal->numberpad)) return;
+
+	// Check if the press is on the numberpad background
+	if (target == modal->numberpad->background) {
+
+		return; // This is a numberpad background press, let numberpad handle it
+	}
+
+	// Check if the press is on any of the numberpad buttons
+	for (int i = 0; i < 13; i++) {
+		if (modal->numberpad->buttons[i] && target == modal->numberpad->buttons[i]) {
+			return; // This is a numberpad button press, let numberpad handle it
+		}
+	}
+
+	// Check if the press is on a target field
+	int field_id = find_field_by_button(modal, target);
+	if (field_id >= 0) {
+
+		lv_obj_t* gauge_container = modal->gauge_sections[modal->field_data[field_id].gauge_index];
+
+		// Check if this is the same field that's currently being edited
+		if (field_id == modal->current_field_id) {
+
+			numberpad_show_outside_container(modal->numberpad, target, gauge_container);
+			return; // Do nothing when pressing the current field
+		}
+
+		// This is a different field, move numberpad to it
+		// Set flag to prevent click handler from closing during transition
+		modal->field_transition_in_progress = true;
+
+		// First close the current field to clear its state
+		close_current_field(modal);
+
+		// Now open the new field
+		modal->current_field_id = field_id;
+
+		numberpad_show_outside_container(modal->numberpad, target, gauge_container);
+
+		// Set up the new field for editing
+		field_data_t* data = &modal->field_data[field_id];
+		data->is_being_edited = true;
+
+		// Update field borders to highlight the new field
+		update_all_field_borders(modal);
+
+		return;
+	}
+
+	// Press is neither on numberpad nor on a field, close the numberpad
+	close_current_field(modal);
+}
+
+// Scroll handler - repositions numberpad when container is scrolling
+static void scroll_handler(lv_event_t *e)
+{
+	alerts_modal_t* modal = (alerts_modal_t*)lv_event_get_user_data(e);
+
+	if (!modal || !modal->numberpad) return;
+
+	// Only reposition if numberpad is currently visible
+	if (!numberpad_is_visible(modal->numberpad)) return;
+
+	// Only reposition if we have a current field
+	if (modal->current_field_id < 0) return;
+
+	printf("[I] alerts_modal: Container scrolling, repositioning numberpad\n");
+
+	// Get the current field's target and gauge container
+	field_data_t* data = &modal->field_data[modal->current_field_id];
+	lv_obj_t* target = modal->field_ui[modal->current_field_id].button;
+	lv_obj_t* gauge_container = modal->gauge_sections[data->gauge_index];
+
+	// Reposition the numberpad to stay aligned with the field
+	numberpad_show_outside_container(modal->numberpad, target, gauge_container);
+}
 
 // Close button callback
 static void close_button_cb(lv_event_t *e)
@@ -794,42 +908,18 @@ static void cancel_button_cb(lv_event_t *e)
 		return;
 	}
 
-	// Close any currently editing field first
-	close_current_field(modal);
-
-	// Revert all field values to their original values
-		for (int field_id = 0; field_id < modal->total_field_count; field_id++) {
+	// Revert all field values to their original values (in-memory only)
+	for (int field_id = 0; field_id < modal->total_field_count; field_id++) {
 		field_data_t* data = &modal->field_data[field_id];
-
-		// Restore original value
 		data->current_value = data->original_value;
 		data->has_changed = false;
 		data->is_out_of_range = false;
-
-		// Clear any warning UI elements
-		hide_out_of_range_warning(modal, field_id);
-
-		// Update display and border
-		update_field_display(modal, field_id);
-		update_all_field_borders(modal);
-	}
-
-	// Update all field borders to reflect the reverted state
-	update_all_field_borders(modal);
-
-	// Save the reverted values to device state
-	for (int field_id = 0; field_id < modal->total_field_count; field_id++) {
-		field_data_t* data = &modal->field_data[field_id];
 		set_device_state_value(modal, data->gauge_index, data->field_index, data->current_value);
 	}
-	device_state_save();
 
-	printf("[I] alerts_modal: Cancel button pressed - reverted all changes\n");
+	printf("[I] alerts_modal: Cancel button pressed - reverted all changes (in-memory)\n");
 
-	// Refresh gauges and alerts after reverting changes
-	alerts_modal_refresh_gauges_and_alerts(modal);
-
-	// Close the modal
+	// Close the modal immediately
 	if (modal->on_close) {
 		modal->on_close();
 	}
@@ -1322,15 +1412,15 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 				// For GAUGE LOW fields, MAX constraint is current GAUGE HIGH value
 				int gauge_index = data->gauge_index;
 				float actual_max_value = modal->field_data[gauge_index * 5 + FIELD_GAUGE_HIGH].current_value;
-				snprintf(value_text, sizeof(value_text), "%.1f", actual_max_value);
+				snprintf(value_text, sizeof(value_text), "%.0f", actual_max_value);
 			} else if (data->field_index == FIELD_ALERT_LOW) {
 				// For ALERT LOW fields, MAX constraint is current ALERT HIGH value
 				int gauge_index = data->gauge_index;
 				float actual_max_value = modal->field_data[gauge_index * 5 + FIELD_ALERT_HIGH].current_value;
-				snprintf(value_text, sizeof(value_text), "%.1f", actual_max_value);
+				snprintf(value_text, sizeof(value_text), "%.0f", actual_max_value);
 			} else {
 				// For other fields, use config max
-				snprintf(value_text, sizeof(value_text), "%.1f", data->max_value);
+				snprintf(value_text, sizeof(value_text), "%.0f", data->max_value);
 			}
 			lv_label_set_text(g_warning_data[field_id].value_label, value_text);
 		} else if (is_below_min) {
@@ -1365,15 +1455,15 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 				// For GAUGE HIGH fields, MIN constraint is current GAUGE LOW value
 				int gauge_index = data->gauge_index;
 				float actual_min_value = modal->field_data[gauge_index * 5 + FIELD_GAUGE_LOW].current_value;
-				snprintf(value_text, sizeof(value_text), "%.1f", actual_min_value);
+				snprintf(value_text, sizeof(value_text), "%.0f", actual_min_value);
 			} else if (data->field_index == FIELD_ALERT_HIGH) {
 				// For ALERT HIGH fields, MIN constraint is current ALERT LOW value
 				int gauge_index = data->gauge_index;
 				float actual_min_value = modal->field_data[gauge_index * 5 + FIELD_ALERT_LOW].current_value;
-				snprintf(value_text, sizeof(value_text), "%.1f", actual_min_value);
+				snprintf(value_text, sizeof(value_text), "%.0f", actual_min_value);
 			} else {
 				// For other fields, use config min
-				snprintf(value_text, sizeof(value_text), "%.1f", data->min_value);
+				snprintf(value_text, sizeof(value_text), "%.0f", data->min_value);
 			}
 			lv_label_set_text(g_warning_data[field_id].value_label, value_text);
 		} else {
@@ -1513,7 +1603,7 @@ static void warning_timer_callback(lv_timer_t* timer)
 
 		// Update numberpad to show the clamped value so subsequent inputs start fresh
 		char clamped_value_str[16];
-		snprintf(clamped_value_str, sizeof(clamped_value_str), "%.1f", data->clamped_value);
+		snprintf(clamped_value_str, sizeof(clamped_value_str), "%.0f", data->clamped_value);
 		numberpad_set_value_for_fresh_input(data->modal->numberpad, clamped_value_str);
 	}
 
@@ -1772,6 +1862,12 @@ alerts_modal_t* alerts_modal_create(const alerts_modal_config_t* config, void (*
 	lv_obj_add_event_cb(modal->background, field_click_handler, LV_EVENT_CLICKED, modal);
 	lv_obj_add_event_cb(modal->content_container, field_click_handler, LV_EVENT_CLICKED, modal);
 
+	// Add press handler to close numberpad on press unless it's on numberpad or field
+	lv_obj_add_event_cb(modal->content_container, on_pressing, LV_EVENT_PRESSING, modal);
+
+	// Add scroll handler to reposition numberpad when container is scrolling
+	lv_obj_add_event_cb(modal->content_container, scroll_handler, LV_EVENT_SCROLL, modal);
+
 
 	// Initialize all field data with proper group types and field types
 	for (int gauge = 0; gauge < config->gauge_count; gauge++) {
@@ -1914,31 +2010,24 @@ void alerts_modal_hide(alerts_modal_t* modal)
 	}
 }
 
-void alerts_modal_destroy(alerts_modal_t* modal)
+// Timer callback for deferred destruction
+static void alerts_modal_destroy_timer_cb(lv_timer_t* timer)
 {
+	alerts_modal_t* modal = (alerts_modal_t*)lv_timer_get_user_data(timer);
+	printf("[I] alerts_modal: (timer) Destroying alerts modal\n");
+
 	if (!modal) {
-		printf("[W] alerts_modal: Cannot destroy NULL modal\n");
+		if (timer) lv_timer_del(timer);
+		s_alerts_destroy_timer = NULL;
+		s_alerts_destroy_pending = false;
 		return;
 	}
 
-	// Clear all warnings and destroy timers first (without updating borders)
-	for (int field_id = 0; field_id < modal->total_field_count; field_id++) {
-		// Bounds check to prevent array overflow
-		if (field_id >= 30) {
-			printf("[E] alerts_modal: Field ID %d exceeds warning data array bounds (max 29)\n", field_id);
-			break;
-		}
+	// Ensure hidden to stop interactions
+	alerts_modal_hide(modal);
 
-		// Clear warning data directly without calling update_all_field_borders
-		if (g_warning_data[field_id].text_label) {
-			lv_obj_add_flag(g_warning_data[field_id].text_label, LV_OBJ_FLAG_HIDDEN);
-		}
-		if (g_warning_data[field_id].container) {
-			lv_obj_add_flag(g_warning_data[field_id].container, LV_OBJ_FLAG_HIDDEN);
-		}
-		if (g_warning_data[field_id].value_label) {
-			lv_obj_add_flag(g_warning_data[field_id].value_label, LV_OBJ_FLAG_HIDDEN);
-		}
+	// Clear all warnings and destroy timers
+	for (int field_id = 0; field_id < modal->total_field_count && field_id < 30; field_id++) {
 		if (g_warning_data[field_id].timer) {
 			lv_timer_del(g_warning_data[field_id].timer);
 			g_warning_data[field_id].timer = NULL;
@@ -1952,19 +2041,19 @@ void alerts_modal_destroy(alerts_modal_t* modal)
 		g_warning_data[field_id].modal = NULL;
 	}
 
-	// Hide and destroy numberpad first
+	// Destroy numberpad subcomponent
 	if (modal->numberpad) {
 		numberpad_hide(modal->numberpad);
-		// Note: Don't destroy numberpad here as it's managed by the modal's background
+		modal->numberpad = NULL;
 	}
 
-	// Destroy the background and all its children
-	if (modal->background) {
+	// Delete the LVGL tree synchronously (like timeline_modal)
+	if (modal->background && lv_obj_is_valid(modal->background)) {
 		lv_obj_del(modal->background);
-		modal->background = NULL; // Prevent double-free
+		modal->background = NULL;
 	}
 
-	// Free dynamically allocated arrays with null checks
+	// Free dynamically allocated arrays
 	if (modal->gauge_sections) {
 		free(modal->gauge_sections);
 		modal->gauge_sections = NULL;
@@ -1998,8 +2087,36 @@ void alerts_modal_destroy(alerts_modal_t* modal)
 		modal->field_data = NULL;
 	}
 
-	printf("[I] alerts_modal: Modal destruction complete\n");
+	// Free modal struct last
 	free(modal);
+
+	// Clear pending state and delete the timer
+	s_alerts_destroy_pending = false;
+	s_alerts_destroy_timer = NULL;
+	if (timer) lv_timer_del(timer);
+}
+
+// Destroy alerts modal (deferred to avoid re-entrancy with LVGL events)
+void alerts_modal_destroy(alerts_modal_t* modal)
+{
+	if (!modal) return;
+
+	printf("[I] alerts_modal: Destroying alerts modal (deferred)\n");
+
+	if (s_alerts_destroy_pending) {
+		printf("[W] alerts_modal: Destroy already pending, ignoring duplicate request\n");
+		return;
+	}
+	s_alerts_destroy_pending = true;
+
+	// Cancel any previous timer defensively
+	if (s_alerts_destroy_timer) {
+		lv_timer_del(s_alerts_destroy_timer);
+		s_alerts_destroy_timer = NULL;
+	}
+
+	// Schedule a short delay to allow LVGL to flush pending events before deletion
+	s_alerts_destroy_timer = lv_timer_create(alerts_modal_destroy_timer_cb, 50, modal);
 }
 
 bool alerts_modal_is_visible(alerts_modal_t* modal)

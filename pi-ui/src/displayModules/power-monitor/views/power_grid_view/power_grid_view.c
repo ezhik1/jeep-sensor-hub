@@ -1,16 +1,21 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../power-monitor.h"
+#include "../../power-monitor.h"
 #include "power_grid_view.h"
 
-#include "../../../state/device_state.h"
-#include "../../../data/lerp_data/lerp_data.h"
+#include "../../../../state/device_state.h"
+#include "../../../../data/lerp_data/lerp_data.h"
+#include "../../../../app_data_store.h"
 
-#include "../../shared/gauges/bar_graph_gauge.h"
+#include "../../../shared/gauges/bar_graph_gauge/bar_graph_gauge.h"
+#include "../../../shared/utils/number_formatting/number_formatting.h"
 
-#include "../../shared/palette.h"
-#include "../../../fonts/lv_font_noplato_24.h"
+#include "../../../shared/palette.h"
+#include "../../../../fonts/lv_font_noplato_24.h"
+
+// Device state for JSON-backed history
+#include "../../../../state/device_state.h"
 
 static const char *TAG = "power_grid_view";
 
@@ -83,12 +88,21 @@ static void create_gauge_row(
 	lv_obj_set_flex_align(numeric_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 	lv_obj_set_style_pad_gap(numeric_container, 0, 0);
 
+	// Create a container for the value label to handle warning icons properly
+	lv_obj_t* value_container = lv_obj_create(numeric_container);
+	lv_obj_set_size(value_container, 50, 30); // Fixed size for value area
+	lv_obj_set_style_bg_opa(value_container, LV_OPA_TRANSP, 0);
+	lv_obj_set_style_border_width(value_container, 0, 0);
+	lv_obj_set_style_pad_all(value_container, 0, 0);
+	lv_obj_clear_flag(value_container, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_add_flag(value_container, LV_OBJ_FLAG_EVENT_BUBBLE);
+
 	// Number Value for Gauge Row
-	*value_label = lv_label_create(numeric_container);
+	*value_label = lv_label_create(value_container);
 	lv_label_set_text(*value_label, "00.0");
 	lv_obj_set_size(*value_label, 50, LV_SIZE_CONTENT); // Fixed width for 4 characters (00.0)
 	lv_obj_set_style_text_color(*value_label, color, 0);
-	lv_obj_set_style_text_font(*value_label, font, 0); // Use passed font
+	lv_obj_set_style_text_font(*value_label, &lv_font_noplato_24, 0); // Use monospace font
 	lv_obj_set_style_text_align(*value_label, LV_TEXT_ALIGN_RIGHT, 0);
 	lv_obj_set_style_pad_all(*value_label, 0, 0); // Remove any internal padding
 	lv_obj_set_style_border_width(*value_label, 0, 0); // No border
@@ -100,6 +114,9 @@ static void create_gauge_row(
 	lv_obj_set_style_text_decor(*value_label, LV_TEXT_DECOR_NONE, 0); // No text decoration
 	lv_obj_set_style_text_letter_space(*value_label, 0, 0); // No letter spacing changes
 	lv_obj_set_style_text_line_space(*value_label, 0, 0); // No line spacing changes
+
+	// Center the value label in its container
+	lv_obj_center(*value_label);
 
 	// Create title label with natural sizing for proper centering
 	*title_label = lv_label_create(numeric_container);
@@ -133,7 +150,7 @@ static void create_gauge_row(
 
 	// Create gauge (shrink by 6px to give more space for numeric values)
 	int gauge_width = (container_width * BAR_GRAPH_PERCENT) / 100 - 6;
-	bar_graph_gauge_init(gauge, gauge_container, 0, 0, gauge_width, gauge_height, 3, 1);
+	bar_graph_gauge_init(gauge, gauge_container, 0, 0, gauge_width, gauge_height, 2, 3);
 	bar_graph_gauge_configure_advanced(
 		gauge, // gauge pointer
 		mode, // graph mode
@@ -144,9 +161,9 @@ static void create_gauge_row(
 }
 
 // Static bar graph gauges for this view (temporarily reverted from shared)
-static bar_graph_gauge_t s_starter_voltage_gauge;
-static bar_graph_gauge_t s_house_voltage_gauge;
-static bar_graph_gauge_t s_solar_voltage_gauge;
+bar_graph_gauge_t s_starter_voltage_gauge;
+bar_graph_gauge_t s_house_voltage_gauge;
+bar_graph_gauge_t s_solar_voltage_gauge;
 
 // Static numeric value labels and title labels for each gauge
 static lv_obj_t* s_starter_value_label = NULL;
@@ -158,6 +175,13 @@ static lv_obj_t* s_solar_title_label = NULL;
 
 // Value editor for interactive editing
 static int s_current_editing_gauge = -1; // -1 = none, 0 = starter, 1 = house, 2 = solar
+
+// DEPRECATED: Old history helper - now using centralized power_monitor_push_gauge_sample()
+// Left as reference only - DO NOT USE
+
+// DEPRECATED: Use centralized power_monitor_seed_gauge_from_history() instead
+// This function is kept for reference but uses the OLD namespace path
+// All seeding should now go through the centralized history system in power-monitor.c
 
 void power_monitor_power_grid_view_render(lv_obj_t *container)
 {
@@ -232,8 +256,11 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 		"CABIN\n(V)", PALETTE_WARM_WHITE,
 		container_width, gauge_height,
 		starter_baseline, starter_min, starter_max,
-		BAR_GRAPH_MODE_BIPOLAR, &lv_font_noplato_24, 0
+		BAR_GRAPH_MODE_BIPOLAR, &lv_font_montserrat_16, 0
 	);
+
+	// Apply timeline settings for current view
+	power_monitor_update_gauge_timeline_duration(POWER_MONITOR_GAUGE_GRID_STARTER_VOLTAGE);
 
 	create_gauge_row(
 		container, &s_house_voltage_gauge,
@@ -241,8 +268,11 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 		"HOUSE\n(V)", PALETTE_WARM_WHITE,
 		container_width, gauge_height,
 		house_baseline, house_min, house_max,
-		BAR_GRAPH_MODE_BIPOLAR, &lv_font_noplato_24, 1
+		BAR_GRAPH_MODE_BIPOLAR, &lv_font_montserrat_16, 1
 	);
+
+	// Apply timeline settings for current view
+	power_monitor_update_gauge_timeline_duration(POWER_MONITOR_GAUGE_GRID_HOUSE_VOLTAGE);
 
 	create_gauge_row(
 		container, &s_solar_voltage_gauge,
@@ -250,23 +280,20 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 		"SOLAR\n(V)", PALETTE_WARM_WHITE,
 		container_width, gauge_height,
 		0.0f, solar_min, solar_max,
-		BAR_GRAPH_MODE_POSITIVE_ONLY, &lv_font_noplato_24, 2
+		BAR_GRAPH_MODE_POSITIVE_ONLY, &lv_font_montserrat_16, 2
 	);
+
+	// Apply timeline settings for current view
+	power_monitor_update_gauge_timeline_duration(POWER_MONITOR_GAUGE_GRID_SOLAR_VOLTAGE);
+
+	// Gauges are now seeded directly when bar_graph_gauge_add_data_point is called
 
 	// Update labels and ticks for Y-axis (show ticks but not values)
 	bar_graph_gauge_update_labels_and_ticks(&s_starter_voltage_gauge);
 	bar_graph_gauge_update_labels_and_ticks(&s_house_voltage_gauge);
 	bar_graph_gauge_update_labels_and_ticks(&s_solar_voltage_gauge);
 
-	// Add initial data to make gauges visible
-	bar_graph_gauge_add_data_point(&s_starter_voltage_gauge, 12.5f);
-	bar_graph_gauge_add_data_point(&s_house_voltage_gauge, 13.2f);
-	bar_graph_gauge_add_data_point(&s_solar_voltage_gauge, 14.1f);
-
-	// Force canvas updates to make data visible
-	bar_graph_gauge_update_canvas(&s_starter_voltage_gauge);
-	bar_graph_gauge_update_canvas(&s_house_voltage_gauge);
-	bar_graph_gauge_update_canvas(&s_solar_voltage_gauge);
+	// Canvas update is now handled by power_monitor_seed_gauge_from_history()
 
 	// Mark view as initialized
 	s_view_initialized = true;
@@ -275,6 +302,26 @@ void power_monitor_power_grid_view_render(lv_obj_t *container)
 // Reset view state when view is destroyed
 void power_monitor_power_grid_view_reset_state(void)
 {
+	// History persistence is now handled by centralized system in power-monitor.c
+	// Just cleanup gauges
+	if (s_starter_voltage_gauge.initialized) {
+		bar_graph_gauge_cleanup(&s_starter_voltage_gauge);
+	}
+	if (s_house_voltage_gauge.initialized) {
+		bar_graph_gauge_cleanup(&s_house_voltage_gauge);
+	}
+	if (s_solar_voltage_gauge.initialized) {
+		bar_graph_gauge_cleanup(&s_solar_voltage_gauge);
+	}
+
+	// Clear row containers if still valid
+	for (int i = 0; i < 3; i++) {
+		if (s_row_containers[i] && lv_obj_is_valid(s_row_containers[i])) {
+			lv_obj_del(s_row_containers[i]);
+			s_row_containers[i] = NULL;
+		}
+	}
+
 	s_view_initialized = false;
 }
 
@@ -296,64 +343,86 @@ void power_monitor_power_grid_view_update_data(void)
 	float house_voltage = lerp_value_get_display(&lerp.house_voltage);
 	float solar_voltage = lerp_value_get_display(&lerp.solar_voltage);
 
+
 	// Update bar graphs with data from LERP system
-	// Note: bar_graph_gauge_add_data_point() already calls bar_graph_gauge_update_canvas() internally
+	// Note: bar_graph_gauge_add_data_point() handles rendering internally
 
 	if (s_starter_voltage_gauge.initialized) {
-		// Add safety check for gauge validity
-		if (s_starter_voltage_gauge.container && lv_obj_is_valid(s_starter_voltage_gauge.container)) {
-			bar_graph_gauge_add_data_point(&s_starter_voltage_gauge, starter_voltage);
-		} else {
-			printf("[W] power_grid_view: Starter voltage gauge container is invalid, skipping data update\n");
-		}
+		// Data sampling and gauge updates are now handled centrally in power_monitor_update_all_gauge_histories()
 
 		// Update numeric value label with current value
 		if (s_starter_value_label && lv_obj_is_valid(s_starter_value_label)) {
-			char value_text[16];
-			snprintf(value_text, sizeof(value_text), "%.1f", starter_voltage);
-			lv_label_set_text(s_starter_value_label, value_text);
+			// Get power monitor data to check for errors
+			power_monitor_data_t* power_data_ptr = power_monitor_get_data();
+
+			number_formatting_config_t config = {
+				.label = s_starter_value_label,
+				.font = &lv_font_noplato_24, // Use monospace font
+				.color = PALETTE_WARM_WHITE,
+				.warning_color = PALETTE_YELLOW,
+				.error_color = lv_color_hex(0xFF0000), // Red for errors
+				.show_warning = false, // No warning for power grid view
+				.show_error = power_data_ptr->starter_battery.voltage_error,
+				.warning_icon_size = 16,
+				.alignment = NUMBER_ALIGN_CENTER // Centered for power grid view
+			};
+			format_and_display_number(starter_voltage, &config);
 		}
 	}
 
 	if (s_house_voltage_gauge.initialized) {
-		// Add safety check for gauge validity
-		if (s_house_voltage_gauge.container && lv_obj_is_valid(s_house_voltage_gauge.container)) {
-			bar_graph_gauge_add_data_point(&s_house_voltage_gauge, house_voltage);
-		} else {
-			printf("[W] power_grid_view: House voltage gauge container is invalid, skipping data update\n");
-		}
+		// Data sampling and gauge updates are now handled centrally in power_monitor_update_all_gauge_histories()
 
 		// Update numeric value label with current value
 		if (s_house_value_label && lv_obj_is_valid(s_house_value_label)) {
-			char value_text[16];
-			snprintf(value_text, sizeof(value_text), "%.1f", house_voltage);
-			lv_label_set_text(s_house_value_label, value_text);
+			// Get power monitor data to check for errors
+			power_monitor_data_t* power_data_ptr = power_monitor_get_data();
+
+			number_formatting_config_t config = {
+				.label = s_house_value_label,
+				.font = &lv_font_noplato_24, // Use monospace font
+				.color = PALETTE_WARM_WHITE,
+				.warning_color = PALETTE_YELLOW,
+				.error_color = lv_color_hex(0xFF0000), // Red for errors
+				.show_warning = false,
+				.show_error = power_data_ptr->house_battery.voltage_error,
+				.warning_icon_size = 16,
+				.alignment = NUMBER_ALIGN_CENTER // Centered for power grid view
+			};
+			format_and_display_number(house_voltage, &config);
 		}
 	}
 
 	if (s_solar_voltage_gauge.initialized) {
-		// Add safety check for gauge validity
-		if (s_solar_voltage_gauge.container && lv_obj_is_valid(s_solar_voltage_gauge.container)) {
-			bar_graph_gauge_add_data_point(&s_solar_voltage_gauge, solar_voltage);
-		} else {
-			printf("[W] power_grid_view: Solar voltage gauge container is invalid, skipping data update\n");
-		}
+		// Data sampling and gauge updates are now handled centrally in power_monitor_update_all_gauge_histories()
 
 		// Update numeric value label with current value
 		if (s_solar_value_label && lv_obj_is_valid(s_solar_value_label)) {
-			char value_text[16];
-			snprintf(value_text, sizeof(value_text), "%.1f", solar_voltage);
-			lv_label_set_text(s_solar_value_label, value_text);
+			// Get power monitor data to check for errors
+			power_monitor_data_t* power_data_ptr = power_monitor_get_data();
+
+			number_formatting_config_t config = {
+				.label = s_solar_value_label,
+				.font = &lv_font_noplato_24, // Use monospace font
+				.color = PALETTE_WARM_WHITE,
+				.warning_color = PALETTE_YELLOW,
+				.error_color = lv_color_hex(0xFF0000), // Red for errors
+				.show_warning = false,
+				.show_error = power_data_ptr->solar_input.voltage_error,
+				.warning_icon_size = 16,
+				.alignment = NUMBER_ALIGN_CENTER // Centered for power grid view
+			};
+			format_and_display_number(solar_voltage, &config);
 		}
 	}
 
-	// Update gauge intervals and timeline durations
-	power_grid_view_update_gauge_intervals();
+	// Timeline settings are applied when gauges are created, not every render
 
 	// Mark view as initialized for proper cleanup
 	s_view_initialized = true;
 	// printf("[I] power_grid_view: Power grid view render complete, view initialized\n");
 }
+
 
 
 void power_monitor_reset_static_gauges(void)
@@ -499,30 +568,5 @@ void power_monitor_power_grid_view_update_configuration(void)
 			BAR_GRAPH_MODE_POSITIVE_ONLY, 0.0f, solar_min, solar_max,
 			"", "V", "V", PALETTE_WARM_WHITE, false, true, false // No border for current view
 		);
-	}
-}
-
-// Update power grid view gauge timelines based on per-gauge timeline settings
-void power_grid_view_update_gauge_intervals(void)
-{
-	// Update starter voltage gauge timeline
-	if (s_starter_voltage_gauge.initialized) {
-		int timeline_duration = device_state_get_int("power_monitor.gauge_timeline_settings.starter_voltage.current_view");
-		uint32_t timeline_duration_ms = timeline_duration * 1000;
-		bar_graph_gauge_set_timeline_duration(&s_starter_voltage_gauge, timeline_duration_ms);
-	}
-
-	// Update house voltage gauge timeline
-	if (s_house_voltage_gauge.initialized) {
-		int timeline_duration = device_state_get_int("power_monitor.gauge_timeline_settings.house_voltage.current_view");
-		uint32_t timeline_duration_ms = timeline_duration * 1000;
-		bar_graph_gauge_set_timeline_duration(&s_house_voltage_gauge, timeline_duration_ms);
-	}
-
-	// Update solar voltage gauge timeline
-	if (s_solar_voltage_gauge.initialized) {
-		int timeline_duration = device_state_get_int("power_monitor.gauge_timeline_settings.solar_voltage.current_view");
-		uint32_t timeline_duration_ms = timeline_duration * 1000;
-		bar_graph_gauge_set_timeline_duration(&s_solar_voltage_gauge, timeline_duration_ms);
 	}
 }

@@ -233,6 +233,56 @@ void device_state_set_value(const char* path, double value) {
 	}
 }
 
+void device_state_set_float_array(const char* path, const float* values, int count, bool save_now) {
+	if (!path || !values || count < 0) return;
+	// Split path into parent path and final key (no array index handling needed here)
+	char parent_path[256] = {0};
+	char leaf_key[128] = {0};
+	size_t len = strlen(path);
+	const char* last_dot = strrchr(path, '.');
+	if (last_dot) {
+		size_t parent_len = (size_t)(last_dot - path);
+		if (parent_len >= sizeof(parent_path)) parent_len = sizeof(parent_path) - 1;
+		memcpy(parent_path, path, parent_len);
+		parent_path[parent_len] = '\0';
+		strncpy(leaf_key, last_dot + 1, sizeof(leaf_key) - 1);
+	} else {
+		// No dot, place array at root with this key
+		parent_path[0] = '\0';
+		strncpy(leaf_key, path, sizeof(leaf_key) - 1);
+	}
+
+	cJSON* parent = NULL;
+	if (parent_path[0] == '\0') {
+		parent = g_root;
+	} else {
+		parent = get_object_by_path(parent_path, true);
+	}
+	if (!parent || !leaf_key[0]) return;
+
+	// Remove old value at leaf_key if exists, then set array
+	cJSON_DeleteItemFromObjectCaseSensitive(parent, leaf_key);
+	cJSON* arr = cJSON_CreateArray();
+	if (!arr) return;
+	for (int i = 0; i < count; i++) {
+		cJSON_AddItemToArray(arr, cJSON_CreateNumber(values[i]));
+	}
+	cJSON_AddItemToObject(parent, leaf_key, arr);
+	if (save_now) device_state_save();
+}
+
+int device_state_get_float_array(const char* path, float* out_values, int max_count) {
+	cJSON* obj = get_object_by_path(path, false);
+	if (!obj || !cJSON_IsArray(obj)) return 0;
+	int n = cJSON_GetArraySize(obj);
+	if (n > max_count) n = max_count;
+	for (int i = 0; i < n; i++) {
+		cJSON* it = cJSON_GetArrayItem(obj, i);
+		out_values[i] = (float)(cJSON_IsNumber(it) ? it->valuedouble : 0.0);
+	}
+	return n;
+}
+
 // Save device state to JSON file
 void device_state_save(void) {
 	if (!g_root) {

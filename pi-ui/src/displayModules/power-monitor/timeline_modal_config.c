@@ -86,15 +86,15 @@ void power_monitor_timeline_changed_callback(int gauge_index, int duration_secon
 	printf("[I] power_monitor: Timeline changed for gauge %d to %d seconds (%s view)\n",
 		   gauge_index, duration_seconds, is_current_view ? "current" : "detail");
 
-	// Map gauge index to gauge type
-	power_monitor_gauge_type_t gauge_type;
+	// Map gauge index to data type
+	power_monitor_data_type_t gauge_type;
 	switch (gauge_index) {
-		case 0: gauge_type = POWER_MONITOR_GAUGE_STARTER_VOLTAGE; break;
-		case 1: gauge_type = POWER_MONITOR_GAUGE_STARTER_CURRENT; break;
-		case 2: gauge_type = POWER_MONITOR_GAUGE_HOUSE_VOLTAGE; break;
-		case 3: gauge_type = POWER_MONITOR_GAUGE_HOUSE_CURRENT; break;
-		case 4: gauge_type = POWER_MONITOR_GAUGE_SOLAR_VOLTAGE; break;
-		case 5: gauge_type = POWER_MONITOR_GAUGE_SOLAR_CURRENT; break;
+		case 0: gauge_type = POWER_MONITOR_DATA_STARTER_VOLTAGE; break;
+		case 1: gauge_type = POWER_MONITOR_DATA_STARTER_CURRENT; break;
+		case 2: gauge_type = POWER_MONITOR_DATA_HOUSE_VOLTAGE; break;
+		case 3: gauge_type = POWER_MONITOR_DATA_HOUSE_CURRENT; break;
+		case 4: gauge_type = POWER_MONITOR_DATA_SOLAR_VOLTAGE; break;
+		case 5: gauge_type = POWER_MONITOR_DATA_SOLAR_CURRENT; break;
 		default:
 			printf("[E] power_monitor: Invalid gauge index %d\n", gauge_index);
 			return;
@@ -102,14 +102,14 @@ void power_monitor_timeline_changed_callback(int gauge_index, int duration_secon
 
 	// Save to the appropriate view based on is_current_view parameter
 	// Helper function to convert gauge type to string name
-	const char* gauge_type_to_string(power_monitor_gauge_type_t gauge_type) {
+	const char* gauge_type_to_string(power_monitor_data_type_t gauge_type) {
 		switch (gauge_type) {
-			case POWER_MONITOR_GAUGE_STARTER_VOLTAGE: return "starter_voltage";
-			case POWER_MONITOR_GAUGE_STARTER_CURRENT: return "starter_current";
-			case POWER_MONITOR_GAUGE_HOUSE_VOLTAGE: return "house_voltage";
-			case POWER_MONITOR_GAUGE_HOUSE_CURRENT: return "house_current";
-			case POWER_MONITOR_GAUGE_SOLAR_VOLTAGE: return "solar_voltage";
-			case POWER_MONITOR_GAUGE_SOLAR_CURRENT: return "solar_current";
+			case POWER_MONITOR_DATA_STARTER_VOLTAGE: return "starter_voltage";
+			case POWER_MONITOR_DATA_STARTER_CURRENT: return "starter_current";
+			case POWER_MONITOR_DATA_HOUSE_VOLTAGE: return "house_voltage";
+			case POWER_MONITOR_DATA_HOUSE_CURRENT: return "house_current";
+			case POWER_MONITOR_DATA_SOLAR_VOLTAGE: return "solar_voltage";
+			case POWER_MONITOR_DATA_SOLAR_CURRENT: return "solar_current";
 			default: return "unknown";
 		}
 	}
@@ -118,15 +118,15 @@ void power_monitor_timeline_changed_callback(int gauge_index, int duration_secon
 		char timeline_path[256];
 		snprintf(timeline_path, sizeof(timeline_path), "power_monitor.gauge_timeline_settings.%s.current_view", gauge_type_to_string(gauge_type));
 		device_state_set_int(timeline_path, duration_seconds);
-		// Update the specific gauge's interval (affects update frequency)
-		extern void power_monitor_update_gauge_timeline(power_monitor_gauge_type_t gauge_type, bool is_detail_view);
-		power_monitor_update_gauge_timeline(gauge_type, false);
+		// Update all gauge instances that use this data type for current view
+		extern void power_monitor_update_data_type_timeline_duration(power_monitor_data_type_t data_type, const char* view_type);
+		power_monitor_update_data_type_timeline_duration(gauge_type, "current_view");
 	} else {
 		char timeline_path[256];
 		snprintf(timeline_path, sizeof(timeline_path), "power_monitor.gauge_timeline_settings.%s.detail_view", gauge_type_to_string(gauge_type));
 		device_state_set_int(timeline_path, duration_seconds);
-		// Update the detail gauge's timeline duration (affects display range)
-		extern void power_monitor_update_gauge_timeline(power_monitor_gauge_type_t gauge_type, bool is_detail_view);
-		power_monitor_update_gauge_timeline(gauge_type, true);
+		// Update all gauge instances that use this data type for detail view
+		extern void power_monitor_update_data_type_timeline_duration(power_monitor_data_type_t data_type, const char* view_type);
+		power_monitor_update_data_type_timeline_duration(gauge_type, "detail_view");
 	}
 }

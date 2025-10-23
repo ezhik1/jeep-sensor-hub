@@ -6,15 +6,15 @@
 
 #include "timeline_modal.h"
 
-#include "../../../state/device_state.h"
+#include "../../../../state/device_state.h"
 
 // UI Style
-#include "../palette.h"
-#include "../../../fonts/lv_font_noplato_10.h"
-#include "../../../fonts/lv_font_noplato_14.h"
-#include "../../../fonts/lv_font_noplato_18.h"
-#include "../../../fonts/lv_font_noplato_24.h"
-#include "../utils/animation.h"
+#include "../../palette.h"
+#include "../../../../fonts/lv_font_noplato_10.h"
+#include "../../../../fonts/lv_font_noplato_14.h"
+#include "../../../../fonts/lv_font_noplato_18.h"
+#include "../../../../fonts/lv_font_noplato_24.h"
+#include "../../utils/animation/animation.h"
 
 
 // #### Default State Colors ####
@@ -1481,6 +1481,13 @@ void timeline_modal_hide(timeline_modal_t* modal)
 	modal->is_visible = false;
 }
 
+// Check if timeline modal is visible
+bool timeline_modal_is_visible(timeline_modal_t* modal)
+{
+	if (!modal) return false;
+	return modal->is_visible;
+}
+
 // Get current timeline duration
 int timeline_modal_get_duration(timeline_modal_t* modal)
 {
@@ -1505,15 +1512,15 @@ static void load_current_gauge_timeline_settings(timeline_modal_t* modal)
 
 	// Load current timeline duration for each gauge
 	for (int i = 0; i < modal->config.gauge_count; i++) {
-		// Map gauge index to gauge type
-		power_monitor_gauge_type_t gauge_type;
+		// Map gauge index to data type
+		power_monitor_data_type_t gauge_type;
 		switch (i) {
-			case 0: gauge_type = POWER_MONITOR_GAUGE_STARTER_VOLTAGE; break;
-			case 1: gauge_type = POWER_MONITOR_GAUGE_STARTER_CURRENT; break;
-			case 2: gauge_type = POWER_MONITOR_GAUGE_HOUSE_VOLTAGE; break;
-			case 3: gauge_type = POWER_MONITOR_GAUGE_HOUSE_CURRENT; break;
-			case 4: gauge_type = POWER_MONITOR_GAUGE_SOLAR_VOLTAGE; break;
-			case 5: gauge_type = POWER_MONITOR_GAUGE_SOLAR_CURRENT; break;
+			case 0: gauge_type = POWER_MONITOR_DATA_STARTER_VOLTAGE; break;
+			case 1: gauge_type = POWER_MONITOR_DATA_STARTER_CURRENT; break;
+			case 2: gauge_type = POWER_MONITOR_DATA_HOUSE_VOLTAGE; break;
+			case 3: gauge_type = POWER_MONITOR_DATA_HOUSE_CURRENT; break;
+			case 4: gauge_type = POWER_MONITOR_DATA_SOLAR_VOLTAGE; break;
+			case 5: gauge_type = POWER_MONITOR_DATA_SOLAR_CURRENT; break;
 			default:
 				printf("[E] timeline_modal: Invalid gauge index %d\n", i);
 				continue;
@@ -1521,14 +1528,14 @@ static void load_current_gauge_timeline_settings(timeline_modal_t* modal)
 
 		// Get current and detail view timeline durations for this gauge
 		// Helper function to convert gauge type to string name
-		const char* gauge_type_to_string(power_monitor_gauge_type_t gauge_type) {
+		const char* gauge_type_to_string(power_monitor_data_type_t gauge_type) {
 			switch (gauge_type) {
-				case POWER_MONITOR_GAUGE_STARTER_VOLTAGE: return "starter_voltage";
-				case POWER_MONITOR_GAUGE_STARTER_CURRENT: return "starter_current";
-				case POWER_MONITOR_GAUGE_HOUSE_VOLTAGE: return "house_voltage";
-				case POWER_MONITOR_GAUGE_HOUSE_CURRENT: return "house_current";
-				case POWER_MONITOR_GAUGE_SOLAR_VOLTAGE: return "solar_voltage";
-				case POWER_MONITOR_GAUGE_SOLAR_CURRENT: return "solar_current";
+				case POWER_MONITOR_DATA_STARTER_VOLTAGE: return "starter_voltage";
+				case POWER_MONITOR_DATA_STARTER_CURRENT: return "starter_current";
+				case POWER_MONITOR_DATA_HOUSE_VOLTAGE: return "house_voltage";
+				case POWER_MONITOR_DATA_HOUSE_CURRENT: return "house_current";
+				case POWER_MONITOR_DATA_SOLAR_VOLTAGE: return "solar_voltage";
+				case POWER_MONITOR_DATA_SOLAR_CURRENT: return "solar_current";
 				default: return "unknown";
 			}
 		}
@@ -1559,37 +1566,84 @@ static void load_current_gauge_timeline_settings(timeline_modal_t* modal)
 	}
 }
 
-// Destroy timeline modal
+// Deferred destroy state
+static bool s_timeline_destroy_pending = false;
+static lv_timer_t* s_timeline_destroy_timer = NULL;
+
+static void timeline_modal_destroy_timer_cb(lv_timer_t* timer)
+{
+	// Retrieve modal pointer passed as user data
+	timeline_modal_t* modal = (timeline_modal_t*)lv_timer_get_user_data(timer);
+	printf("[I] timeline_modal: (timer) Destroying timeline modal\n");
+
+	if (!modal) {
+		if (timer) lv_timer_del(timer);
+		s_timeline_destroy_timer = NULL;
+		s_timeline_destroy_pending = false;
+		return;
+	}
+
+	// Ensure hidden to stop interactions
+	timeline_modal_hide(modal);
+
+	// Destroy subcomponents that own their own LVGL objects before deleting the tree
+	if (modal->time_input) {
+		time_input_destroy(modal->time_input);
+		modal->time_input = NULL;
+	}
+	if (modal->animation_manager) {
+		animation_manager_destroy(modal->animation_manager);
+		modal->animation_manager = NULL;
+	}
+
+	// Delete the LVGL tree (removes event callbacks bound to the object)
+	if (modal->background && lv_obj_is_valid(modal->background)) {
+		lv_obj_del(modal->background);
+		modal->background = NULL;
+	}
+
+	// Free allocated memory arrays
+	if (modal->gauge_sections) {
+		free(modal->gauge_sections);
+		modal->gauge_sections = NULL;
+	}
+	if (modal->gauge_titles) {
+		free(modal->gauge_titles);
+		modal->gauge_titles = NULL;
+	}
+	if (modal->gauge_ui) {
+		free(modal->gauge_ui);
+		modal->gauge_ui = NULL;
+	}
+
+	// Free modal struct last
+	free(modal);
+
+	// Clear pending state and delete the timer
+	s_timeline_destroy_pending = false;
+	s_timeline_destroy_timer = NULL;
+	if (timer) lv_timer_del(timer);
+}
+
+// Destroy timeline modal (deferred to avoid re-entrancy with LVGL events)
 void timeline_modal_destroy(timeline_modal_t* modal)
 {
 	if (!modal) return;
 
-	printf("[I] timeline_modal: Destroying timeline modal\n");
+	printf("[I] timeline_modal: Destroying timeline modal (deferred)\n");
 
-	// Individual changes are already saved via callback, no need to save all
+	if (s_timeline_destroy_pending) {
+		printf("[W] timeline_modal: Destroy already pending, ignoring duplicate request\n");
+		return;
+	}
+	s_timeline_destroy_pending = true;
 
-	// Hide modal first
-	timeline_modal_hide(modal);
-
-	// Free allocated memory
-	if (modal->gauge_sections) {
-		free(modal->gauge_sections);
-	}
-	if (modal->gauge_titles) {
-		free(modal->gauge_titles);
-	}
-	if (modal->gauge_ui) {
-		free(modal->gauge_ui);
-	}
-	if (modal->time_input) {
-		time_input_destroy(modal->time_input);
+	// Cancel any previous timer defensively
+	if (s_timeline_destroy_timer) {
+		lv_timer_del(s_timeline_destroy_timer);
+		s_timeline_destroy_timer = NULL;
 	}
 
-	// Clean up animation manager
-	if (modal->animation_manager) {
-		animation_manager_destroy(modal->animation_manager);
-	}
-
-	// Free the modal itself
-	free(modal);
+	// Schedule a short delay to allow LVGL to flush pending events before deletion
+	s_timeline_destroy_timer = lv_timer_create(timeline_modal_destroy_timer_cb, 50, modal);
 }

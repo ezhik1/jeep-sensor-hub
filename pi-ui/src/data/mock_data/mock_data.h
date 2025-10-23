@@ -27,6 +27,16 @@ typedef struct {
 	bool starter_battery_connected;
 	bool house_battery_connected;
 	bool solar_input_connected;
+
+	// Sensor error states
+	bool starter_voltage_error;
+	bool starter_current_error;
+	bool house_voltage_error;
+	bool house_current_error;
+	bool solar_voltage_error;
+	bool solar_current_error;
+	uint32_t error_start_time;    // When current error started
+	uint32_t error_duration_ms;   // How long error should last
 } mock_power_monitor_data_t;
 
 // Temperature & Humidity Mock Data

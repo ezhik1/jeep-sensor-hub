@@ -56,6 +56,16 @@ void mock_data_init(void)
 	g_mock_data.power_monitor.house_battery_connected = true;
 	g_mock_data.power_monitor.solar_input_connected = false;
 
+	// Initialize error states
+	g_mock_data.power_monitor.starter_voltage_error = false;
+	g_mock_data.power_monitor.starter_current_error = false;
+	g_mock_data.power_monitor.house_voltage_error = false;
+	g_mock_data.power_monitor.house_current_error = false;
+	g_mock_data.power_monitor.solar_voltage_error = false;
+	g_mock_data.power_monitor.solar_current_error = false;
+	g_mock_data.power_monitor.error_start_time = 0;
+	g_mock_data.power_monitor.error_duration_ms = 0;
+
 	g_mock_data.temp_humidity.temperature_celsius = 25.0f;
 	g_mock_data.temp_humidity.humidity_percent = 50.0f;
 	g_mock_data.temp_humidity.pressure_hpa = 1013.25f;
@@ -256,6 +266,11 @@ uint32_t mock_data_random_uint32(uint32_t min, uint32_t max)
 // Private update functions
 static void update_power_monitor_mock_data(void)
 {
+	// Get current time for error simulation
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	uint32_t current_time_ms = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+
 	// Simulate realistic power monitoring scenarios
 	g_mock_data.power_monitor.ignition_on = mock_data_random_bool(0.3f); // 30% chance ignition is on
 
@@ -265,14 +280,14 @@ static void update_power_monitor_mock_data(void)
 		g_mock_data.power_monitor.starter_battery_voltage = mock_data_sweep_float(10.0f, 18.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
 		g_mock_data.power_monitor.starter_battery_connected = true;
 		// Starter current when ignition is on (charging from alternator)
-		g_mock_data.power_monitor.starter_battery_current = mock_data_sweep_float(5.0f, 15.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
+		g_mock_data.power_monitor.starter_battery_current = mock_data_sweep_float(-150.0f, 150.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
 	} else {
 		// Engine off - simulate discharge scenario
 		g_mock_data.power_monitor.current_amps = mock_data_sweep_float(-2.0f, 0.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
 		g_mock_data.power_monitor.starter_battery_voltage = mock_data_sweep_float(10.0f, 18.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
 		g_mock_data.power_monitor.starter_battery_connected = mock_data_random_bool(0.95f);
 		// Starter current when ignition is off (small discharge)
-		g_mock_data.power_monitor.starter_battery_current = mock_data_sweep_float(-2.0f, 0.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
+		g_mock_data.power_monitor.starter_battery_current = mock_data_sweep_float(-150.0f, 150.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
 	}
 
 	// House battery always connected and powered
@@ -299,6 +314,54 @@ static void update_power_monitor_mock_data(void)
 	g_mock_data.power_monitor.current_amps += oscillation;
 	g_mock_data.power_monitor.starter_battery_voltage += oscillation * 0.02f; // Very reduced impact
 	g_mock_data.power_monitor.house_battery_voltage += oscillation * 0.02f; // Very reduced impact
+
+	// Simulate sensor read errors (1-3 second duration)
+	// Check if current error has expired
+	if (g_mock_data.power_monitor.error_start_time > 0 &&
+		(current_time_ms - g_mock_data.power_monitor.error_start_time) >= g_mock_data.power_monitor.error_duration_ms) {
+		// Error expired, clear all errors
+		g_mock_data.power_monitor.starter_voltage_error = false;
+		g_mock_data.power_monitor.starter_current_error = false;
+		g_mock_data.power_monitor.house_voltage_error = false;
+		g_mock_data.power_monitor.house_current_error = false;
+		g_mock_data.power_monitor.solar_voltage_error = false;
+		g_mock_data.power_monitor.solar_current_error = false;
+		g_mock_data.power_monitor.error_start_time = 0;
+		g_mock_data.power_monitor.error_duration_ms = 0;
+	}
+
+	// Start new error if none is active (20% chance per update for testing)
+	if (g_mock_data.power_monitor.error_start_time == 0 && mock_data_random_bool(0.20f)) {
+		// Randomly select 1-3 sensors to have errors
+		int num_errors = mock_data_random_uint32(1, 3);
+		g_mock_data.power_monitor.error_start_time = current_time_ms;
+		g_mock_data.power_monitor.error_duration_ms = mock_data_random_uint32(1000, 3000); // 1-3 seconds
+
+		// Reset all error flags first
+		g_mock_data.power_monitor.starter_voltage_error = false;
+		g_mock_data.power_monitor.starter_current_error = false;
+		g_mock_data.power_monitor.house_voltage_error = false;
+		g_mock_data.power_monitor.house_current_error = false;
+		g_mock_data.power_monitor.solar_voltage_error = false;
+		g_mock_data.power_monitor.solar_current_error = false;
+
+		// Randomly select which sensors to error
+		bool sensors[6] = {false, false, false, false, false, false};
+		for (int i = 0; i < num_errors; i++) {
+			int sensor_idx;
+			do {
+				sensor_idx = mock_data_random_uint32(0, 5);
+			} while (sensors[sensor_idx]);
+			sensors[sensor_idx] = true;
+		}
+
+		g_mock_data.power_monitor.starter_voltage_error = sensors[0];
+		g_mock_data.power_monitor.starter_current_error = sensors[1];
+		g_mock_data.power_monitor.house_voltage_error = sensors[2];
+		g_mock_data.power_monitor.house_current_error = sensors[3];
+		g_mock_data.power_monitor.solar_voltage_error = sensors[4];
+		g_mock_data.power_monitor.solar_current_error = sensors[5];
+	}
 }
 
 static void update_temp_humidity_mock_data(void)
@@ -499,16 +562,24 @@ void mock_data_write_to_state_objects(void)
 	power_data->starter_battery.current = mock_power->starter_battery_current;
 	power_data->starter_battery.is_connected = mock_power->starter_battery_connected;
 	power_data->starter_battery.is_charging = mock_power->ignition_on;
+	power_data->starter_battery.voltage_error = mock_power->starter_voltage_error;
+	power_data->starter_battery.current_error = mock_power->starter_current_error;
+
+	// Error states are being written to power data
 
 	power_data->house_battery.voltage = mock_power->house_battery_voltage;
 	power_data->house_battery.current = mock_power->house_battery_current;
 	power_data->house_battery.is_connected = mock_power->house_battery_connected;
 	power_data->house_battery.is_charging = mock_power->solar_input_connected;
+	power_data->house_battery.voltage_error = mock_power->house_voltage_error;
+	power_data->house_battery.current_error = mock_power->house_current_error;
 
 	power_data->solar_input.voltage = mock_power->solar_input_voltage;
 	power_data->solar_input.current = mock_power->solar_input_current;
 	power_data->solar_input.is_connected = mock_power->solar_input_connected;
 	power_data->solar_input.is_charging = mock_power->solar_input_connected && mock_power->solar_input_voltage > 0.0f;
+	power_data->solar_input.voltage_error = mock_power->solar_voltage_error;
+	power_data->solar_input.current_error = mock_power->solar_current_error;
 
 	power_data->ignition_on = mock_power->ignition_on;
 

@@ -3,7 +3,7 @@
 
 #include <lvgl.h>
 #include <stdbool.h>
-#include "../numberpad/numberpad.h"
+#include "../../numberpad/numberpad.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -137,6 +137,7 @@ typedef struct {
 	void (*on_close)(void);         // Close callback
 	bool is_visible;                // Visibility state
 	bool numberpad_visible;         // Numberpad visibility state
+	bool field_transition_in_progress; // Flag to prevent click handler from closing during field transition
 } alerts_modal_t;
 
 /**

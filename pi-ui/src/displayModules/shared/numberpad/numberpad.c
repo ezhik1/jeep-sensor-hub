@@ -2,7 +2,7 @@
 #include "numberpad.h"
 #include <string.h>
 #include <stdlib.h>
-#include "../utils/positioning.h"
+#include "../utils/positioning/positioning.h"
 
 static const char* TAG = "numberpad";
 
@@ -540,9 +540,9 @@ static void add_digit(numberpad_t* numpad, char digit) {
 		numpad->is_negative = false; // Reset negative flag on first digit
 	}
 
-	// Just add digits and place decimal to left of rightmost
-	if (numpad->current_length == 0) {
-		// First digit: start with "0.X" or "-0.X" based on negative flag
+	// Handle auto-decimal input: 1→0.1, 15→1.5, 150→15.0, 1500→150
+	if (numpad->digit_count == 0) {
+		// First digit: "1" → "0.1" or "-1" → "-0.1"
 		if (numpad->is_negative) {
 			snprintf(numpad->value_buffer, numpad->buffer_size, "-0.%c", digit);
 			numpad->current_length = 4;
@@ -551,8 +551,8 @@ static void add_digit(numberpad_t* numpad, char digit) {
 			numpad->current_length = 3;
 		}
 		numpad->digit_count = 1;
-	} else if ((numpad->current_length == 3 && !numpad->is_negative && numpad->digit_count == 1) || (numpad->current_length == 4 && numpad->is_negative && numpad->digit_count == 1)) {
-		// Second digit: "0.2" → "2.3" or "-0.2" → "-2.3" (remove leading zero and add new digit)
+	} else if (numpad->digit_count == 1) {
+		// Second digit: "0.1" → "1.5" or "-0.1" → "-1.5"
 		if (numpad->is_negative) {
 			snprintf(numpad->value_buffer, numpad->buffer_size, "-%c.%c", numpad->value_buffer[2], digit);
 			numpad->current_length = 4;
@@ -561,8 +561,8 @@ static void add_digit(numberpad_t* numpad, char digit) {
 			numpad->current_length = 3;
 		}
 		numpad->digit_count = 2;
-	} else if ((numpad->current_length == 3 && !numpad->is_negative && numpad->digit_count == 2) || (numpad->current_length == 4 && numpad->is_negative && numpad->digit_count == 2)) {
-		// Third digit: "2.3" → "23.4" or "-2.3" → "-23.4" (add new digit to left side)
+	} else if (numpad->digit_count == 2) {
+		// Third digit: "1.5" → "15.0" or "-1.5" → "-15.0"
 		if (numpad->is_negative) {
 			snprintf(numpad->value_buffer, numpad->buffer_size, "-%c%c.%c", numpad->value_buffer[1], numpad->value_buffer[3], digit);
 			numpad->current_length = 6;
@@ -571,9 +571,31 @@ static void add_digit(numberpad_t* numpad, char digit) {
 			numpad->current_length = 5;
 		}
 		numpad->digit_count = 3;
-	} else if ((numpad->current_length == 5 && !numpad->is_negative) || (numpad->current_length == 6 && numpad->is_negative)) {
-		// After 3 digits, next input should start over and populate first number
-		// Start over and populate first number as "0.X" or "-0.X"
+	} else if (numpad->digit_count == 3) {
+		// Fourth digit: "15.0" → "150" or "-15.0" → "-150" (remove decimal, add digit)
+		if (numpad->is_negative) {
+			snprintf(numpad->value_buffer, numpad->buffer_size, "-%c%c%c",
+				numpad->value_buffer[1], numpad->value_buffer[2], digit);
+			numpad->current_length = 4;
+		} else {
+			snprintf(numpad->value_buffer, numpad->buffer_size, "%c%c%c",
+				numpad->value_buffer[0], numpad->value_buffer[1], digit);
+			numpad->current_length = 3;
+		}
+		numpad->digit_count = 4; // Complete (3 digits, no decimal)
+		printf("[I] numberpad: Complete 3-digit whole number: '%s'\n", numpad->value_buffer);
+	} else if (numpad->digit_count >= 4) {
+		// Already at maximum (3 digits), clear and start fresh with new digit
+		printf("[I] numberpad: Maximum digits reached, clearing and starting fresh with '%c'\n", digit);
+
+		// Clear current value and start fresh
+		numpad->value_buffer[0] = '\0';
+		numpad->current_length = 0;
+		numpad->is_first_digit = false;
+		numpad->digit_count = 0;
+		numpad->is_negative = false; // Reset negative flag
+
+		// Start fresh with the new digit
 		if (numpad->is_negative) {
 			snprintf(numpad->value_buffer, numpad->buffer_size, "-0.%c", digit);
 			numpad->current_length = 4;
@@ -582,7 +604,6 @@ static void add_digit(numberpad_t* numpad, char digit) {
 			numpad->current_length = 3;
 		}
 		numpad->digit_count = 1;
-		printf("[I] numberpad: Started over and populated first number: '%s'\n", numpad->value_buffer);
 	}
 
 		printf("[I] numberpad: Result: '%s'\n", numpad->value_buffer);
@@ -675,6 +696,40 @@ static void set_value_for_fresh_input(numberpad_t* numpad, const char* value) {
 	strncpy(numpad->value_buffer, value, numpad->buffer_size - 1);
 	numpad->value_buffer[numpad->buffer_size - 1] = '\0';
 	numpad->current_length = strlen(numpad->value_buffer);
+
+	// Parse the value to determine digit count and format
+	numpad->digit_count = 0;
+	numpad->is_negative = (numpad->value_buffer[0] == '-');
+
+	// Count digits (excluding decimal point and negative sign)
+	for (int i = 0; i < numpad->current_length; i++) {
+		if (numpad->value_buffer[i] >= '0' && numpad->value_buffer[i] <= '9') {
+			numpad->digit_count++;
+		}
+	}
+
+	// Determine if this is a decimal value or whole number
+	// If it has a decimal point and ends with ".0", treat as whole number
+	bool has_decimal = (strchr(numpad->value_buffer, '.') != NULL);
+	bool ends_with_zero = (numpad->value_buffer[numpad->current_length - 1] == '0');
+
+	if (has_decimal && ends_with_zero && numpad->digit_count >= 3) {
+		// This is a whole number like "150.0" - convert to "150"
+		char temp_buffer[16];
+		int start = numpad->is_negative ? 1 : 0;
+		int whole_digits = numpad->digit_count - 1; // Exclude the trailing zero
+
+		if (numpad->is_negative) {
+			snprintf(temp_buffer, sizeof(temp_buffer), "-%.*s", whole_digits, &numpad->value_buffer[1]);
+		} else {
+			snprintf(temp_buffer, sizeof(temp_buffer), "%.*s", whole_digits, numpad->value_buffer);
+		}
+
+		strncpy(numpad->value_buffer, temp_buffer, numpad->buffer_size - 1);
+		numpad->value_buffer[numpad->buffer_size - 1] = '\0';
+		numpad->current_length = strlen(numpad->value_buffer);
+		numpad->digit_count = whole_digits;
+	}
 
 	// Set flag so next digit input will clear and start fresh
 	numpad->is_first_digit = true;

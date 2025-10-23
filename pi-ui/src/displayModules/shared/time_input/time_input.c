@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../../../fonts/lv_font_noplato_24.h"
-#include "../utils/positioning.h"
+#include "../utils/positioning/positioning.h"
 #include "../palette.h"
 
 // Forward declarations

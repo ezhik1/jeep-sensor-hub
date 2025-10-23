@@ -159,6 +159,36 @@ void detail_screen_restore_current_view_styling(lv_obj_t* container);
  */
 bool detail_screen_prepare_current_view_layout(detail_screen_t* detail);
 
+/**
+ * @brief Generic modal toggle function
+ * @param modal_name Name of the modal to toggle
+ * @param create_func Function to create the modal
+ * @param destroy_func Function to destroy the modal
+ * @param show_func Function to show the modal
+ * @param is_visible_func Function to check if modal is visible
+ * @param config Configuration for the modal
+ * @param on_close_callback Callback when modal is closed
+ */
+void detail_screen_toggle_modal(const char* modal_name,
+	void* (*create_func)(void* config, void (*on_close)(void)),
+	void (*destroy_func)(void* modal),
+	void (*show_func)(void* modal),
+	bool (*is_visible_func)(void* modal),
+	void* config,
+	void (*on_close_callback)(void));
+
+/**
+ * @brief Check if a modal is currently visible
+ * @param modal_name Name of the modal to check
+ * @return true if modal is visible, false otherwise
+ */
+bool detail_screen_is_modal_visible(const char* modal_name);
+
+/**
+ * @brief Reset modal tracking system (call when detail screen is recreated)
+ */
+void detail_screen_reset_modal_tracking(void);
+
 #ifdef __cplusplus
 }
 #endif

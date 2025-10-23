@@ -15,8 +15,10 @@
  * @param min_gap Minimum gap between element and field/container (default: 20)
  * @param screen_margin Screen margin (default: 5)
  */
-void smart_position_outside_container(lv_obj_t* element, lv_obj_t* target_field, lv_obj_t* container,
-									lv_coord_t min_gap, lv_coord_t screen_margin);
+void smart_position_outside_container(
+	lv_obj_t* element, lv_obj_t* target_field, lv_obj_t* container,
+	lv_coord_t min_gap, lv_coord_t screen_margin
+);
 
 /**
  * @brief Smart positioning with default parameters
