@@ -47,7 +47,7 @@ void power_monitor_house_current_view_render(lv_obj_t *container)
 
 	// Create configuration for house_current view
 	single_value_bar_graph_view_config_t config = {
-		.title = "HOUSE\nCURRENT",
+		.title = "HOUSE BATTERY CURRENT",
 		.unit = "(A)",
 		.bar_graph_color = PALETTE_WARM_WHITE,
 		.bar_mode = BAR_GRAPH_MODE_BIPOLAR,

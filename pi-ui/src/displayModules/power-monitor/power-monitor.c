@@ -318,53 +318,41 @@ void power_monitor_create_current_view_content(lv_obj_t* container)
 	power_monitor_view_type_t current_type = get_current_view_type();
 
 	if (current_type == POWER_MONITOR_VIEW_BAR_GRAPH) {
-		printf("[I] power_monitor: Rendering voltage grid view content\n");
+
 		power_monitor_voltage_grid_view_render(container);
-		printf("[I] power_monitor: Voltage grid view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_AMPERAGE_GRID) {
-		printf("[I] power_monitor: Rendering amperage grid view content\n");
+
 		power_monitor_amperage_grid_view_render(container);
-		printf("[I] power_monitor: Amperage grid view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_POWER) {
-		printf("[I] power_monitor: Rendering power grid view content\n");
+
 		power_monitor_power_grid_view_render(container);
-		printf("[I] power_monitor: Power grid view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_NUMERICAL) {
-		printf("[I] power_monitor: Rendering starter voltage view content\n");
+
 		power_monitor_starter_voltage_view_render(container);
-		printf("[I] power_monitor: Starter voltage view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_VOLTAGE) {
-		printf("[I] power_monitor: Rendering house voltage view content\n");
+
 		power_monitor_house_voltage_view_render(container);
-		printf("[I] power_monitor: House voltage view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_VOLTAGE) {
-		printf("[I] power_monitor: Rendering solar voltage view content\n");
+
 		power_monitor_solar_voltage_view_render(container);
-		printf("[I] power_monitor: Solar voltage view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_STARTER_CURRENT) {
-		printf("[I] power_monitor: Rendering starter current view content\n");
+
 		power_monitor_starter_current_view_render(container);
-		printf("[I] power_monitor: Starter current view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_CURRENT) {
-		printf("[I] power_monitor: Rendering house current view content\n");
+
 		power_monitor_house_current_view_render(container);
-		printf("[I] power_monitor: House current view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_CURRENT) {
-		printf("[I] power_monitor: Rendering solar current view content\n");
+
 		power_monitor_solar_current_view_render(container);
-		printf("[I] power_monitor: Solar current view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_STARTER_POWER) {
-		printf("[I] power_monitor: Rendering starter power view content\n");
+
 		power_monitor_starter_power_view_render(container);
-		printf("[I] power_monitor: Starter power view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_POWER) {
-		printf("[I] power_monitor: Rendering house power view content\n");
+
 		power_monitor_house_power_view_render(container);
-		printf("[I] power_monitor: House power view shown and rendered\n");
 	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_POWER) {
-		printf("[I] power_monitor: Rendering solar power view content\n");
+
 		power_monitor_solar_power_view_render(container);
-		printf("[I] power_monitor: Solar power view shown and rendered\n");
 	}
 
 
@@ -2047,53 +2035,41 @@ void power_monitor_render_current_view(lv_obj_t* container)
 
 	// Always render the current view fresh - no complex cleanup logic
 	if (current_type == POWER_MONITOR_VIEW_BAR_GRAPH) {
-			printf("[I] power_monitor: Rendering voltage grid view content\n");
-			power_monitor_voltage_grid_view_render(container);
-			printf("[I] power_monitor: Voltage grid view shown and rendered\n");
+
+		power_monitor_voltage_grid_view_render(container);
 	} else if (current_type == POWER_MONITOR_VIEW_AMPERAGE_GRID) {
-			printf("[I] power_monitor: Rendering amperage grid view content\n");
-			power_monitor_amperage_grid_view_render(container);
-			printf("[I] power_monitor: Amperage grid view shown and rendered\n");
+
+		power_monitor_amperage_grid_view_render(container);
 	} else if (current_type == POWER_MONITOR_VIEW_POWER) {
-			printf("[I] power_monitor: Rendering power grid view content\n");
-			power_monitor_power_grid_view_render(container);
-			printf("[I] power_monitor: Power grid view shown and rendered\n");
+
+		power_monitor_power_grid_view_render(container);
 	} else if (current_type == POWER_MONITOR_VIEW_NUMERICAL) {
-			printf("[I] power_monitor: Rendering starter voltage view content\n");
-			power_monitor_starter_voltage_view_render(container);
-			printf("[I] power_monitor: Starter voltage view shown and rendered\n");
+
+		power_monitor_starter_voltage_view_render(container);
 	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_VOLTAGE) {
-			printf("[I] power_monitor: Rendering house voltage view content\n");
-			power_monitor_house_voltage_view_render(container);
-			printf("[I] power_monitor: House voltage view shown and rendered\n");
+
+		power_monitor_house_voltage_view_render(container);
 	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_VOLTAGE) {
-			printf("[I] power_monitor: Rendering solar voltage view content\n");
-			power_monitor_solar_voltage_view_render(container);
-			printf("[I] power_monitor: Solar voltage view shown and rendered\n");
+
+		power_monitor_solar_voltage_view_render(container);
 	} else if (current_type == POWER_MONITOR_VIEW_STARTER_CURRENT) {
-			printf("[I] power_monitor: Rendering starter current view content\n");
-			power_monitor_starter_current_view_render(container);
-			printf("[I] power_monitor: Starter current view shown and rendered\n");
+
+		power_monitor_starter_current_view_render(container);
 	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_CURRENT) {
-			printf("[I] power_monitor: Rendering house current view content\n");
-			power_monitor_house_current_view_render(container);
-			printf("[I] power_monitor: House current view shown and rendered\n");
+
+		power_monitor_house_current_view_render(container);
 	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_CURRENT) {
-			printf("[I] power_monitor: Rendering solar current view content\n");
-			power_monitor_solar_current_view_render(container);
-			printf("[I] power_monitor: Solar current view shown and rendered\n");
+
+		power_monitor_solar_current_view_render(container);
 	} else if (current_type == POWER_MONITOR_VIEW_STARTER_POWER) {
-			printf("[I] power_monitor: Rendering starter power view content\n");
-			power_monitor_starter_power_view_render(container);
-			printf("[I] power_monitor: Starter power view shown and rendered\n");
+
+		power_monitor_starter_power_view_render(container);
 	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_POWER) {
-			printf("[I] power_monitor: Rendering house power view content\n");
-			power_monitor_house_power_view_render(container);
-			printf("[I] power_monitor: House power view shown and rendered\n");
+
+		power_monitor_house_power_view_render(container);
 	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_POWER) {
-			printf("[I] power_monitor: Rendering solar power view content\n");
-			power_monitor_solar_power_view_render(container);
-			printf("[I] power_monitor: Solar power view shown and rendered\n");
+
+		power_monitor_solar_power_view_render(container);
 	}
 
 	// Timeline settings are applied when gauges are created, not every frame

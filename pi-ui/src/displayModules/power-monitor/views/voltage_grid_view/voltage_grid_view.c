@@ -34,8 +34,8 @@ static lv_obj_t* s_row_containers[3] = {NULL, NULL, NULL}; // Track row containe
 #define CONTAINER_PADDING_PX        4     // Padding from container edges
 
 // Row layout split (numeric value : bar graph)
-#define NUMERIC_VALUE_PERCENT      22     // Percentage of width for numeric value
-#define BAR_GRAPH_PERCENT          78     // Percentage of width for bar graph
+#define NUMERIC_VALUE_PERCENT      27     // Percentage of width for numeric value
+#define BAR_GRAPH_PERCENT          73     // Percentage of width for bar graph
 
 // Gauge spacing
 #define GAUGE_PADDING_PX            1     // Vertical padding between gauges
@@ -68,20 +68,19 @@ static void create_gauge_row(
 	lv_obj_clear_flag(row_container, LV_OBJ_FLAG_SCROLLABLE);
 	lv_obj_add_flag(row_container, LV_OBJ_FLAG_EVENT_BUBBLE);
 
-	// Set up flexbox for row (horizontal: 20% numeric + 80% gauge)
+	// Set up flexbox for row (horizontal: 27% numeric + 73% gauge)
 	lv_obj_set_flex_flow(row_container, LV_FLEX_FLOW_ROW);
-	lv_obj_set_flex_align(row_container, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-	lv_obj_set_style_pad_gap(row_container, 2, 0); // 2px gap between numeric and gauge
+	lv_obj_set_flex_align(row_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+	lv_obj_set_style_pad_gap(row_container, 2, 0); // No gap between numeric and gauge
 
-	// NUMERIC CONTAINER : 20% of width
-
+	// NUMERIC CONTAINER : 27% of width
 	lv_obj_t* numeric_container = lv_obj_create(row_container);
-	int numeric_container_width = (container_width * NUMERIC_VALUE_PERCENT) / 100;
-	lv_obj_set_size(numeric_container, numeric_container_width, LV_SIZE_CONTENT);
+	lv_obj_set_size(numeric_container, LV_PCT(NUMERIC_VALUE_PERCENT), LV_SIZE_CONTENT);
 	lv_obj_set_style_bg_opa(numeric_container, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(numeric_container, 0, 0); // No border
 	lv_obj_set_style_radius(numeric_container, 0, 0); // No border radius
 	lv_obj_set_style_pad_all(numeric_container, 0, 0);
+	lv_obj_set_style_pad_left(numeric_container, 2, 0);
 	lv_obj_clear_flag(numeric_container, LV_OBJ_FLAG_SCROLLABLE);
 	lv_obj_add_flag(numeric_container, LV_OBJ_FLAG_EVENT_BUBBLE);
 
@@ -91,7 +90,7 @@ static void create_gauge_row(
 
 	// Create a container for the value label to handle warning icons properly
 	lv_obj_t* value_container = lv_obj_create(numeric_container);
-	lv_obj_set_size(value_container, 50, 30); // Fixed size for value area
+	lv_obj_set_size(value_container, 60, 30); // Fixed size for value area (wider for 4-digit numbers)
 	lv_obj_set_style_bg_opa(value_container, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(value_container, 0, 0);
 	lv_obj_set_style_pad_all(value_container, 0, 0);
@@ -101,7 +100,7 @@ static void create_gauge_row(
 	// Number Value for Gauge Row
 	*value_label = lv_label_create(value_container);
 	lv_label_set_text(*value_label, "00.0");
-	lv_obj_set_size(*value_label, 50, LV_SIZE_CONTENT); // Fixed width for 4 characters (00.0)
+	lv_obj_set_size(*value_label, 60, LV_SIZE_CONTENT); // Fixed width for 4 characters (00.0)
 	lv_obj_set_style_text_color(*value_label, color, 0);
 	lv_obj_set_style_text_font(*value_label, &lv_font_noplato_24, 0); // Use monospace font
 	lv_obj_set_style_text_align(*value_label, LV_TEXT_ALIGN_RIGHT, 0);
@@ -137,18 +136,18 @@ static void create_gauge_row(
 	lv_obj_set_style_text_letter_space(*title_label, 0, 0); // No letter spacing changes
 	lv_obj_set_style_text_line_space(*title_label, 0, 0); // No line spacing changes
 
-	// Create gauge container (80% of width) - use fixed width to prevent flexbox flooding
+	// GAUGE CONTAINER : 73% of width
 	lv_obj_t* gauge_container = lv_obj_create(row_container);
-	int gauge_container_width = (container_width * BAR_GRAPH_PERCENT) / 100 - 6; // Shrink by 6px total
-	lv_obj_set_size(gauge_container, gauge_container_width, gauge_height - 2); // 2px padding from bottom
+	lv_obj_set_size(gauge_container, LV_PCT(BAR_GRAPH_PERCENT), LV_PCT(100));
 	lv_obj_set_style_bg_opa(gauge_container, LV_OPA_TRANSP, 0);
 	lv_obj_set_style_border_width(gauge_container, 0, 0); // No border
 	lv_obj_set_style_radius(gauge_container, 0, 0); // No border radius
 	lv_obj_set_style_pad_all(gauge_container, 0, 0);
-	lv_obj_set_style_pad_bottom(gauge_container, 2, 0); // 2px bottom padding (overrides pad_all)
+	// lv_obj_set_style_pad_bottom(gauge_container, 0, 0); // 2px bottom padding (overrides pad_all)
 	lv_obj_clear_flag(gauge_container, LV_OBJ_FLAG_SCROLLABLE);
 	lv_obj_add_flag(gauge_container, LV_OBJ_FLAG_EVENT_BUBBLE);
 
+	// 0,0 gauge width to use flex layout
 	bar_graph_gauge_init(gauge, gauge_container, 0, 0, 0, 0, 2, 3);
 	bar_graph_gauge_configure_advanced(
 		gauge, // gauge pointer
@@ -354,7 +353,7 @@ void power_monitor_voltage_grid_view_update_data(void)
 				.show_warning = false, // No warning for power grid view
 				.show_error = power_data_pointer->starter_battery.voltage.error,
 				.warning_icon_size = WARNING_ICON_SIZE_30,
-				.number_alignment = LABEL_ALIGN_RIGHT,
+				.number_alignment = LABEL_ALIGN_CENTER,
 				.warning_alignment = LABEL_ALIGN_CENTER
 			};
 			format_and_display_number(starter_voltage, &config);
@@ -377,7 +376,7 @@ void power_monitor_voltage_grid_view_update_data(void)
 				.show_warning = false,
 				.show_error = power_data_pointer->house_battery.voltage.error,
 				.warning_icon_size = WARNING_ICON_SIZE_30,
-				.number_alignment = LABEL_ALIGN_RIGHT,
+				.number_alignment = LABEL_ALIGN_CENTER,
 				.warning_alignment = LABEL_ALIGN_CENTER
 			};
 			format_and_display_number(house_voltage, &config);
@@ -400,7 +399,7 @@ void power_monitor_voltage_grid_view_update_data(void)
 				.show_warning = false,
 				.show_error = power_data_pointer->solar_input.voltage.error,
 				.warning_icon_size = WARNING_ICON_SIZE_30,
-				.number_alignment = LABEL_ALIGN_RIGHT,
+				.number_alignment = LABEL_ALIGN_CENTER,
 				.warning_alignment = LABEL_ALIGN_CENTER
 			};
 			format_and_display_number(solar_voltage, &config);

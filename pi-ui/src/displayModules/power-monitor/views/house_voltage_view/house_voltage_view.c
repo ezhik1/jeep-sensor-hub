@@ -38,7 +38,7 @@ void power_monitor_house_voltage_view_render(lv_obj_t *container)
 
 	// Create configuration for house_voltage view
 	single_value_bar_graph_view_config_t config = {
-		.title = "HOUSE\nVOLTAGE",
+		.title = "HOUSE BATTERY VOLTAGE",
 		.unit = "(V)",
 		.bar_graph_color = PALETTE_WARM_WHITE,
 		.bar_mode = BAR_GRAPH_MODE_BIPOLAR,

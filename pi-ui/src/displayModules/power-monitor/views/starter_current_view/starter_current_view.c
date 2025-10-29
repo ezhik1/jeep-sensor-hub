@@ -47,7 +47,7 @@ void power_monitor_starter_current_view_render(lv_obj_t *container)
 
 	// Create configuration for starter_current view
 	single_value_bar_graph_view_config_t config = {
-		.title = "STARTER\nCURRENT",
+		.title = "STARTER BATTERY CURRENT",
 		.unit = "(A)",
 		.bar_graph_color = PALETTE_WARM_WHITE,
 		.bar_mode = BAR_GRAPH_MODE_BIPOLAR,

@@ -38,8 +38,8 @@ single_value_bar_graph_view_state_t* single_value_bar_graph_view_create(lv_obj_t
 	}
 
 	// Calculate row heights (1/3 for top, 2/3 for bottom)
-	int voltage_height = container_height / 3;
-	int gauge_height = container_height - voltage_height;
+	int number_container_height = (container_height / 3 ) + 10;
+	int gauge_height = container_height - number_container_height;
 
 	// Set container background to black (border is handled by parent container)
 	lv_obj_set_style_bg_color(parent, lv_color_hex(0x000000), 0);
@@ -47,57 +47,71 @@ single_value_bar_graph_view_state_t* single_value_bar_graph_view_create(lv_obj_t
 	lv_obj_set_style_pad_all(parent, 0, 0);
 	lv_obj_clear_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
 
-	// Create title/unit container for vertical stacking
+	// Create title/unit container for horizontal layout (title left, unit right)
 	base_view->title_container = lv_obj_create(parent);
 	if (base_view->title_container) {
-		// Position at top-left with some padding
+		// Position at top-left with 5px offset
 		lv_obj_align(base_view->title_container, LV_ALIGN_TOP_LEFT, 5, 5);
-		// Set size to accommodate title and unit
-		lv_obj_set_size(base_view->title_container, lv_pct(30), LV_SIZE_CONTENT);
-		// Configure container
+		// Set size to full width minus 10px (5px left + 5px right) to match offsets
+		lv_obj_set_size(base_view->title_container, container_width - 10, LV_SIZE_CONTENT);
+		// Configure container - no radius, no padding, no margins
 		lv_obj_set_style_bg_opa(base_view->title_container, LV_OPA_TRANSP, 0);
 		lv_obj_set_style_border_width(base_view->title_container, 0, 0);
+		lv_obj_set_style_radius(base_view->title_container, 0, 0); // No radius
 		lv_obj_set_style_pad_all(base_view->title_container, 0, 0);
+		lv_obj_set_style_margin_all(base_view->title_container, 0, 0);
 		lv_obj_clear_flag(base_view->title_container, LV_OBJ_FLAG_SCROLLABLE);
 		lv_obj_clear_flag(base_view->title_container, LV_OBJ_FLAG_CLICKABLE);
 		lv_obj_add_flag(base_view->title_container, LV_OBJ_FLAG_EVENT_BUBBLE);
 
-		// Set up vertical flex layout
-		lv_obj_set_flex_flow(base_view->title_container, LV_FLEX_FLOW_COLUMN);
-		lv_obj_set_flex_align(base_view->title_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-		lv_obj_set_style_pad_gap(base_view->title_container, 5, 0); // 5px gap between title and unit
+		// Set up horizontal flex layout - title left, unit right
+		lv_obj_set_flex_flow(base_view->title_container, LV_FLEX_FLOW_ROW);
+		lv_obj_set_flex_align(base_view->title_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+		lv_obj_set_style_pad_gap(base_view->title_container, 0, 0); // No gap - use space-between alignment
 	}
 
-	// Create title label
+	// Create title label (left-aligned)
 	base_view->title_label = lv_label_create(base_view->title_container);
 	if (base_view->title_label) {
 		lv_label_set_text(base_view->title_label, config->title);
 		lv_obj_set_style_text_color(base_view->title_label, lv_color_hex(0xFFFFFF), 0);
 		lv_obj_set_style_text_font(base_view->title_label, &lv_font_montserrat_12, 0);
 		lv_obj_set_style_text_align(base_view->title_label, LV_TEXT_ALIGN_LEFT, 0);
+		lv_obj_set_style_pad_all(base_view->title_label, 0, 0); // No padding
+		lv_obj_set_style_margin_all(base_view->title_label, 0, 0); // No margins
 		lv_obj_clear_flag(base_view->title_label, LV_OBJ_FLAG_CLICKABLE);
 		lv_obj_add_flag(base_view->title_label, LV_OBJ_FLAG_EVENT_BUBBLE);
+		// Allow title to grow to push unit to the right
+		lv_obj_set_style_flex_grow(base_view->title_label, 1, 0);
 	}
 
-	// Create unit label
+	// Create unit label (right-aligned)
 	base_view->unit_label = lv_label_create(base_view->title_container);
 	if (base_view->unit_label) {
 		lv_label_set_text(base_view->unit_label, config->unit);
 		lv_obj_set_style_text_color(base_view->unit_label, lv_color_hex(0xFFFFFF), 0);
 		lv_obj_set_style_text_font(base_view->unit_label, &lv_font_montserrat_12, 0);
-		lv_obj_set_style_text_align(base_view->unit_label, LV_TEXT_ALIGN_LEFT, 0);
+		lv_obj_set_style_text_align(base_view->unit_label, LV_TEXT_ALIGN_RIGHT, 0);
+		lv_obj_set_style_pad_all(base_view->unit_label, 0, 0); // No padding
+		lv_obj_set_style_margin_all(base_view->unit_label, 0, 0); // No margins
 		lv_obj_clear_flag(base_view->unit_label, LV_OBJ_FLAG_CLICKABLE);
 		lv_obj_add_flag(base_view->unit_label, LV_OBJ_FLAG_EVENT_BUBBLE);
 	}
 
 	// Create value container for format_and_display_number to work with
+	// Position it below the title container on a new line
 	base_view->value_container = lv_obj_create(parent);
 	if (base_view->value_container) {
-		// Position the container to avoid collision with title
-		lv_coord_t top_offset = 15; // Move down to avoid title collision
-		lv_obj_align(base_view->value_container, LV_ALIGN_TOP_RIGHT, 0, top_offset);
+		// Update layout to measure title container height
+		lv_obj_update_layout(base_view->title_container);
+		lv_coord_t title_height = lv_obj_get_height(base_view->title_container);
+		lv_coord_t title_y = lv_obj_get_y(base_view->title_container);
+		lv_coord_t top_offset = title_y + title_height + 5; // 5px gap below title container
+
+		// Position below title container, right-aligned
+		lv_obj_align(base_view->value_container, LV_ALIGN_TOP_RIGHT, -5, top_offset);
 		// lv_obj_set_size(base_view->value_container, 100, 40); // Fixed size for the value area
-		lv_obj_set_size(base_view->value_container, lv_pct(70), LV_SIZE_CONTENT);
+		lv_obj_set_size(base_view->value_container, lv_pct(100), LV_SIZE_CONTENT);
 		// Configure container for format_and_display_number
 		lv_obj_set_style_bg_opa(base_view->value_container, LV_OPA_TRANSP, 0);
 		lv_obj_set_style_border_width(base_view->value_container, 0, 0);
@@ -175,6 +189,7 @@ single_value_bar_graph_view_state_t* single_value_bar_graph_view_create(lv_obj_t
 	// Store config for later use
 	base_view->container = parent;
 	base_view->number_config = config->number_config;
+	base_view->last_error_shown = false;
 	base_view->initialized = true;
 
 	return base_view;
@@ -192,16 +207,29 @@ void single_value_bar_graph_view_update_data(single_value_bar_graph_view_state_t
 {
 	if (!base_view || !base_view->initialized) return;
 
-	// Update numerical value display using format_and_display_number
+	// If there's an error, show the warning icon once and avoid repeated updates
+	if (has_error) {
+		if (!base_view->value_label) return;
+
+		if (!base_view->last_error_shown) {
+			// Use the stored number_config for formatting
+			number_formatting_config_t config = base_view->number_config;
+			config.label = base_view->value_label;
+			config.show_error = true;
+			format_and_display_number(value, &config);
+			base_view->last_error_shown = true;
+		}
+		return;
+	}
+
+	// No error: ensure we resume numeric updates
+	base_view->last_error_shown = false;
+
 	if (base_view->value_label) {
 		// Use the stored number_config for formatting
 		number_formatting_config_t config = base_view->number_config;
 		config.label = base_view->value_label; // Set the label to update
-
-		// Set error state
-		config.show_error = has_error;
-
-		// Use format_and_display_number for proper formatting and positioning
+		config.show_error = false;
 		format_and_display_number(value, &config);
 	}
 }

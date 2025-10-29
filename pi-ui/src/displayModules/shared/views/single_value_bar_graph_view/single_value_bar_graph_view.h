@@ -28,6 +28,7 @@ typedef struct {
 	lv_obj_t* gauge_container;
 	bar_graph_gauge_t gauge;  // Static gauge, not pointer
 	number_formatting_config_t number_config;
+	bool last_error_shown;
 	bool initialized;
 } single_value_bar_graph_view_state_t;
 

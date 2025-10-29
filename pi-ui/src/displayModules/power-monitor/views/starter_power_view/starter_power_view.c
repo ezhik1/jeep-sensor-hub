@@ -86,7 +86,7 @@ void power_monitor_starter_power_view_render(lv_obj_t *container)
 
 	// Create configuration for starter_power view
 	single_value_bar_graph_view_config_t config = {
-		.title = "STARTER\nPOWER",
+		.title = "STARTER BATTERY POWER",
 		.unit = "(W)",
 		.bar_graph_color = PALETTE_WARM_WHITE,
 		.bar_mode = BAR_GRAPH_MODE_BIPOLAR,
@@ -141,7 +141,7 @@ void power_monitor_starter_power_view_update_data(void)
 
 	// Get error state from power monitor data
 	power_monitor_data_t* power_data = power_monitor_get_data();
-	bool has_error = power_data ? false : false;
+	bool has_error = power_data ? (power_data->starter_battery.voltage.error || power_data->starter_battery.current.error) : false;
 
 	// Update the generic view (which adds data to its gauge)
 	single_value_bar_graph_view_update_data(single_view_starter_power, value, has_error);

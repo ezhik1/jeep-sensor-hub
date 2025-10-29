@@ -38,7 +38,7 @@ void power_monitor_solar_current_view_render(lv_obj_t *container)
 
 	// Create configuration for solar_current view
 	single_value_bar_graph_view_config_t config = {
-		.title = "SOLAR\nCURRENT",
+		.title = "SOLAR CHARGE CURRENT",
 		.unit = "(A)",
 		.bar_graph_color = PALETTE_WARM_WHITE,
 		.bar_mode = BAR_GRAPH_MODE_POSITIVE_ONLY,
@@ -54,7 +54,7 @@ void power_monitor_solar_current_view_render(lv_obj_t *container)
 			.show_warning = true,
 			.show_error = false,
 			.warning_icon_size = WARNING_ICON_SIZE_50,
-			.number_alignment = LABEL_ALIGN_CENTER,
+			.number_alignment = LABEL_ALIGN_RIGHT,
 			.warning_alignment = LABEL_ALIGN_CENTER
 		}
 	};

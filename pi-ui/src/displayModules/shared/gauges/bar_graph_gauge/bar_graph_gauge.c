@@ -893,6 +893,11 @@ void bar_graph_gauge_update_y_axis_labels(bar_graph_gauge_t *gauge)
 		lv_coord_t width;
 		lv_coord_t height = lv_font_get_line_height(&lv_font_montserrat_12);
 
+		// Calculate minimum width based on "-000" for consistency across all gauges
+		const char* min_width_text = "-000";
+		lv_text_attributes_t min_attr = {0};
+		lv_coord_t min_width = lv_text_get_width(min_width_text, strlen(min_width_text), &lv_font_montserrat_12, &min_attr);
+
 		// Set label text (flexbox will handle positioning) - only if labels exist
 		if (gauge->max_label) lv_label_set_text(gauge->max_label, max_text);
 		if (gauge->center_label) lv_label_set_text(gauge->center_label, center_text);
@@ -918,6 +923,11 @@ void bar_graph_gauge_update_y_axis_labels(bar_graph_gauge_t *gauge)
 			lv_text_attributes_t attr = {0};
 			width = lv_text_get_width(min_text_ptr, strlen(min_text_ptr), &lv_font_montserrat_12, &attr);
 			if (width > max_width) max_width = width;
+		}
+
+		// Ensure minimum width for consistency across all gauges
+		if (max_width < min_width) {
+			max_width = min_width;
 		}
 
 		/* Step 2: Give all labels that same width */
