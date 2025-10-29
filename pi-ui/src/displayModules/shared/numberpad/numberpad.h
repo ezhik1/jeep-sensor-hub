@@ -35,7 +35,8 @@ typedef struct {
 	lv_obj_t* background;
 	lv_obj_t* buttons[13];    // 0-9, CLEAR, NEGATIVE, CANCEL
 	lv_obj_t* target_field;   // Field being edited
-	char* value_buffer;       // Current input value
+	char* value_buffer;       // Current input value (numeric)
+	char* display_buffer;     // Display value (with k notation)
 	int buffer_size;
 	int current_length;
 	numberpad_config_t config;
@@ -98,6 +99,12 @@ void numberpad_reset_negative_state(numberpad_t* numpad);
 
 // Set value and prepare for fresh input (next digit will clear and start fresh)
 void numberpad_set_value_for_fresh_input(numberpad_t* numpad, const char* value);
+
+// Convert display value (with k notation) to numeric value
+float numberpad_get_numeric_value(const char* display_value);
+
+// Convert numeric value to display value (with k notation for values >= 1000)
+void numberpad_format_display_value(float numeric_value, char* display_buffer, size_t buffer_size);
 
 #ifdef __cplusplus
 }

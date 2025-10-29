@@ -1,7 +1,7 @@
 #ifndef POWER_MONITOR_TIMELINE_MODAL_CONFIG_H
 #define POWER_MONITOR_TIMELINE_MODAL_CONFIG_H
 
-#include "../shared/modals/timeline_modal/timeline_modal.h"
+#include "../../shared/modals/timeline_modal/timeline_modal.h"
 
 #ifdef __cplusplus
 extern "C" {

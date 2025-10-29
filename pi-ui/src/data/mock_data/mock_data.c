@@ -277,31 +277,35 @@ static void update_power_monitor_mock_data(void)
 	if (g_mock_data.power_monitor.ignition_on) {
 		// Engine running - simulate charging scenario
 		g_mock_data.power_monitor.current_amps = mock_data_sweep_float(-5.0f, 15.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
-		g_mock_data.power_monitor.starter_battery_voltage = mock_data_sweep_float(10.0f, 18.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
+		// Different sweep duration for starter voltage - 6 second cycle
+		g_mock_data.power_monitor.starter_battery_voltage = mock_data_sweep_float(10.0f, 18.0f, g_mock_data.sweep_cycle_count, 6000);
 		g_mock_data.power_monitor.starter_battery_connected = true;
-		// Starter current when ignition is on (charging from alternator)
-		g_mock_data.power_monitor.starter_battery_current = mock_data_sweep_float(-150.0f, 150.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
+		// Different sweep duration for starter current - 7 second cycle
+		g_mock_data.power_monitor.starter_battery_current = mock_data_sweep_float(-150.0f, 150.0f, g_mock_data.sweep_cycle_count, 7000);
 	} else {
 		// Engine off - simulate discharge scenario
 		g_mock_data.power_monitor.current_amps = mock_data_sweep_float(-2.0f, 0.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
-		g_mock_data.power_monitor.starter_battery_voltage = mock_data_sweep_float(10.0f, 18.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
+		// Different sweep duration for starter voltage - 6 second cycle
+		g_mock_data.power_monitor.starter_battery_voltage = mock_data_sweep_float(10.0f, 18.0f, g_mock_data.sweep_cycle_count, 6000);
 		g_mock_data.power_monitor.starter_battery_connected = mock_data_random_bool(0.95f);
-		// Starter current when ignition is off (small discharge)
-		g_mock_data.power_monitor.starter_battery_current = mock_data_sweep_float(-150.0f, 150.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
+		// Different sweep duration for starter current - 7 second cycle
+		g_mock_data.power_monitor.starter_battery_current = mock_data_sweep_float(-150.0f, 150.0f, g_mock_data.sweep_cycle_count, 7000);
 	}
 
 	// House battery always connected and powered
-	g_mock_data.power_monitor.house_battery_voltage = mock_data_sweep_float(9.0f, 17.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
+	// Different sweep duration for house voltage - 8 second cycle
+	g_mock_data.power_monitor.house_battery_voltage = mock_data_sweep_float(9.0f, 17.0f, g_mock_data.sweep_cycle_count, 8000);
 	g_mock_data.power_monitor.house_battery_connected = true;
-	// House current - varies based on load (can be positive or negative)
-	g_mock_data.power_monitor.house_battery_current = mock_data_sweep_float(-10.0f, 20.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
+	// Different sweep duration for house current - 9 second cycle
+	g_mock_data.power_monitor.house_battery_current = mock_data_sweep_float(-10.0f, 20.0f, g_mock_data.sweep_cycle_count, 9000);
 
 	// Solar input - always generate some voltage for testing (simulate daytime)
-	g_mock_data.power_monitor.solar_input_voltage = mock_data_sweep_float(18.0f, 22.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
+	// Different sweep duration for solar voltage - 10 second cycle
+	g_mock_data.power_monitor.solar_input_voltage = mock_data_sweep_float(18.0f, 22.0f, g_mock_data.sweep_cycle_count, 10000);
 	g_mock_data.power_monitor.solar_input_connected = true;
 
-	// Solar current - always positive (simulate solar panel output)
-	g_mock_data.power_monitor.solar_input_current = mock_data_sweep_float(2.0f, 8.0f, g_mock_data.sweep_cycle_count, g_sweep_duration_ms);
+	// Different sweep duration for solar current - 11 second cycle
+	g_mock_data.power_monitor.solar_input_current = mock_data_sweep_float(2.0f, 8.0f, g_mock_data.sweep_cycle_count, 11000);
 
 	// Power monitor mock data logging removed for cleaner output
 
@@ -558,28 +562,26 @@ void mock_data_write_to_state_objects(void)
 	power_data->last_update_ms = current_time;
 
 	// Update battery data with bounds checking
-	power_data->starter_battery.voltage = mock_power->starter_battery_voltage;
-	power_data->starter_battery.current = mock_power->starter_battery_current;
+	power_data->starter_battery.voltage.value = mock_power->starter_battery_voltage;
+	power_data->starter_battery.voltage.error = mock_power->starter_voltage_error;
+	power_data->starter_battery.current.value = mock_power->starter_battery_current;
+	power_data->starter_battery.current.error = mock_power->starter_current_error;
 	power_data->starter_battery.is_connected = mock_power->starter_battery_connected;
 	power_data->starter_battery.is_charging = mock_power->ignition_on;
-	power_data->starter_battery.voltage_error = mock_power->starter_voltage_error;
-	power_data->starter_battery.current_error = mock_power->starter_current_error;
 
-	// Error states are being written to power data
-
-	power_data->house_battery.voltage = mock_power->house_battery_voltage;
-	power_data->house_battery.current = mock_power->house_battery_current;
+	power_data->house_battery.voltage.value = mock_power->house_battery_voltage;
+	power_data->house_battery.voltage.error = mock_power->house_voltage_error;
+	power_data->house_battery.current.value = mock_power->house_battery_current;
+	power_data->house_battery.current.error = mock_power->house_current_error;
 	power_data->house_battery.is_connected = mock_power->house_battery_connected;
 	power_data->house_battery.is_charging = mock_power->solar_input_connected;
-	power_data->house_battery.voltage_error = mock_power->house_voltage_error;
-	power_data->house_battery.current_error = mock_power->house_current_error;
 
-	power_data->solar_input.voltage = mock_power->solar_input_voltage;
-	power_data->solar_input.current = mock_power->solar_input_current;
+	power_data->solar_input.voltage.value = mock_power->solar_input_voltage;
+	power_data->solar_input.voltage.error = mock_power->solar_voltage_error;
+	power_data->solar_input.current.value = mock_power->solar_input_current;
+	power_data->solar_input.current.error = mock_power->solar_current_error;
 	power_data->solar_input.is_connected = mock_power->solar_input_connected;
 	power_data->solar_input.is_charging = mock_power->solar_input_connected && mock_power->solar_input_voltage > 0.0f;
-	power_data->solar_input.voltage_error = mock_power->solar_voltage_error;
-	power_data->solar_input.current_error = mock_power->solar_current_error;
 
 	power_data->ignition_on = mock_power->ignition_on;
 

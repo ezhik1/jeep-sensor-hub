@@ -24,11 +24,18 @@ typedef struct {
 
 // View type enumeration
 typedef enum {
-	POWER_MONITOR_VIEW_CURRENT = 0,
-	POWER_MONITOR_VIEW_VOLTAGE,
-	POWER_MONITOR_VIEW_POWER,
-	POWER_MONITOR_VIEW_BAR_GRAPH,
-	POWER_MONITOR_VIEW_NUMERICAL,
+	POWER_MONITOR_VIEW_BAR_GRAPH = 0,      // Voltage grid view
+	POWER_MONITOR_VIEW_AMPERAGE_GRID,      // Current grid view
+	POWER_MONITOR_VIEW_POWER,              // Power grid view
+	POWER_MONITOR_VIEW_NUMERICAL,          // Starter voltage single view
+	POWER_MONITOR_VIEW_HOUSE_VOLTAGE,      // House voltage single view
+	POWER_MONITOR_VIEW_SOLAR_VOLTAGE,      // Solar voltage single view
+	POWER_MONITOR_VIEW_STARTER_CURRENT,    // Starter current single view
+	POWER_MONITOR_VIEW_HOUSE_CURRENT,      // House current single view
+	POWER_MONITOR_VIEW_SOLAR_CURRENT,      // Solar current single view
+	POWER_MONITOR_VIEW_STARTER_POWER,      // Starter power single view
+	POWER_MONITOR_VIEW_HOUSE_POWER,        // House power single view
+	POWER_MONITOR_VIEW_SOLAR_POWER,        // Solar power single view
 	POWER_MONITOR_VIEW_COUNT
 } power_monitor_view_type_t;
 
@@ -36,14 +43,18 @@ typedef enum {
 extern "C" {
 #endif
 
+// Sensor value with error state
+typedef struct {
+	float value;
+	bool error;
+} sensor_value_t;
+
 // Battery data structure
 typedef struct {
-	float voltage;
-	float current;
+	sensor_value_t voltage;
+	sensor_value_t current;
 	bool is_connected;
 	bool is_charging;
-	bool voltage_error;
-	bool current_error;
 	uint32_t last_update;
 } battery_data_t;
 
@@ -82,13 +93,6 @@ struct display_module_base_s* power_monitor_get_module_base(void);
 // Starter voltage view functions
 void power_monitor_starter_voltage_view_render(lv_obj_t *container);
 void power_monitor_starter_voltage_view_update_data(void);
-void power_monitor_starter_voltage_view_apply_alert_flashing(
-	const power_monitor_data_t* data,
-	int starter_lo, int starter_hi,
-	int house_lo, int house_hi,
-	int solar_lo, int solar_hi,
-	bool blink_on
-);
 
 // Data access functions
 float power_monitor_get_current(void);
@@ -96,9 +100,7 @@ bool power_monitor_is_connected(void);
 bool power_monitor_is_active(void);
 
 // Centralized gauge history API (data-only, UI reads from here)
-void power_monitor_push_gauge_sample(power_monitor_data_type_t gauge_type, float value);
 void power_monitor_update_all_gauge_histories(void); // Called every frame
-void power_monitor_seed_gauge_from_history(power_monitor_gauge_type_t gauge_type, bar_graph_gauge_t* gauge);
 
 // View management functions
 void power_monitor_render_simple_view(lv_obj_t *container);
@@ -130,7 +132,14 @@ void power_monitor_handle_timeline_button(void);
 void power_monitor_render_current_view(lv_obj_t* container);
 
 // View state management
+void power_monitor_voltage_grid_view_reset_state(void);
 void power_monitor_power_grid_view_reset_state(void);
+
+// Power grid view functions
+void power_monitor_power_grid_view_render(lv_obj_t *container);
+void power_monitor_power_grid_view_update_data(void);
+void power_monitor_power_grid_view_apply_alert_flashing(const power_monitor_data_t* data, int starter_lo, int starter_hi, int house_lo, int house_hi, int solar_lo, int solar_hi, bool blink_on);
+void power_monitor_power_grid_view_update_configuration(void);
 
 // Timeline modal functions
 void power_monitor_timeline_changed_callback(int gauge_index, int duration_seconds, bool is_current_view);

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "../utils/positioning/positioning.h"
+#include "../utils/number_formatting/number_formatting.h"
 
 static const char* TAG = "numberpad";
 
@@ -15,8 +16,8 @@ const numberpad_config_t NUMBERPAD_DEFAULT_CONFIG = {
 	.bg_color = {0x00, 0x00, 0x00},
 	.border_color = {0xFF, 0xFF, 0xFF},
 	.text_color = {0xFF, 0xFF, 0xFF},
-	.button_width = 60,
-	.button_height = 50,
+	.button_width = 65,
+	.button_height = 55,
 	.button_gap = 5
 };
 
@@ -45,13 +46,17 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 
 	memset(numpad, 0, sizeof(numberpad_t));
 	numpad->config = *config;
-	numpad->buffer_size = config->max_digits + config->decimal_places + 2; // +2 for decimal point and null terminator
+	numpad->buffer_size = config->max_digits + config->decimal_places + 10; // +10 for decimal point, 'k' notation, and safety margin
 	numpad->value_buffer = malloc(numpad->buffer_size);
-	if (!numpad->value_buffer) {
+	numpad->display_buffer = malloc(numpad->buffer_size);
+	if (!numpad->value_buffer || !numpad->display_buffer) {
+		free(numpad->value_buffer);
+		free(numpad->display_buffer);
 		free(numpad);
 		return NULL;
 	}
 	numpad->value_buffer[0] = '\0';
+	numpad->display_buffer[0] = '\0';
 
 	// Create background
 	numpad->background = lv_obj_create(parent);
@@ -83,6 +88,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 					  row * (config->button_height + config->button_gap));
 
 		lv_obj_set_style_bg_color(numpad->buttons[i], lv_color_hex(0x556b2f), 0); // Dark olive green
+		lv_obj_set_style_bg_color(numpad->buttons[i], lv_color_hex(0x3d4f1f), LV_STATE_PRESSED); // Darker olive green when pressed
 		lv_obj_set_style_border_width(numpad->buttons[i], 0, 0); // Remove border
 		lv_obj_set_style_radius(numpad->buttons[i], 3, 0);
 		lv_obj_set_style_shadow_width(numpad->buttons[i], 0, 0); // Remove drop shadow
@@ -102,6 +108,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 	lv_obj_set_pos(numpad->buttons[9], 0, 3 * (config->button_height + config->button_gap));
 
 	lv_obj_set_style_bg_color(numpad->buttons[9], lv_color_hex(0x556b2f), 0); // Dark olive green
+	lv_obj_set_style_bg_color(numpad->buttons[9], lv_color_hex(0x3d4f1f), LV_STATE_PRESSED); // Darker olive green when pressed
 	lv_obj_set_style_border_width(numpad->buttons[9], 0, 0); // Remove border
 	lv_obj_set_style_radius(numpad->buttons[9], 3, 0);
 	lv_obj_set_style_shadow_width(numpad->buttons[9], 0, 0); // Remove drop shadow
@@ -121,6 +128,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 				  3 * (config->button_height + config->button_gap));
 
 	lv_obj_set_style_bg_color(numpad->buttons[10], lv_color_hex(0xba3232), 0); // Red
+	lv_obj_set_style_bg_color(numpad->buttons[10], lv_color_hex(0x8b2525), LV_STATE_PRESSED); // Darker red when pressed
 	lv_obj_set_style_border_width(numpad->buttons[10], 0, 0); // Remove border
 	lv_obj_set_style_radius(numpad->buttons[10], 3, 0);
 	lv_obj_set_style_shadow_width(numpad->buttons[10], 0, 0); // Remove drop shadow
@@ -138,6 +146,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 	lv_obj_set_pos(numpad->buttons[11], 0, 4 * (config->button_height + config->button_gap));
 
 	lv_obj_set_style_bg_color(numpad->buttons[11], lv_color_hex(0x556b2f), 0); // Dark olive green
+	lv_obj_set_style_bg_color(numpad->buttons[11], lv_color_hex(0x3d4f1f), LV_STATE_PRESSED); // Darker olive green when pressed
 	lv_obj_set_style_border_width(numpad->buttons[11], 0, 0); // Remove border
 	lv_obj_set_style_radius(numpad->buttons[11], 3, 0);
 	lv_obj_set_style_shadow_width(numpad->buttons[11], 0, 0); // Remove drop shadow
@@ -157,6 +166,7 @@ numberpad_t* numberpad_create(const numberpad_config_t* config, lv_obj_t* parent
 				  4 * (config->button_height + config->button_gap));
 
 	lv_obj_set_style_bg_color(numpad->buttons[12], lv_color_hex(0x87CEEB), 0); // Light blue
+	lv_obj_set_style_bg_color(numpad->buttons[12], lv_color_hex(0x5F9EA0), LV_STATE_PRESSED); // Darker blue when pressed
 	lv_obj_set_style_border_width(numpad->buttons[12], 0, 0); // Remove border
 	lv_obj_set_style_radius(numpad->buttons[12], 3, 0);
 	lv_obj_set_style_shadow_width(numpad->buttons[12], 0, 0); // Remove drop shadow
@@ -183,6 +193,9 @@ void numberpad_destroy(numberpad_t* numpad) {
 
 	if (numpad->value_buffer) {
 		free(numpad->value_buffer);
+	}
+	if (numpad->display_buffer) {
+		free(numpad->display_buffer);
 	}
 
 	if (numpad->background) {
@@ -540,7 +553,7 @@ static void add_digit(numberpad_t* numpad, char digit) {
 		numpad->is_negative = false; // Reset negative flag on first digit
 	}
 
-	// Handle auto-decimal input: 1→0.1, 15→1.5, 150→15.0, 1500→150
+	// Handle 4-digit input with k notation: 1→0.1, 15→1.5, 150→15.0, 1500→1.5k, 3000→3.0k
 	if (numpad->digit_count == 0) {
 		// First digit: "1" → "0.1" or "-1" → "-0.1"
 		if (numpad->is_negative) {
@@ -572,20 +585,57 @@ static void add_digit(numberpad_t* numpad, char digit) {
 		}
 		numpad->digit_count = 3;
 	} else if (numpad->digit_count == 3) {
-		// Fourth digit: "15.0" → "150" or "-15.0" → "-150" (remove decimal, add digit)
+		// Fourth digit: "15.0" → "150.0" (regular progression)
+		// Calculate: "15.0" * 10 + digit = 150.0
+		float numeric_value;
 		if (numpad->is_negative) {
-			snprintf(numpad->value_buffer, numpad->buffer_size, "-%c%c%c",
-				numpad->value_buffer[1], numpad->value_buffer[2], digit);
-			numpad->current_length = 4;
+			numeric_value = -(atof(&numpad->value_buffer[1]) * 10.0f + (digit - '0'));
 		} else {
-			snprintf(numpad->value_buffer, numpad->buffer_size, "%c%c%c",
-				numpad->value_buffer[0], numpad->value_buffer[1], digit);
-			numpad->current_length = 3;
+			numeric_value = (atof(numpad->value_buffer) * 10.0f + (digit - '0'));
 		}
-		numpad->digit_count = 4; // Complete (3 digits, no decimal)
-		printf("[I] numberpad: Complete 3-digit whole number: '%s'\n", numpad->value_buffer);
-	} else if (numpad->digit_count >= 4) {
-		// Already at maximum (3 digits), clear and start fresh with new digit
+
+		// Store the actual numeric value in the buffer
+		snprintf(numpad->value_buffer, numpad->buffer_size, "%.1f", numeric_value);
+		numpad->current_length = strlen(numpad->value_buffer);
+
+		// Format for display using the display formatting function
+		numberpad_format_display_value(numeric_value, numpad->display_buffer, numpad->buffer_size);
+
+		numpad->digit_count = 4; // Now at 4 digits
+		printf("[I] numberpad: Fourth digit - numeric: '%s', display: '%s'\n", numpad->value_buffer, numpad->display_buffer);
+
+		// Update the target field display
+		update_target_field(numpad);
+	} else if (numpad->digit_count == 4) {
+		// Fifth digit: "150.0" → "1500.0" (multiply by 10 for thousands notation)
+		// Calculate: "150.0" * 10 + digit = 1500.0
+		float numeric_value;
+		if (numpad->is_negative) {
+			numeric_value = -(atof(&numpad->value_buffer[1]) * 10.0f + (digit - '0'));
+		} else {
+			numeric_value = (atof(numpad->value_buffer) * 10.0f + (digit - '0'));
+		}
+
+		// Store the actual numeric value in the buffer with bounds checking
+		int written = snprintf(numpad->value_buffer, numpad->buffer_size, "%.1f", numeric_value);
+		if (written >= numpad->buffer_size) {
+			printf("[E] numberpad: Buffer overflow in value_buffer! Written: %d, Buffer size: %d\n", written, numpad->buffer_size);
+			numpad->value_buffer[numpad->buffer_size - 1] = '\0';
+		}
+		numpad->current_length = strlen(numpad->value_buffer);
+
+		// Format for display using the display formatting function
+		numberpad_format_display_value(numeric_value, numpad->display_buffer, numpad->buffer_size);
+
+		numpad->digit_count = 5; // Complete (5 digits with k notation)
+		printf("[I] numberpad: Complete 5-digit number - numeric: '%s', display: '%s'\n", numpad->value_buffer, numpad->display_buffer);
+
+		// Update the target field display
+		printf("[D] numberpad: About to call update_target_field for 5th digit\n");
+		update_target_field(numpad);
+		printf("[D] numberpad: update_target_field completed for 5th digit\n");
+	} else if (numpad->digit_count >= 5) {
+		// Already at maximum (5 digits), clear and start fresh with new digit
 		printf("[I] numberpad: Maximum digits reached, clearing and starting fresh with '%c'\n", digit);
 
 		// Clear current value and start fresh
@@ -608,11 +658,23 @@ static void add_digit(numberpad_t* numpad, char digit) {
 
 		printf("[I] numberpad: Result: '%s'\n", numpad->value_buffer);
 
-	update_target_field(numpad);
+	// Update display buffer for regular formatting (not 5-digit k notation)
+	if (numpad->digit_count < 5) {
+		float numeric_value = atof(numpad->value_buffer);
+		numberpad_format_display_value(numeric_value, numpad->display_buffer, numpad->buffer_size);
+	}
 
 	if (numpad->on_value_changed) {
+		// Safety check: ensure callback is still valid
+		printf("[D] numberpad: Calling on_value_changed callback\n");
 		numpad->on_value_changed(numpad->value_buffer, numpad->user_data);
+		printf("[D] numberpad: on_value_changed callback completed\n");
 	}
+
+	// Update target field display AFTER callback to ensure formatted display is shown
+	printf("[D] numberpad: Updating target field display\n");
+	update_target_field(numpad);
+	printf("[D] numberpad: Target field display updated\n");
 }
 
 static void clear_value(numberpad_t* numpad) {
@@ -644,10 +706,25 @@ static void enter_value(numberpad_t* numpad) {
 static void update_target_field(numberpad_t* numpad) {
 	if (!numpad || !numpad->target_field) return;
 
+	// Safety check: ensure target field is still valid
+	if (!lv_obj_is_valid(numpad->target_field)) {
+		printf("[W] numberpad: Target field is no longer valid, skipping update\n");
+		return;
+	}
+
 	// Update the target field's label with current value
 	lv_obj_t* label = lv_obj_get_child(numpad->target_field, 0);
-	if (label && lv_obj_check_type(label, &lv_label_class)) {
-		lv_label_set_text(label, numpad->value_buffer);
+	if (label && lv_obj_is_valid(label) && lv_obj_check_type(label, &lv_label_class)) {
+		// Use display buffer if available (for k notation), otherwise use value buffer
+		const char* display_text = (numpad->display_buffer && strlen(numpad->display_buffer) > 0)
+			? numpad->display_buffer : numpad->value_buffer;
+
+		// Safety check: ensure display text is valid
+		if (display_text && strlen(display_text) > 0) {
+			lv_label_set_text(label, display_text);
+		}
+	} else {
+		printf("[W] numberpad: Label is invalid or not found, skipping update\n");
 	}
 }
 
@@ -701,19 +778,25 @@ static void set_value_for_fresh_input(numberpad_t* numpad, const char* value) {
 	numpad->digit_count = 0;
 	numpad->is_negative = (numpad->value_buffer[0] == '-');
 
-	// Count digits (excluding decimal point and negative sign)
+	// Count digits (excluding decimal point, negative sign, and 'k' notation)
 	for (int i = 0; i < numpad->current_length; i++) {
 		if (numpad->value_buffer[i] >= '0' && numpad->value_buffer[i] <= '9') {
 			numpad->digit_count++;
 		}
 	}
 
+	// Check for 'k' notation
+	bool has_k_notation = (numpad->value_buffer[numpad->current_length - 1] == 'k');
+
 	// Determine if this is a decimal value or whole number
 	// If it has a decimal point and ends with ".0", treat as whole number
 	bool has_decimal = (strchr(numpad->value_buffer, '.') != NULL);
 	bool ends_with_zero = (numpad->value_buffer[numpad->current_length - 1] == '0');
 
-	if (has_decimal && ends_with_zero && numpad->digit_count >= 3) {
+	if (has_k_notation) {
+		// This is a k notation value like "1.5k" - keep as is
+		printf("[I] numberpad: Setting k notation value: '%s'\n", numpad->value_buffer);
+	} else if (has_decimal && ends_with_zero && numpad->digit_count >= 3) {
 		// This is a whole number like "150.0" - convert to "150"
 		char temp_buffer[16];
 		int start = numpad->is_negative ? 1 : 0;
@@ -740,6 +823,37 @@ static void set_value_for_fresh_input(numberpad_t* numpad, const char* value) {
 // Public function to set value for fresh input
 void numberpad_set_value_for_fresh_input(numberpad_t* numpad, const char* value) {
 	set_value_for_fresh_input(numpad, value);
+}
+
+// Convert display value (with k notation) to numeric value
+float numberpad_get_numeric_value(const char* display_value) {
+	if (!display_value) return 0.0f;
+
+	float value = atof(display_value);
+
+	// Check if it ends with 'k' notation
+	size_t len = strlen(display_value);
+	if (len > 0 && display_value[len - 1] == 'k') {
+		value *= 1000.0f; // Convert k to actual value
+	}
+
+	return value;
+}
+
+// Convert numeric value to display value (with k notation for values >= 1000)
+void numberpad_format_display_value(float numeric_value, char* display_buffer, size_t buffer_size) {
+	if (!display_buffer || buffer_size == 0) return;
+
+	if (numeric_value >= 1000.0f) {
+		// Format as k notation
+		format_value_with_magnitude(numeric_value, display_buffer, buffer_size);
+	} else if (numeric_value >= 100.0f && numeric_value < 1000.0f) {
+		// Format as whole number for values 100-999
+		snprintf(display_buffer, buffer_size, "%.0f", numeric_value);
+	} else {
+		// Format as regular number with decimal
+		snprintf(display_buffer, buffer_size, "%.1f", numeric_value);
+	}
 }
 
 // Cancel value and close numberpad

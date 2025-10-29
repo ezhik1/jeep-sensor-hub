@@ -115,13 +115,20 @@ typedef struct {
 // Warning data is now allocated per modal instance
 // Gauge names, field names, and group names are now provided by configuration
 
-// Global warning data array for all fields
-static warning_data_t g_warning_data[30]; // 6 gauges * 5 fields = 30 total fields
+// Global warning data array for all fields - dynamically allocated
+static warning_data_t* g_warning_data = NULL;
+static int g_warning_data_size = 0;
+
+// Macro to safely access warning data
+#define WARNING_DATA(field_id) get_warning_data(field_id)
 
 // Forward declarations
 static void close_button_cb(lv_event_t *e);
 static void cancel_button_cb(lv_event_t *e);
 static void field_click_handler(lv_event_t *e);
+static void init_warning_data(int total_field_count);
+static void cleanup_warning_data(void);
+static warning_data_t* get_warning_data(int field_id);
 static void on_pressing(lv_event_t *e);
 static void scroll_handler(lv_event_t *e);
 static void initialize_field_data(field_data_t* field_data, int gauge, int field_type, const alerts_modal_config_t* config);
@@ -1141,6 +1148,10 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 	// Bail early if we don't have a valid modal or field ID
 	if (!modal || field_id < 0 || field_id >= modal->total_field_count) return;
 
+	// Get warning data with bounds checking
+	warning_data_t* warning_data = get_warning_data(field_id);
+	if (!warning_data) return;
+
 	field_ui_t* ui = &modal->field_ui[field_id];
 
 	// Bail early if we don't have a valid UI button
@@ -1531,6 +1542,40 @@ static void show_out_of_range_warning(alerts_modal_t* modal, int field_id, float
 	printf("[I] alerts_modal: Showing warning for out-of-range value: %.1f (timer created)\n", out_of_range_value);
 }
 
+// Initialize warning data array
+static void init_warning_data(int total_field_count)
+{
+	if (g_warning_data) {
+		cleanup_warning_data();
+	}
+
+	g_warning_data_size = total_field_count;
+	g_warning_data = calloc(total_field_count, sizeof(warning_data_t));
+	if (!g_warning_data) {
+		printf("[E] alerts_modal: Failed to allocate warning data array\n");
+		g_warning_data_size = 0;
+	}
+}
+
+// Cleanup warning data array
+static void cleanup_warning_data(void)
+{
+	if (g_warning_data) {
+		free(g_warning_data);
+		g_warning_data = NULL;
+		g_warning_data_size = 0;
+	}
+}
+
+// Get warning data with bounds checking
+static warning_data_t* get_warning_data(int field_id)
+{
+	if (!g_warning_data || field_id < 0 || field_id >= g_warning_data_size) {
+		return NULL;
+	}
+	return &g_warning_data[field_id];
+}
+
 static void hide_out_of_range_warning(alerts_modal_t* modal, int field_id)
 {
 	if (!modal || field_id < 0 || field_id >= modal->total_field_count) return;
@@ -1538,25 +1583,29 @@ static void hide_out_of_range_warning(alerts_modal_t* modal, int field_id)
 	// Mark field as no longer out of range
 	modal->field_data[field_id].is_out_of_range = false;
 
+	// Get warning data with bounds checking
+	warning_data_t* warning_data = get_warning_data(field_id);
+	if (!warning_data) return;
+
 	// Hide warning UI elements
-	if (g_warning_data[field_id].text_label) {
-		lv_obj_add_flag(g_warning_data[field_id].text_label, LV_OBJ_FLAG_HIDDEN);
+	if (warning_data->text_label) {
+		lv_obj_add_flag(warning_data->text_label, LV_OBJ_FLAG_HIDDEN);
 	}
-	if (g_warning_data[field_id].container) {
-		lv_obj_add_flag(g_warning_data[field_id].container, LV_OBJ_FLAG_HIDDEN);
+	if (warning_data->container) {
+		lv_obj_add_flag(warning_data->container, LV_OBJ_FLAG_HIDDEN);
 	}
-	if (g_warning_data[field_id].value_label) {
-		lv_obj_add_flag(g_warning_data[field_id].value_label, LV_OBJ_FLAG_HIDDEN);
+	if (warning_data->value_label) {
+		lv_obj_add_flag(warning_data->value_label, LV_OBJ_FLAG_HIDDEN);
 	}
 
 	// Destroy timer if it exists
-	if (g_warning_data[field_id].timer) {
-		lv_timer_del(g_warning_data[field_id].timer);
-		g_warning_data[field_id].timer = NULL;
+	if (warning_data->timer) {
+		lv_timer_del(warning_data->timer);
+		warning_data->timer = NULL;
 	}
 
 	// Store the highlighted field ID before clearing warning data
-	int highlighted_field_id = g_warning_data[field_id].highlighted_field_id;
+	int highlighted_field_id = warning_data->highlighted_field_id;
 
 	// Unhighlight any highlighted field for baseline warnings
 	if (highlighted_field_id >= 0) {
@@ -1565,12 +1614,12 @@ static void hide_out_of_range_warning(alerts_modal_t* modal, int field_id)
 	}
 
 	// Clear warning data
-	g_warning_data[field_id].text_label = NULL;
-	g_warning_data[field_id].container = NULL;
-	g_warning_data[field_id].value_label = NULL;
-	g_warning_data[field_id].highlighted_field_id = -1;
-	g_warning_data[field_id].is_baseline_warning = false;
-	g_warning_data[field_id].modal = NULL;
+	warning_data->text_label = NULL;
+	warning_data->container = NULL;
+	warning_data->value_label = NULL;
+	warning_data->highlighted_field_id = -1;
+	warning_data->is_baseline_warning = false;
+	warning_data->modal = NULL;
 
 	// Update field display for the baseline field
 	update_field_display(modal, field_id);
@@ -1753,6 +1802,9 @@ alerts_modal_t* alerts_modal_create(const alerts_modal_config_t* config, void (*
 	// Store configuration
 	modal->config = *config;
 	modal->total_field_count = config->gauge_count * 5; // 5 fields per gauge
+
+	// Initialize warning data array
+	init_warning_data(modal->total_field_count);
 
 	// Allocate dynamic arrays
 	modal->gauge_sections = calloc(config->gauge_count, sizeof(lv_obj_t*));
@@ -2027,19 +2079,25 @@ static void alerts_modal_destroy_timer_cb(lv_timer_t* timer)
 	alerts_modal_hide(modal);
 
 	// Clear all warnings and destroy timers
-	for (int field_id = 0; field_id < modal->total_field_count && field_id < 30; field_id++) {
-		if (g_warning_data[field_id].timer) {
-			lv_timer_del(g_warning_data[field_id].timer);
-			g_warning_data[field_id].timer = NULL;
+	for (int field_id = 0; field_id < modal->total_field_count; field_id++) {
+		warning_data_t* warning_data = get_warning_data(field_id);
+		if (warning_data && warning_data->timer) {
+			lv_timer_del(warning_data->timer);
+			warning_data->timer = NULL;
 		}
 		// Clear warning data
-		g_warning_data[field_id].text_label = NULL;
-		g_warning_data[field_id].container = NULL;
-		g_warning_data[field_id].value_label = NULL;
-		g_warning_data[field_id].highlighted_field_id = -1;
-		g_warning_data[field_id].is_baseline_warning = false;
-		g_warning_data[field_id].modal = NULL;
+		if (warning_data) {
+			warning_data->text_label = NULL;
+			warning_data->container = NULL;
+			warning_data->value_label = NULL;
+			warning_data->highlighted_field_id = -1;
+			warning_data->is_baseline_warning = false;
+			warning_data->modal = NULL;
+		}
 	}
+
+	// Cleanup warning data array
+	cleanup_warning_data();
 
 	// Destroy numberpad subcomponent
 	if (modal->numberpad) {

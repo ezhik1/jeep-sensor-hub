@@ -10,9 +10,9 @@ extern "C" {
 // Warning icon sizes
 typedef enum {
 	WARNING_ICON_SIZE_16 = 16,
-	WARNING_ICON_SIZE_24 = 24,
-	WARNING_ICON_SIZE_32 = 32,
-	WARNING_ICON_SIZE_48 = 48
+	WARNING_ICON_SIZE_30 = 30,
+	WARNING_ICON_SIZE_50 = 50,
+	WARNING_ICON_SIZE_100 = 100
 } warning_icon_size_t;
 
 // Create a colorable warning icon

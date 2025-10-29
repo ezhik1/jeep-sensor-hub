@@ -24,6 +24,7 @@ typedef struct {
 	float init_max_value;
 
 	// LVGL objects
+	lv_obj_t *parent;
 	lv_obj_t *container;
 	lv_obj_t *content_container;
 	lv_obj_t *labels_container;
@@ -32,9 +33,6 @@ typedef struct {
 	lv_obj_t *max_label;
 	lv_obj_t *center_label;
 	lv_obj_t *min_label;
-	lv_obj_t *max_range_rect;
-	lv_obj_t *center_range_rect;
-	lv_obj_t *min_range_rect;
 	// Indicator line objects (separate from canvas)
 	lv_obj_t *indicator_container;
 	lv_obj_t *indicator_vertical_line;
@@ -132,7 +130,7 @@ void bar_graph_gauge_set_history_type(bar_graph_gauge_t *gauge, int history_type
 void bar_graph_gauge_add_data_point(bar_graph_gauge_t *gauge, void* gauge_data_history);
 
 void bar_graph_gauge_draw_all_data(bar_graph_gauge_t *gauge, void* gauge_data_history);
-void bar_graph_gauge_draw_all_data_snapshot(bar_graph_gauge_t *gauge, int snapshot_head, void* gauge_data_history_ptr);
+void bar_graph_gauge_draw_all_data_snapshot(bar_graph_gauge_t *gauge, int snapshot_head, void* gauge_data_history_pointer);
 
 void bar_graph_gauge_cleanup(bar_graph_gauge_t *gauge);
 void bar_graph_gauge_set_timeline_duration(bar_graph_gauge_t *gauge, uint32_t duration_ms);
@@ -151,7 +149,7 @@ void bar_graph_gauge_configure_advanced(
 	bool show_title,
 	bool show_y_axis,
 	bool show_border);
-void bar_graph_gauge_update_labels_and_ticks(bar_graph_gauge_t *gauge);
+void bar_graph_gauge_update_y_axis_labels(bar_graph_gauge_t *gauge);
 
 // Force complete current animation (useful for interrupting smooth animations)
 void bar_graph_gauge_force_complete_animation(bar_graph_gauge_t *gauge);

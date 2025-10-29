@@ -23,6 +23,7 @@ typedef struct {
 	lv_obj_t* title_container;
 	lv_obj_t* title_label;
 	lv_obj_t* unit_label;
+	lv_obj_t* value_container;  // Container for value label
 	lv_obj_t* value_label;
 	lv_obj_t* gauge_container;
 	bar_graph_gauge_t gauge;  // Static gauge, not pointer

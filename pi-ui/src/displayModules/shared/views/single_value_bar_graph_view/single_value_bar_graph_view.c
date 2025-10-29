@@ -51,9 +51,9 @@ single_value_bar_graph_view_state_t* single_value_bar_graph_view_create(lv_obj_t
 	base_view->title_container = lv_obj_create(parent);
 	if (base_view->title_container) {
 		// Position at top-left with some padding
-		lv_obj_align(base_view->title_container, LV_ALIGN_TOP_LEFT, 10, 5);
+		lv_obj_align(base_view->title_container, LV_ALIGN_TOP_LEFT, 5, 5);
 		// Set size to accommodate title and unit
-		lv_obj_set_size(base_view->title_container, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+		lv_obj_set_size(base_view->title_container, lv_pct(30), LV_SIZE_CONTENT);
 		// Configure container
 		lv_obj_set_style_bg_opa(base_view->title_container, LV_OPA_TRANSP, 0);
 		lv_obj_set_style_border_width(base_view->title_container, 0, 0);
@@ -90,20 +90,27 @@ single_value_bar_graph_view_state_t* single_value_bar_graph_view_create(lv_obj_t
 		lv_obj_add_flag(base_view->unit_label, LV_OBJ_FLAG_EVENT_BUBBLE);
 	}
 
-	// Create value label
-	base_view->value_label = lv_label_create(parent);
+	// Create value container for format_and_display_number to work with
+	base_view->value_container = lv_obj_create(parent);
+	if (base_view->value_container) {
+		// Position the container to avoid collision with title
+		lv_coord_t top_offset = 15; // Move down to avoid title collision
+		lv_obj_align(base_view->value_container, LV_ALIGN_TOP_RIGHT, 0, top_offset);
+		// lv_obj_set_size(base_view->value_container, 100, 40); // Fixed size for the value area
+		lv_obj_set_size(base_view->value_container, lv_pct(70), LV_SIZE_CONTENT);
+		// Configure container for format_and_display_number
+		lv_obj_set_style_bg_opa(base_view->value_container, LV_OPA_TRANSP, 0);
+		lv_obj_set_style_border_width(base_view->value_container, 0, 0);
+		lv_obj_set_style_pad_all(base_view->value_container, 0, 0);
+		lv_obj_clear_flag(base_view->value_container, LV_OBJ_FLAG_SCROLLABLE);
+		lv_obj_clear_flag(base_view->value_container, LV_OBJ_FLAG_CLICKABLE);
+		lv_obj_add_flag(base_view->value_container, LV_OBJ_FLAG_EVENT_BUBBLE);
+	}
+
+	// Create value label inside the container
+	base_view->value_label = lv_label_create(base_view->value_container);
 	if (base_view->value_label) {
 		lv_label_set_text(base_view->value_label, "12.6");
-		lv_obj_set_style_text_color(base_view->value_label, config->number_config.color, 0);
-		lv_obj_set_style_text_font(base_view->value_label, config->number_config.font, 0);
-
-		// Position in top-right corner with fixed positioning for stability
-		lv_coord_t top_offset = 15; // Fixed 15px from top for consistent positioning
-		lv_obj_align(base_view->value_label, LV_ALIGN_TOP_RIGHT, -10, top_offset);
-
-		// Allow layout to settle
-		lv_obj_update_layout(parent);
-
 		lv_obj_clear_flag(base_view->value_label, LV_OBJ_FLAG_CLICKABLE);
 		lv_obj_add_flag(base_view->value_label, LV_OBJ_FLAG_EVENT_BUBBLE);
 	}
@@ -141,7 +148,7 @@ single_value_bar_graph_view_state_t* single_value_bar_graph_view_create(lv_obj_t
 
 		bar_graph_gauge_init(
 			&base_view->gauge, base_view->gauge_container,
-			0, 0, container_width, gauge_height, 2, 3
+			0, 0, 0, 0, 2, 3
 		);
 
 
@@ -161,7 +168,7 @@ single_value_bar_graph_view_state_t* single_value_bar_graph_view_create(lv_obj_t
 		);
 
 		// Update labels and ticks
-		bar_graph_gauge_update_labels_and_ticks(&base_view->gauge);
+		bar_graph_gauge_update_y_axis_labels(&base_view->gauge);
 
 	}
 
@@ -185,23 +192,18 @@ void single_value_bar_graph_view_update_data(single_value_bar_graph_view_state_t
 {
 	if (!base_view || !base_view->initialized) return;
 
-	// Update numerical value display (right-aligned)
+	// Update numerical value display using format_and_display_number
 	if (base_view->value_label) {
+		// Use the stored number_config for formatting
+		number_formatting_config_t config = base_view->number_config;
+		config.label = base_view->value_label; // Set the label to update
 
-		char value_text[32];
-		snprintf(value_text, sizeof(value_text), "%.1f", value);
-		lv_label_set_text(base_view->value_label, value_text);
+		// Set error state
+		config.show_error = has_error;
 
-		// Set color based on error state
-		if (has_error) {
-			lv_obj_set_style_text_color(base_view->value_label, base_view->number_config.error_color, 0);
-		} else {
-			lv_obj_set_style_text_color(base_view->value_label, base_view->number_config.color, 0);
-		}
+		// Use format_and_display_number for proper formatting and positioning
+		format_and_display_number(value, &config);
 	}
-
-	// Data sampling and gauge updates are now handled centrally in power_monitor_update_all_gauge_histories()
-	// This function only handles UI-specific updates for the single value bar graph view
 }
 
 void single_value_bar_graph_view_render(single_value_bar_graph_view_state_t* base_view)
@@ -216,12 +218,15 @@ void single_value_bar_graph_view_apply_alert_flashing(single_value_bar_graph_vie
 {
 	if (!base_view || !base_view->value_label) return;
 
-	if (blink_on && (value < low_threshold || value > high_threshold)) {
+	// Check if value is in alert range
+	bool in_alert_range = (value < low_threshold || value > high_threshold);
 
-		lv_obj_set_style_text_color(base_view->value_label, PALETTE_YELLOW, 0);
+	if (blink_on && in_alert_range) {
+		// Use warning color from config during alert flashing
+		lv_obj_set_style_text_color(base_view->value_label, base_view->number_config.warning_color, 0);
 	} else {
-
-		lv_obj_set_style_text_color(base_view->value_label, PALETTE_WHITE, 0);
+		// Use normal color from config
+		lv_obj_set_style_text_color(base_view->value_label, base_view->number_config.color, 0);
 	}
 }
 
@@ -238,5 +243,5 @@ void single_value_bar_graph_view_update_configuration(single_value_bar_graph_vie
 		false, true, false // Show title, Show Y-axis, Show Border
 	);
 
-	bar_graph_gauge_update_labels_and_ticks(&base_view->gauge);
+	bar_graph_gauge_update_y_axis_labels(&base_view->gauge);
 }

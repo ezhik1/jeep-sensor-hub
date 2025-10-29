@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include "detail_screen.h"
 #include "../../displayModules/shared/palette.h"
 
@@ -10,7 +11,7 @@
 // Simple modal tracking - only store modal pointers, read state from modal itself
 typedef struct {
 	char name[32];
-	void* modal_ptr;
+	void* modal_pointer;
 	void (*destroy_func)(void* modal);
 	bool (*is_visible_func)(void* modal); // Function to check if modal is visible
 } modal_tracking_t;
@@ -41,7 +42,7 @@ static int detail_screen_allocate_modal_slot(const char* modal_name)
 	int slot = modal_count++;
 	strncpy(modal_tracking[slot].name, modal_name, sizeof(modal_tracking[slot].name) - 1);
 	modal_tracking[slot].name[sizeof(modal_tracking[slot].name) - 1] = '\0';
-	modal_tracking[slot].modal_ptr = NULL;
+	modal_tracking[slot].modal_pointer = NULL;
 	modal_tracking[slot].destroy_func = NULL;
 	modal_tracking[slot].is_visible_func = NULL;
 
@@ -55,7 +56,7 @@ static void detail_screen_modal_destroyed_callback(const char* modal_name)
 
 	int slot = detail_screen_find_modal_slot(modal_name);
 	if (slot != -1) {
-		modal_tracking[slot].modal_ptr = NULL;
+		modal_tracking[slot].modal_pointer = NULL;
 		printf("[I] detail_screen: Modal %s pointer cleared\n", modal_name);
 	}
 }
@@ -65,9 +66,9 @@ static void detail_screen_timeline_modal_destroyed_wrapper(void)
 {
 	// Find the modal and hide it before clearing the pointer
 	int slot = detail_screen_find_modal_slot("timeline");
-	if (slot != -1 && modal_tracking[slot].modal_ptr) {
+	if (slot != -1 && modal_tracking[slot].modal_pointer) {
 		extern void timeline_modal_hide(void* modal);
-		timeline_modal_hide(modal_tracking[slot].modal_ptr);
+		timeline_modal_hide(modal_tracking[slot].modal_pointer);
 	}
 	detail_screen_modal_destroyed_callback("timeline");
 }
@@ -76,9 +77,9 @@ static void detail_screen_alerts_modal_destroyed_wrapper(void)
 {
 	// Find the modal and hide it before clearing the pointer
 	int slot = detail_screen_find_modal_slot("alerts");
-	if (slot != -1 && modal_tracking[slot].modal_ptr) {
+	if (slot != -1 && modal_tracking[slot].modal_pointer) {
 		extern void alerts_modal_hide(void* modal);
-		alerts_modal_hide(modal_tracking[slot].modal_ptr);
+		alerts_modal_hide(modal_tracking[slot].modal_pointer);
 	}
 	detail_screen_modal_destroyed_callback("alerts");
 }
@@ -101,23 +102,30 @@ void detail_screen_toggle_modal(const char* modal_name,
 
 	// Check if modal exists and is visible by reading from modal itself
 	bool is_visible = false;
-	if (modal_tracking[slot].modal_ptr && modal_tracking[slot].is_visible_func) {
-		printf("[D] detail_screen: Checking modal visibility for %s, modal_ptr=%p\n", modal_name, modal_tracking[slot].modal_ptr);
-		is_visible = modal_tracking[slot].is_visible_func(modal_tracking[slot].modal_ptr);
+	if (modal_tracking[slot].modal_pointer && modal_tracking[slot].is_visible_func) {
+		printf("[D] detail_screen: Checking modal visibility for %s, modal_pointer=%p\n", modal_name, modal_tracking[slot].modal_pointer);
+		is_visible = modal_tracking[slot].is_visible_func(modal_tracking[slot].modal_pointer);
 		printf("[D] detail_screen: Modal %s visibility: %s\n", modal_name, is_visible ? "visible" : "hidden");
 	} else {
-		printf("[D] detail_screen: Modal %s not found or invalid (ptr=%p, func=%p)\n", modal_name, modal_tracking[slot].modal_ptr, modal_tracking[slot].is_visible_func);
+		printf("[D] detail_screen: Modal %s not found or invalid (ptr=%p, func=%p)\n", modal_name, modal_tracking[slot].modal_pointer, modal_tracking[slot].is_visible_func);
 	}
 
 	if (is_visible) {
 		// Close modal
-		if (modal_tracking[slot].modal_ptr && modal_tracking[slot].destroy_func) {
-			modal_tracking[slot].destroy_func(modal_tracking[slot].modal_ptr);
+		if (modal_tracking[slot].modal_pointer && modal_tracking[slot].destroy_func) {
+			modal_tracking[slot].destroy_func(modal_tracking[slot].modal_pointer);
 		}
-		modal_tracking[slot].modal_ptr = NULL;
+		modal_tracking[slot].modal_pointer = NULL;
 		printf("[I] detail_screen: Modal %s closed\n", modal_name);
 	} else {
-		// Open modal - use appropriate wrapper callback
+		// Open modal - destroy any existing modal first to prevent memory leaks
+		if (modal_tracking[slot].modal_pointer && modal_tracking[slot].destroy_func) {
+			printf("[I] detail_screen: Destroying existing %s modal before creating new one\n", modal_name);
+			modal_tracking[slot].destroy_func(modal_tracking[slot].modal_pointer);
+			modal_tracking[slot].modal_pointer = NULL;
+		}
+
+		// Use appropriate wrapper callback
 		void (*wrapper_callback)(void) = NULL;
 		if (strcmp(modal_name, "timeline") == 0) {
 			wrapper_callback = detail_screen_timeline_modal_destroyed_wrapper;
@@ -128,11 +136,11 @@ void detail_screen_toggle_modal(const char* modal_name,
 		modal_tracking[slot].destroy_func = destroy_func;
 		modal_tracking[slot].is_visible_func = is_visible_func;
 		printf("[D] detail_screen: Creating modal %s with config=%p, callback=%p\n", modal_name, config, wrapper_callback);
-		modal_tracking[slot].modal_ptr = create_func(config, wrapper_callback);
-		printf("[D] detail_screen: Modal %s created, ptr=%p\n", modal_name, modal_tracking[slot].modal_ptr);
-		if (modal_tracking[slot].modal_ptr) {
+		modal_tracking[slot].modal_pointer = create_func(config, wrapper_callback);
+		printf("[D] detail_screen: Modal %s created, ptr=%p\n", modal_name, modal_tracking[slot].modal_pointer);
+		if (modal_tracking[slot].modal_pointer) {
 			printf("[D] detail_screen: Showing modal %s\n", modal_name);
-			show_func(modal_tracking[slot].modal_ptr);
+			show_func(modal_tracking[slot].modal_pointer);
 			printf("[I] detail_screen: Modal %s opened\n", modal_name);
 		} else {
 			printf("[E] detail_screen: Failed to create modal %s\n", modal_name);
@@ -143,10 +151,10 @@ void detail_screen_toggle_modal(const char* modal_name,
 bool detail_screen_is_modal_visible(const char* modal_name)
 {
 	int slot = detail_screen_find_modal_slot(modal_name);
-	if (slot == -1 || !modal_tracking[slot].modal_ptr || !modal_tracking[slot].is_visible_func) {
+	if (slot == -1 || !modal_tracking[slot].modal_pointer || !modal_tracking[slot].is_visible_func) {
 		return false;
 	}
-	return modal_tracking[slot].is_visible_func(modal_tracking[slot].modal_ptr);
+	return modal_tracking[slot].is_visible_func(modal_tracking[slot].modal_pointer);
 }
 
 // Reset modal tracking system (call when detail screen is recreated)
@@ -154,14 +162,14 @@ void detail_screen_reset_modal_tracking(void)
 {
 	printf("[I] detail_screen: Resetting modal tracking system\n");
 	for (int i = 0; i < modal_count; i++) {
-		if (modal_tracking[i].modal_ptr && modal_tracking[i].destroy_func) {
+		if (modal_tracking[i].modal_pointer && modal_tracking[i].destroy_func) {
 			printf("[I] detail_screen: Destroying existing modal %s\n", modal_tracking[i].name);
 			// Call destroy function and immediately clear the pointer to prevent double-free
-			void* modal_ptr = modal_tracking[i].modal_ptr;
-			modal_tracking[i].modal_ptr = NULL;
-			modal_tracking[i].destroy_func(modal_ptr);
+			void* modal_pointer = modal_tracking[i].modal_pointer;
+			modal_tracking[i].modal_pointer = NULL;
+			modal_tracking[i].destroy_func(modal_pointer);
 		}
-		modal_tracking[i].modal_ptr = NULL;
+		modal_tracking[i].modal_pointer = NULL;
 		modal_tracking[i].destroy_func = NULL;
 		modal_tracking[i].is_visible_func = NULL;
 	}
@@ -184,7 +192,8 @@ static const char *TAG = "detail_screen_template";
 #define OTHER_SECTIONS_PADDING  5     // Internal padding for raw values and settings
 
 // Left column width as percentage of screen width
-#define LEFT_COLUMN_WIDTH_PERCENT 50  // Left column takes 50% of screen width
+#define LEFT_COLUMN_WIDTH_PERCENT 48  // Left column takes 50% of screen width
+#define GAUGES_CONTAINER_WIDTH_PERCENT 48  // Gauges container takes 48% of screen width
 
 // ============================================================================
 // CALCULATED VALUES - These are computed from the configuration above
@@ -349,7 +358,6 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 	lv_obj_set_size(detail->main_content, LV_PCT(100), LV_PCT(100));
 	lv_obj_set_style_bg_color(detail->main_content, PALETTE_BLACK, 0);
 	lv_obj_set_style_border_width(detail->main_content, 0, 0);
-	lv_obj_set_style_pad_all(detail->main_content, 10, 0);
 	lv_obj_clear_flag(detail->main_content, LV_OBJ_FLAG_SCROLLABLE);
 	lv_obj_add_flag(detail->main_content, LV_OBJ_FLAG_OVERFLOW_VISIBLE); // Allow children to extend outside main content
 
@@ -396,6 +404,9 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 	lv_obj_set_style_bg_opa(detail->left_column, LV_OPA_COVER, 0);
 	lv_obj_set_style_border_width(detail->left_column, 0, 0);
 	lv_obj_set_style_pad_all(detail->left_column, 0, 0);
+	lv_obj_set_style_pad_top(detail->left_column, 4, 0);
+	lv_obj_set_style_pad_bottom(detail->left_column, 4, 0);
+	lv_obj_set_style_pad_left(detail->left_column, 4, 0);
 	lv_obj_clear_flag(detail->left_column, LV_OBJ_FLAG_SCROLLABLE);
 
 	// Set up flexbox for left column (vertical stack)
@@ -410,23 +421,22 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		if (!detail->gauges_container) {
 			printf("[E] detail_screen: Failed to create gauges_container\n");
 		} else {
-		lv_obj_set_size(detail->gauges_container, LV_PCT(100), LV_PCT(100));
-		lv_obj_set_style_flex_grow(detail->gauges_container, 1, 0);
+
+		lv_obj_set_size(detail->gauges_container, LV_PCT(GAUGES_CONTAINER_WIDTH_PERCENT), LV_PCT(100));
+		// lv_obj_set_style_flex_grow(detail->gauges_container, 1, 0);
 		lv_obj_set_style_pad_all(detail->gauges_container, 0, 0);
+		lv_obj_set_style_pad_top(detail->gauges_container, 4, 0);
+		lv_obj_set_style_pad_bottom(detail->gauges_container, 0, 0);
+		lv_obj_set_style_pad_right(detail->gauges_container, 4, 0);
 		lv_obj_set_style_bg_color(detail->gauges_container, PALETTE_BLACK, 0);
 		lv_obj_set_style_border_width(detail->gauges_container, 0, 0); // No border around gauges container
 		lv_obj_set_style_radius(detail->gauges_container, 0, 0);
 		lv_obj_clear_flag(detail->gauges_container, LV_OBJ_FLAG_SCROLLABLE);
 
-		// Set up flexbox for gauges (vertical stack with padding)
-		lv_obj_set_flex_flow(detail->gauges_container, LV_FLEX_FLOW_COLUMN);
-		lv_obj_set_flex_align(detail->gauges_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-		lv_obj_set_style_pad_gap(detail->gauges_container, 4, 0); // 4px padding between gauges
-		// gauges container created
-
-		// Note: The actual gauge initialization will be done by the module
-		// when it calls the on_gauges_created callback
-		// This container is ready for the gauges to be added
+		// Flexbox layout
+		// lv_obj_set_flex_flow(detail->gauges_container, LV_FLEX_FLOW_COLUMN);
+		// lv_obj_set_flex_align(detail->gauges_container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+		// lv_obj_set_style_pad_gap(detail->gauges_container, 0, 0); // 4px padding between gauges
 		}
 	}
 
@@ -581,6 +591,7 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		lv_obj_set_style_bg_color(right_buttons_container, PALETTE_BLACK, 0);
 		lv_obj_set_style_bg_opa(right_buttons_container, LV_OPA_COVER, 0);
 		lv_obj_set_style_border_width(right_buttons_container, 0, 0);
+		lv_obj_clear_flag(right_buttons_container, LV_OBJ_FLAG_SCROLLABLE);
 		lv_obj_add_flag(right_buttons_container, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
 		lv_obj_set_style_pad_all(right_buttons_container, 2, 0);
 		lv_obj_set_style_pad_gap(right_buttons_container, 8, 0);
@@ -647,7 +658,6 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 
 	// Position RAW VALUES overlay title inline with the settings section's top border
 	lv_obj_align_to(sensor_title, detail->sensor_data_section, LV_ALIGN_OUT_TOP_LEFT, 20, 10);
-	printf("[I] detail_screen: Created sensor title inline with section border\n");
 
 	// Create status container if requested
 	if (config->show_status_indicators) {
@@ -659,7 +669,7 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 		detail->status_container = lv_obj_create(detail->main_content);
 		lv_obj_set_size(detail->status_container, screen_width - 20, 100);
 		lv_obj_align(detail->status_container, LV_ALIGN_TOP_MID, 0, status_y);
-		lv_obj_set_style_pad_all(detail->status_container, 10, 0);
+		lv_obj_set_style_pad_all(detail->status_container, 4, 0);
 		lv_obj_set_style_bg_color(detail->status_container, lv_color_hex(0x0A0A0A), 0);
 		lv_obj_set_style_border_width(detail->status_container, 2, 0);
 		lv_obj_set_style_border_color(detail->status_container, PALETTE_WHITE, 0);
@@ -669,8 +679,6 @@ detail_screen_t* detail_screen_create(const detail_screen_config_t* config)
 
 	// Overlay functionality not implemented in Pi port
 	detail->current_view_overlay = NULL;
-
-		printf("[I] detail_screen: Detail screen created for module: %s\n", config->module_name);
 	return detail;
 }
 
@@ -728,8 +736,6 @@ void detail_screen_show(detail_screen_t* detail)
 			}
 		}
 	}
-
-				// detail screen shown
 }
 
 void detail_screen_hide(detail_screen_t* detail)
@@ -738,10 +744,8 @@ void detail_screen_hide(detail_screen_t* detail)
 
 	// Hide overlay root
 	if (detail->root && lv_obj_is_valid(detail->root)) {
+
 		lv_obj_add_flag(detail->root, LV_OBJ_FLAG_HIDDEN);
-		printf("[I] detail_screen: Detail screen hidden for module: %s\n", detail->module_name);
-	} else {
-		printf("[W] detail_screen: Detail root container is NULL or invalid for module: %s\n", detail->module_name);
 	}
 }
 
@@ -749,11 +753,6 @@ void detail_screen_update(detail_screen_t* detail, const void* data)
 {
 	if (!detail) return;
 
-	// Update title if needed
-	// Update status indicators if they exist
-	// This can be extended based on specific module needs
-
-		printf("[D] detail_screen: Detail screen updated for module: %s\n", detail->module_name);
 }
 
 void detail_screen_destroy(detail_screen_t* detail)
@@ -779,7 +778,6 @@ void detail_screen_destroy(detail_screen_t* detail)
 	}
 
 	free(detail);
-	printf("[I] detail_screen: Detail screen destroyed\n");
 }
 
 lv_obj_t* detail_screen_get_current_view_container(detail_screen_t* detail)
@@ -818,7 +816,6 @@ void detail_screen_restore_current_view_styling(lv_obj_t* container)
 	// Log container dimensions BEFORE styling
 	lv_coord_t width_before = lv_obj_get_width(container);
 	lv_coord_t height_before = lv_obj_get_height(container);
-	printf("[D] detail_screen: Container BEFORE styling: %dx%d\n", width_before, height_before);
 
 	// Restore size and layout properties
 	lv_obj_set_size(container, LV_PCT(100), LV_SIZE_CONTENT); // Content-based height
@@ -838,13 +835,6 @@ void detail_screen_restore_current_view_styling(lv_obj_t* container)
 	lv_obj_set_style_border_color(container, PALETTE_WHITE, 0);
 	lv_obj_set_style_radius(container, 4, 0);
 	lv_obj_clear_flag(container, LV_OBJ_FLAG_SCROLLABLE);
-
-	// Log container dimensions AFTER styling
-	lv_coord_t width_after = lv_obj_get_width(container);
-	lv_coord_t height_after = lv_obj_get_height(container);
-	printf("[D] detail_screen: Container AFTER styling: %dx%d\n", width_after, height_after);
-
-	printf("[I] detail_screen: Current view container styling restored\n");
 }
 
 /**
@@ -859,39 +849,25 @@ bool detail_screen_prepare_current_view_layout(detail_screen_t* detail)
 		return false;
 	}
 
-	// Log container dimensions BEFORE layout update
-	lv_coord_t width_before_layout = lv_obj_get_width(detail->current_view_container);
-	lv_coord_t height_before_layout = lv_obj_get_height(detail->current_view_container);
-	printf("[D] detail_screen: Container BEFORE layout update: %dx%d\n", width_before_layout, height_before_layout);
-
 	// Force layout calculation on parent container (left_column) to ensure flexbox sizing
 	lv_obj_update_layout(detail->left_column);
 	lv_coord_t width_after_layout = lv_obj_get_width(detail->current_view_container);
 	lv_coord_t height_after_layout = lv_obj_get_height(detail->current_view_container);
-	printf("[D] detail_screen: Container AFTER layout update: %dx%d\n", width_after_layout, height_after_layout);
 
 	// Additional check: if size is still too small, force a second layout update
 	if (width_after_layout < 200 || height_after_layout < 150) {
-		printf("[W] detail_screen: Container size seems too small (%dx%d), forcing additional layout update\n", width_after_layout, height_after_layout);
+
 		lv_obj_update_layout(lv_scr_act()); // Update entire screen layout
 		lv_obj_update_layout(detail->left_column); // Update parent again
 		width_after_layout = lv_obj_get_width(detail->current_view_container);
 		height_after_layout = lv_obj_get_height(detail->current_view_container);
-		printf("[I] detail_screen: Container size after additional layout update: %dx%d\n", width_after_layout, height_after_layout);
 	}
 
 	// Validate final dimensions
 	if (width_after_layout < 100 || height_after_layout < 50) {
-		printf("[E] detail_screen: Container dimensions too small after layout preparation: %dx%d\n", width_after_layout, height_after_layout);
+
 		return false;
 	}
 
-	printf("[I] detail_screen: Layout preparation completed successfully: %dx%d\n", width_after_layout, height_after_layout);
 	return true;
 }
-
-// ============================================================================
-// SENSOR LABELS MANAGEMENT - REMOVED
-// ============================================================================
-// Sensor-specific functionality has been removed to make detail_screen generic.
-// Modules should implement their own sensor data display using the callbacks.

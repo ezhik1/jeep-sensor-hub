@@ -62,12 +62,12 @@ void lerp_data_set_targets(const void* raw_data)
 	const power_monitor_data_t* data = (const power_monitor_data_t*)raw_data;
 
 	// Set target values
-	lerp_value_set_target(&g_lerp_data.starter_voltage, data->starter_battery.voltage);
-	lerp_value_set_target(&g_lerp_data.starter_current, data->starter_battery.current);
-	lerp_value_set_target(&g_lerp_data.house_voltage, data->house_battery.voltage);
-	lerp_value_set_target(&g_lerp_data.house_current, data->house_battery.current);
-	lerp_value_set_target(&g_lerp_data.solar_voltage, data->solar_input.voltage);
-	lerp_value_set_target(&g_lerp_data.solar_current, data->solar_input.current);
+	lerp_value_set_target(&g_lerp_data.starter_voltage, data->starter_battery.voltage.value);
+	lerp_value_set_target(&g_lerp_data.starter_current, data->starter_battery.current.value);
+	lerp_value_set_target(&g_lerp_data.house_voltage, data->house_battery.voltage.value);
+	lerp_value_set_target(&g_lerp_data.house_current, data->house_battery.current.value);
+	lerp_value_set_target(&g_lerp_data.solar_voltage, data->solar_input.voltage.value);
+	lerp_value_set_target(&g_lerp_data.solar_current, data->solar_input.current.value);
 }
 
 // Get current interpolated values

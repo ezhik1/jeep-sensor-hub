@@ -4,6 +4,7 @@
 #include <math.h>
 
 #include "power-monitor.h"
+#include "gauge_types.h"
 
 // State
 #include "../../state/device_state.h"
@@ -14,8 +15,21 @@
 #include "../../data/config.h"
 
 // Views
+#include "views/voltage_grid_view/voltage_grid_view.h"
 #include "views/power_grid_view/power_grid_view.h"
+#include "views/amperage_grid_view/amperage_grid_view.h"
 #include "views/starter_voltage_view/starter_voltage_view.h"
+#include "views/house_voltage_view/house_voltage_view.h"
+#include "views/solar_voltage_view/solar_voltage_view.h"
+#include "views/starter_current_view/starter_current_view.h"
+#include "views/house_current_view/house_current_view.h"
+#include "views/solar_current_view/solar_current_view.h"
+#include "views/starter_power_view/starter_power_view.h"
+#include "views/house_power_view/house_power_view.h"
+#include "views/solar_power_view/solar_power_view.h"
+
+// Number of available views - update this when adding/removing views
+#define POWER_MONITOR_VIEW_COUNT 12
 #include "../shared/views/single_value_bar_graph_view/single_value_bar_graph_view.h"
 
 
@@ -27,25 +41,44 @@
 #include "../shared/modals/timeline_modal/timeline_modal.h"
 #include "../shared/gauges/bar_graph_gauge/bar_graph_gauge.h"
 #include "../shared/utils/number_formatting/number_formatting.h"
+#include "../shared/utils/warning_icon/warning_icon.h"
 
 // App data store
 #include "../../app_data_store.h"
 
-// External references to current view gauges (declared in power_grid_view.h)
+// External references to current view gauges (declared in voltage_grid_view.h)
 extern bar_graph_gauge_t s_starter_voltage_gauge;
 extern bar_graph_gauge_t s_house_voltage_gauge;
 extern bar_graph_gauge_t s_solar_voltage_gauge;
 
-// External reference to single view starter voltage (declared in starter_voltage_view.c)
+// External references to power grid view gauges (declared in power_grid_view.h)
+extern bar_graph_gauge_t s_starter_power_gauge;
+extern bar_graph_gauge_t s_house_power_gauge;
+extern bar_graph_gauge_t s_solar_power_gauge;
+
+// External references to amperage grid view gauges (declared in amperage_grid_view.h)
+extern bar_graph_gauge_t s_starter_current_gauge;
+extern bar_graph_gauge_t s_house_current_gauge;
+extern bar_graph_gauge_t s_solar_current_gauge;
+
+// External reference to single view gauges
 extern single_value_bar_graph_view_state_t* single_view_starter_voltage;
+extern single_value_bar_graph_view_state_t* single_view_house_voltage;
+extern single_value_bar_graph_view_state_t* single_view_solar_voltage;
+extern single_value_bar_graph_view_state_t* single_view_starter_current;
+extern single_value_bar_graph_view_state_t* single_view_house_current;
+extern single_value_bar_graph_view_state_t* single_view_solar_current;
+extern single_value_bar_graph_view_state_t* single_view_starter_power;
+extern single_value_bar_graph_view_state_t* single_view_house_power;
+extern single_value_bar_graph_view_state_t* single_view_solar_power;
 
 #include "../../screens/screen_manager.h"
 #include "../../screens/detail_screen/detail_screen.h"
 #include "../../screens/home_screen/home_screen.h"
 
 // Module Configurations
-#include "power_alerts_config.h"
-#include "timeline_modal_config.h"
+#include "config/battery_alerts_config.h"
+#include "config/timeline_modal_config.h"
 
 // UI Styling
 #include "../../displayModules/shared/palette.h"
@@ -85,7 +118,7 @@ static void power_monitor_update_detail_gauges(void);
 static power_monitor_data_t* power_monitor_get_data_internal(void);
 void power_monitor_render_current_view(lv_obj_t* container);
 void power_monitor_cleanup_internal(void);
-static void power_monitor_destroy_current_view(void);
+static void power_monitor_destroy_current_view(int old_view_index);
 static int power_monitor_get_view_index(void);
 static void power_monitor_set_view_index(int index);
 
@@ -125,8 +158,18 @@ static detail_screen_t* detail_screen = NULL;
 
 // Available view types in order (first is default)
 static const power_monitor_view_type_t available_views[] = {
-	POWER_MONITOR_VIEW_BAR_GRAPH,    // Power grid view (value 3)
-	POWER_MONITOR_VIEW_NUMERICAL     // Starter Voltage view (value 4)
+	POWER_MONITOR_VIEW_BAR_GRAPH,      // Voltage grid view
+	POWER_MONITOR_VIEW_AMPERAGE_GRID,  // Current grid view
+	POWER_MONITOR_VIEW_POWER,          // Power grid view
+	POWER_MONITOR_VIEW_NUMERICAL,      // Starter voltage single view
+	POWER_MONITOR_VIEW_HOUSE_VOLTAGE,  // House voltage single view
+	POWER_MONITOR_VIEW_SOLAR_VOLTAGE,  // Solar voltage single view
+	POWER_MONITOR_VIEW_STARTER_CURRENT,// Starter current single view
+	POWER_MONITOR_VIEW_HOUSE_CURRENT,  // House current single view
+	POWER_MONITOR_VIEW_SOLAR_CURRENT,  // Solar current single view
+	POWER_MONITOR_VIEW_STARTER_POWER,  // Starter power single view
+	POWER_MONITOR_VIEW_HOUSE_POWER,    // House power single view
+	POWER_MONITOR_VIEW_SOLAR_POWER     // Solar power single view
 };
 
 // Modal state management handled by detail_screen.c
@@ -136,8 +179,8 @@ static power_monitor_view_type_t get_current_view_type(void)
 {
 	int view_index = power_monitor_get_view_index();
 
-	if (view_index < 0 || view_index >= 2) {
-		printf("[E] power_monitor: Invalid view index: %d (total: 2)\n", view_index);
+	if (view_index < 0 || view_index >= POWER_MONITOR_VIEW_COUNT) {
+		printf("[E] power_monitor: Invalid view index: %d (total: %d)\n", view_index, POWER_MONITOR_VIEW_COUNT);
 		return POWER_MONITOR_VIEW_BAR_GRAPH; // Default fallback
 	}
 
@@ -154,10 +197,10 @@ static void power_monitor_navigation_cycle_to_next_view(void)
 
 	// Get current index from device state
 	int current_index = power_monitor_get_view_index();
-	printf("[I] power_monitor: Before cycle: index=%d, total_views=2\n", current_index);
+	printf("[I] power_monitor: Before cycle: index=%d, total_views=%d\n", current_index, POWER_MONITOR_VIEW_COUNT);
 
 	// Simple wrap-around logic
-	int next_index = (current_index + 1) % 2;
+	int next_index = (current_index + 1) % POWER_MONITOR_VIEW_COUNT;
 
 	// Update device state directly
 	power_monitor_set_view_index(next_index);
@@ -272,18 +315,56 @@ void power_monitor_create_current_view_content(lv_obj_t* container)
 	}
 
 	// Get current view type and render appropriate view directly in container
-	int view_index = power_monitor_get_view_index();
+	power_monitor_view_type_t current_type = get_current_view_type();
 
-	// Map index to view type: 0=BAR_GRAPH, 1=NUMERICAL
-	if (view_index == 0) {
-
+	if (current_type == POWER_MONITOR_VIEW_BAR_GRAPH) {
+		printf("[I] power_monitor: Rendering voltage grid view content\n");
+		power_monitor_voltage_grid_view_render(container);
+		printf("[I] power_monitor: Voltage grid view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_AMPERAGE_GRID) {
+		printf("[I] power_monitor: Rendering amperage grid view content\n");
+		power_monitor_amperage_grid_view_render(container);
+		printf("[I] power_monitor: Amperage grid view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_POWER) {
+		printf("[I] power_monitor: Rendering power grid view content\n");
 		power_monitor_power_grid_view_render(container);
-	} else if (view_index == 1) {
-
+		printf("[I] power_monitor: Power grid view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_NUMERICAL) {
+		printf("[I] power_monitor: Rendering starter voltage view content\n");
 		power_monitor_starter_voltage_view_render(container);
-	} else {
-
-		power_monitor_power_grid_view_render(container);
+		printf("[I] power_monitor: Starter voltage view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_VOLTAGE) {
+		printf("[I] power_monitor: Rendering house voltage view content\n");
+		power_monitor_house_voltage_view_render(container);
+		printf("[I] power_monitor: House voltage view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_VOLTAGE) {
+		printf("[I] power_monitor: Rendering solar voltage view content\n");
+		power_monitor_solar_voltage_view_render(container);
+		printf("[I] power_monitor: Solar voltage view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_STARTER_CURRENT) {
+		printf("[I] power_monitor: Rendering starter current view content\n");
+		power_monitor_starter_current_view_render(container);
+		printf("[I] power_monitor: Starter current view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_CURRENT) {
+		printf("[I] power_monitor: Rendering house current view content\n");
+		power_monitor_house_current_view_render(container);
+		printf("[I] power_monitor: House current view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_CURRENT) {
+		printf("[I] power_monitor: Rendering solar current view content\n");
+		power_monitor_solar_current_view_render(container);
+		printf("[I] power_monitor: Solar current view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_STARTER_POWER) {
+		printf("[I] power_monitor: Rendering starter power view content\n");
+		power_monitor_starter_power_view_render(container);
+		printf("[I] power_monitor: Starter power view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_POWER) {
+		printf("[I] power_monitor: Rendering house power view content\n");
+		power_monitor_house_power_view_render(container);
+		printf("[I] power_monitor: House power view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_POWER) {
+		printf("[I] power_monitor: Rendering solar power view content\n");
+		power_monitor_solar_power_view_render(container);
+		printf("[I] power_monitor: Solar power view shown and rendered\n");
 	}
 
 
@@ -307,45 +388,20 @@ static void power_monitor_cycle_view(void)
 // ===========================
 // Centralized gauge histories (IN-MEMORY ONLY)
 // ===========================
-#define PM_MAX_GAUGE_POINTS 2000
+#define POWER_MONITOR_MAX_GAUGE_POINTS 2000
 #include <time.h>
 #include <stdio.h>
 typedef struct {
-	float values[PM_MAX_GAUGE_POINTS];
+	float values[POWER_MONITOR_MAX_GAUGE_POINTS];
 	int count;
-} pm_gauge_history_t;
+} power_monitor_gauge_history_t;
 
-static pm_gauge_history_t s_histories[POWER_MONITOR_DATA_COUNT];
+static power_monitor_gauge_history_t s_histories[POWER_MONITOR_DATA_COUNT];
 
-static inline pm_gauge_history_t* pm_get_history(power_monitor_data_type_t t){
+static inline power_monitor_gauge_history_t* power_monitor_get_history(power_monitor_data_type_t t){
 	if((int)t < 0 || t >= POWER_MONITOR_DATA_COUNT) return NULL;
 	return &s_histories[t];
 }
-
-void power_monitor_push_gauge_sample(power_monitor_data_type_t gauge_type, float value)
-{
-	pm_gauge_history_t* h = pm_get_history(gauge_type);
-	if(!h) return;
-	if(h->count < PM_MAX_GAUGE_POINTS){
-		h->values[h->count++] = value;
-	}else{
-		// shift left by 1; O(n) but small and simple
-		memmove(&h->values[0], &h->values[1], sizeof(float) * (PM_MAX_GAUGE_POINTS - 1));
-		h->values[PM_MAX_GAUGE_POINTS - 1] = value;
-	}
-}
-
-// Gauge mapping structure for consolidated update functions
-// Function pointer type for getting LERP data
-typedef float (*lerp_data_getter_t)(const lerp_power_monitor_data_t* data);
-
-typedef struct {
-	power_monitor_gauge_type_t gauge_type;
-	bar_graph_gauge_t* gauge;           // The actual gauge instance
-	const char* gauge_name;
-	const char* view_type;              // "current_view" or "detail_view" - determines timeline settings
-	lerp_data_getter_t data_getter;     // Function to get the data value
-} gauge_map_entry_t;
 
 // LERP data getter functions
 static float get_starter_voltage(const lerp_power_monitor_data_t* data) {
@@ -372,10 +428,25 @@ static float get_solar_current(const lerp_power_monitor_data_t* data) {
 	return lerp_value_get_display(&data->solar_current);
 }
 
+// Power calculation functions (voltage * current)
+// These are non-static so they can be used by power_grid_view.c for numeric labels
+float get_starter_power(const lerp_power_monitor_data_t* data) {
+	float voltage = lerp_value_get_display(&data->starter_voltage);
+	float current = lerp_value_get_display(&data->starter_current);
+	return voltage * current;
+}
 
+float get_house_power(const lerp_power_monitor_data_t* data) {
+	float voltage = lerp_value_get_display(&data->house_voltage);
+	float current = lerp_value_get_display(&data->house_current);
+	return voltage * current;
+}
 
-
-
+float get_solar_power(const lerp_power_monitor_data_t* data) {
+	float voltage = lerp_value_get_display(&data->solar_voltage);
+	float current = lerp_value_get_display(&data->solar_current);
+	return voltage * current;
+}
 
 // Static gauge instances for detail screen (like historic detail.c)
 static bar_graph_gauge_t detail_starter_voltage_gauge = {0};
@@ -387,22 +458,195 @@ static bar_graph_gauge_t detail_solar_current_gauge = {0};
 
 // Map all gauge instances to their types and view contexts
 
-static gauge_map_entry_t gauge_map[POWER_MONITOR_GAUGE_COUNT] = {
+gauge_map_entry_t gauge_map[POWER_MONITOR_GAUGE_COUNT] = {
+
 	// Detail view gauges
-	[POWER_MONITOR_GAUGE_DETAIL_STARTER_VOLTAGE] = {POWER_MONITOR_GAUGE_DETAIL_STARTER_VOLTAGE, &detail_starter_voltage_gauge, "starter_voltage", "detail_view", get_starter_voltage},
-	[POWER_MONITOR_GAUGE_DETAIL_STARTER_CURRENT] = {POWER_MONITOR_GAUGE_DETAIL_STARTER_CURRENT, &detail_starter_current_gauge, "starter_current", "detail_view", get_starter_current},
-	[POWER_MONITOR_GAUGE_DETAIL_HOUSE_VOLTAGE] = {POWER_MONITOR_GAUGE_DETAIL_HOUSE_VOLTAGE, &detail_house_voltage_gauge, "house_voltage", "detail_view", get_house_voltage},
-	[POWER_MONITOR_GAUGE_DETAIL_HOUSE_CURRENT] = {POWER_MONITOR_GAUGE_DETAIL_HOUSE_CURRENT, &detail_house_current_gauge, "house_current", "detail_view", get_house_current},
-	[POWER_MONITOR_GAUGE_DETAIL_SOLAR_VOLTAGE] = {POWER_MONITOR_GAUGE_DETAIL_SOLAR_VOLTAGE, &detail_solar_voltage_gauge, "solar_voltage", "detail_view", get_solar_voltage},
-	[POWER_MONITOR_GAUGE_DETAIL_SOLAR_CURRENT] = {POWER_MONITOR_GAUGE_DETAIL_SOLAR_CURRENT, &detail_solar_current_gauge, "solar_current", "detail_view", get_solar_current},
+	[POWER_MONITOR_GAUGE_DETAIL_STARTER_VOLTAGE] = {
+		POWER_MONITOR_GAUGE_DETAIL_STARTER_VOLTAGE,
+		&detail_starter_voltage_gauge,
+		"starter_voltage", "detail_view",
+		get_starter_voltage,
+		"starter_battery.voltage.error"
+	},
+	[POWER_MONITOR_GAUGE_DETAIL_STARTER_CURRENT] = {
+		POWER_MONITOR_GAUGE_DETAIL_STARTER_CURRENT,
+		&detail_starter_current_gauge,
+		"starter_current", "detail_view",
+		get_starter_current,
+		"starter_battery.current.error"
+	},
+	[POWER_MONITOR_GAUGE_DETAIL_HOUSE_VOLTAGE] = {
+		POWER_MONITOR_GAUGE_DETAIL_HOUSE_VOLTAGE,
+		&detail_house_voltage_gauge,
+		"house_voltage", "detail_view",
+		get_house_voltage,
+		"house_battery.voltage.error"
+	},
+	[POWER_MONITOR_GAUGE_DETAIL_HOUSE_CURRENT] = {
+		POWER_MONITOR_GAUGE_DETAIL_HOUSE_CURRENT,
+		&detail_house_current_gauge,
+		"house_current", "detail_view",
+		get_house_current,
+		"house_battery.current.error"
+	},
+	[POWER_MONITOR_GAUGE_DETAIL_SOLAR_VOLTAGE] = {
+		POWER_MONITOR_GAUGE_DETAIL_SOLAR_VOLTAGE,
+		&detail_solar_voltage_gauge,
+		"solar_voltage", "detail_view",
+		get_solar_voltage,
+		"solar_input.voltage.error"
+	},
+	[POWER_MONITOR_GAUGE_DETAIL_SOLAR_CURRENT] = {
+		POWER_MONITOR_GAUGE_DETAIL_SOLAR_CURRENT,
+		&detail_solar_current_gauge,
+		"solar_current", "detail_view",
+		get_solar_current,
+		"solar_input.current.error"
+	},
 
 	// Power grid view gauges (current_view)
-	[POWER_MONITOR_GAUGE_GRID_STARTER_VOLTAGE] = {POWER_MONITOR_GAUGE_GRID_STARTER_VOLTAGE, &s_starter_voltage_gauge, "starter_voltage", "current_view", get_starter_voltage},
-	[POWER_MONITOR_GAUGE_GRID_HOUSE_VOLTAGE] = {POWER_MONITOR_GAUGE_GRID_HOUSE_VOLTAGE, &s_house_voltage_gauge, "house_voltage", "current_view", get_house_voltage},
-	[POWER_MONITOR_GAUGE_GRID_SOLAR_VOLTAGE] = {POWER_MONITOR_GAUGE_GRID_SOLAR_VOLTAGE, &s_solar_voltage_gauge, "solar_voltage", "current_view", get_solar_voltage},
+	[POWER_MONITOR_GAUGE_GRID_STARTER_VOLTAGE] = {
+		POWER_MONITOR_GAUGE_GRID_STARTER_VOLTAGE,
+		&s_starter_voltage_gauge,
+		"starter_voltage", "current_view",
+		get_starter_voltage,
+		"starter_battery.voltage.error"
+	},
+	[POWER_MONITOR_GAUGE_GRID_HOUSE_VOLTAGE] = {
+		POWER_MONITOR_GAUGE_GRID_HOUSE_VOLTAGE,
+		&s_house_voltage_gauge,
+		"house_voltage", "current_view",
+		get_house_voltage,
+		"house_battery.voltage.error"
+	},
+	[POWER_MONITOR_GAUGE_GRID_SOLAR_VOLTAGE] = {
+		POWER_MONITOR_GAUGE_GRID_SOLAR_VOLTAGE,
+		&s_solar_voltage_gauge,
+		"solar_voltage", "current_view",
+		get_solar_voltage,
+		"solar_input.voltage.error"
+	},
 
-	// Single view gauge (current_view) - will be updated at runtime
-	[POWER_MONITOR_GAUGE_SINGLE_STARTER_VOLTAGE] = {POWER_MONITOR_GAUGE_SINGLE_STARTER_VOLTAGE, NULL, "starter_voltage", "current_view", get_starter_voltage},
+	// Amperage grid view gauges (current_view)
+	[POWER_MONITOR_GAUGE_GRID_STARTER_CURRENT] = {
+		POWER_MONITOR_GAUGE_GRID_STARTER_CURRENT,
+		&s_starter_current_gauge,
+		"starter_current", "current_view",
+		get_starter_current,
+		"starter_battery.current.error"
+	},
+	[POWER_MONITOR_GAUGE_GRID_HOUSE_CURRENT] = {
+		POWER_MONITOR_GAUGE_GRID_HOUSE_CURRENT,
+		&s_house_current_gauge,
+		"house_current", "current_view",
+		get_house_current,
+		"house_battery.current.error"
+	},
+	[POWER_MONITOR_GAUGE_GRID_SOLAR_CURRENT] = {
+		POWER_MONITOR_GAUGE_GRID_SOLAR_CURRENT,
+		&s_solar_current_gauge,
+		"solar_current", "current_view",
+		get_solar_current,
+		"solar_input.current.error"
+	},
+
+	// Power grid view gauges (current_view) - wattage
+	// These gauges display power (voltage * current), but should use voltage timeline durations
+	[POWER_MONITOR_GAUGE_GRID_STARTER_POWER] = {
+		POWER_MONITOR_GAUGE_GRID_STARTER_POWER,
+		&s_starter_power_gauge,
+		"starter_voltage", "current_view",
+		get_starter_power,
+		"starter_battery.power.error"
+	},
+	[POWER_MONITOR_GAUGE_GRID_HOUSE_POWER] = {
+		POWER_MONITOR_GAUGE_GRID_HOUSE_POWER,
+		&s_house_power_gauge,
+		"house_voltage", "current_view",
+		get_house_power,
+		"house_battery.power.error"
+	},
+	[POWER_MONITOR_GAUGE_GRID_SOLAR_POWER] = {
+		POWER_MONITOR_GAUGE_GRID_SOLAR_POWER,
+		&s_solar_power_gauge,
+		"solar_voltage", "current_view",
+		get_solar_power,
+		"solar_input.power.error"
+	},
+
+	// Single view gauges (current_view) - pointers will be updated at runtime
+	[POWER_MONITOR_GAUGE_SINGLE_STARTER_VOLTAGE] = {
+		POWER_MONITOR_GAUGE_SINGLE_STARTER_VOLTAGE,
+		NULL, // pointer will be updated at runtime
+		"starter_voltage",
+		"current_view",
+		get_starter_voltage,
+		"starter_battery.voltage.error"
+	},
+	[POWER_MONITOR_GAUGE_SINGLE_HOUSE_VOLTAGE] = {
+		POWER_MONITOR_GAUGE_SINGLE_HOUSE_VOLTAGE,
+		NULL, // pointer will be updated at runtime
+		"house_voltage",
+		"current_view",
+		get_house_voltage,
+		"house_battery.voltage.error"
+	},
+	[POWER_MONITOR_GAUGE_SINGLE_SOLAR_VOLTAGE] = {
+		POWER_MONITOR_GAUGE_SINGLE_SOLAR_VOLTAGE,
+		NULL, // pointer will be updated at runtime
+		"solar_voltage",
+		"current_view",
+		get_solar_voltage,
+		"solar_input.voltage.error"
+	},
+	[POWER_MONITOR_GAUGE_SINGLE_STARTER_CURRENT] = {
+		POWER_MONITOR_GAUGE_SINGLE_STARTER_CURRENT,
+		NULL, // pointer will be updated at runtime
+		"starter_current",
+		"current_view",
+		get_starter_current,
+		"starter_battery.current.error"
+	},
+	[POWER_MONITOR_GAUGE_SINGLE_HOUSE_CURRENT] = {
+		POWER_MONITOR_GAUGE_SINGLE_HOUSE_CURRENT,
+		NULL, // pointer will be updated at runtime
+		"house_current",
+		"current_view",
+		get_house_current,
+		"house_battery.current.error"
+	},
+	[POWER_MONITOR_GAUGE_SINGLE_SOLAR_CURRENT] = {
+		POWER_MONITOR_GAUGE_SINGLE_SOLAR_CURRENT,
+		NULL, // pointer will be updated at runtime
+		"solar_current",
+		"current_view",
+		get_solar_current,
+		"solar_input.current.error"
+	},
+	[POWER_MONITOR_GAUGE_SINGLE_STARTER_POWER] = {
+		POWER_MONITOR_GAUGE_SINGLE_STARTER_POWER,
+		NULL, // pointer will be updated at runtime
+		"starter_voltage", // Use voltage timeline settings
+		"current_view",
+		get_starter_power,
+		"starter_battery.power.error"
+	},
+	[POWER_MONITOR_GAUGE_SINGLE_HOUSE_POWER] = {
+		POWER_MONITOR_GAUGE_SINGLE_HOUSE_POWER,
+		NULL, // pointer will be updated at runtime
+		"house_voltage", // Use voltage timeline settings
+		"current_view",
+		get_house_power,
+		"house_battery.power.error"
+	},
+	[POWER_MONITOR_GAUGE_SINGLE_SOLAR_POWER] = {
+		POWER_MONITOR_GAUGE_SINGLE_SOLAR_POWER,
+		NULL, // pointer will be updated at runtime
+		"solar_voltage", // Use voltage timeline settings
+		"current_view",
+		get_solar_power,
+		"solar_input.power.error"
+	}
 };
 
 
@@ -424,11 +668,6 @@ void power_monitor_update_all_gauge_histories(void)
 	// Update each gauge instance using the gauge map
 	for (int i = 0; i < POWER_MONITOR_GAUGE_COUNT; i++) {
 		const gauge_map_entry_t* entry = &gauge_map[i];
-
-		// Skip if gauge is not initialized
-		if (!entry->gauge || !entry->gauge->initialized) {
-			continue;
-		}
 
 		// Get the persistent history for this specific gauge instance (1:1 mapping)
 		persistent_gauge_history_t* gauge_history = &store->power_monitor_gauge_histories[i];
@@ -463,6 +702,25 @@ void power_monitor_update_all_gauge_histories(void)
 		int timeline_duration_s = device_state_get_int( timeline_path );
 		uint32_t timeline_duration_ms = timeline_duration_s * 1000;
 
+		// For power gauges in current_view, sample using the matching Amperage timeline rate
+		// so that V and A are sampled together for P = V*A.
+		if (strcmp(entry->view_type, "current_view") == 0 &&
+			(entry->data_getter == get_starter_power || entry->data_getter == get_house_power || entry->data_getter == get_solar_power)) {
+			const char* current_name = NULL;
+			if (entry->data_getter == get_starter_power) current_name = "starter_current";
+			else if (entry->data_getter == get_house_power) current_name = "house_current";
+			else if (entry->data_getter == get_solar_power) current_name = "solar_current";
+			if (current_name) {
+				char current_timeline_path[256];
+				snprintf(current_timeline_path, sizeof(current_timeline_path),
+					"power_monitor.gauge_timeline_settings.%s.%s", current_name, entry->view_type);
+				int current_timeline_s = device_state_get_int(current_timeline_path);
+				if (current_timeline_s > 0) {
+					timeline_duration_ms = (uint32_t)current_timeline_s * 1000;
+				}
+			}
+		}
+
 		// Calculate if we should sample based on timeline duration
 		bool should_sample = false;
 
@@ -487,6 +745,29 @@ void power_monitor_update_all_gauge_histories(void)
 
 		if( should_sample ){
 
+			// Check if there's a sensor error for this data type
+			power_monitor_data_t* power_data = power_monitor_get_data();
+
+			if (entry->error_path && power_data) {
+				// error_path string like "house_battery.voltage.error" maps to power_data->house_battery.voltage.error
+				const char* path = entry->error_path;
+				bool error;
+
+				// Extract the field address and dereference it
+				if (strcmp(path, "starter_battery.voltage.error") == 0) error = power_data->starter_battery.voltage.error;
+				else if (strcmp(path, "starter_battery.current.error") == 0) error = power_data->starter_battery.current.error;
+				else if (strcmp(path, "house_battery.voltage.error") == 0) error = power_data->house_battery.voltage.error;
+				else if (strcmp(path, "house_battery.current.error") == 0) error = power_data->house_battery.current.error;
+				else if (strcmp(path, "solar_input.voltage.error") == 0) error = power_data->solar_input.voltage.error;
+				else if (strcmp(path, "solar_input.current.error") == 0) error = power_data->solar_input.current.error;
+				else if (strcmp(path, "starter_battery.power.error") == 0) error = power_data->starter_battery.voltage.error || power_data->starter_battery.current.error;
+				else if (strcmp(path, "house_battery.power.error") == 0) error = power_data->house_battery.voltage.error || power_data->house_battery.current.error;
+				else if (strcmp(path, "solar_input.power.error") == 0) error = power_data->solar_input.voltage.error || power_data->solar_input.current.error;
+				else error = false;
+
+				if (error) continue;
+			}
+
 			// Get the current value using function pointer from gauge map
 			float current_value = entry->data_getter( &lerp_data );
 
@@ -504,8 +785,10 @@ void power_monitor_update_all_gauge_histories(void)
 			gauge_history->last_update_ms = current_ms;
 			gauge_history->has_real_data = true;  // Now we have real sensor data
 
-			// Update the gauge canvas with the new data point
+			// Update the gauge canvas with the new data point (only if gauge exists and is initialized)
+		if (entry->gauge && entry->gauge->initialized && entry->gauge->canvas && lv_obj_is_valid(entry->gauge->canvas)) {
 			bar_graph_gauge_add_data_point( entry->gauge, gauge_history );
+		}
 		}
 	}
 }
@@ -534,16 +817,11 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 		return;
 	}
 
-	// Calculate gauge dimensions for vertical stack with 6px padding between gauges (2px + 4px from gauge height reduction)
-	int gauge_padding = 12; // 6px padding between gauges (2px original + 4px from gauge height reduction)
-	int total_padding = gauge_padding * 5; // 5 gaps between 6 gauges
-	lv_coord_t gauge_width = container_width;  // Full width, no padding
-	lv_coord_t gauge_height = (container_height - 2 - total_padding) / 6; // 6 rows with padding and 2px offset for the title bleed
-
-	// Configure container for flexbox layout (vertical stack with fixed heights)
-	lv_obj_set_flex_flow(container, LV_FLEX_FLOW_COLUMN);
-	lv_obj_set_flex_align(container, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-	lv_obj_set_style_pad_row(container, gauge_padding, 0); // Vertical gap between gauges
+	// Calculate gauge dimensions for manual positioning
+	int gauge_padding = 12; // Padding between gauges
+	lv_coord_t gauge_width = container_width;  // Full width
+	lv_coord_t gauge_height = (container_height - (gauge_padding * 6)) / 6;
+	printf("[D] power_monitor: Gauge width: %d, Gauge height: %d\n", gauge_width, gauge_height);
 
 	// Get gauge initial configuration values from device state
 	// Voltage gauges
@@ -569,95 +847,56 @@ static void power_monitor_create_detail_gauges(lv_obj_t* container)
 	float solar_current_min = device_state_get_float("power_monitor.solar_min_current_a");
 	float solar_current_max = device_state_get_float("power_monitor.solar_max_current_a");
 
+	// Define gauge configuration array for loop-based creation
+	struct {
+		bar_graph_gauge_t* gauge;
+		const char* title;
+		const char* unit;
+		const char* y_unit;
+		bar_graph_mode_t mode;
+		float baseline, min_val, max_val;
+		power_monitor_gauge_type_t gauge_type;
+	} gauge_configs[] = {
+		{&detail_starter_voltage_gauge, "STARTER BATTERY", "V", "V", BAR_GRAPH_MODE_BIPOLAR, starter_baseline, starter_min, starter_max, POWER_MONITOR_GAUGE_DETAIL_STARTER_VOLTAGE},
+		{&detail_starter_current_gauge, "STARTER CURRENT", "A", "A", BAR_GRAPH_MODE_BIPOLAR, starter_current_baseline, starter_current_min, starter_current_max, POWER_MONITOR_GAUGE_DETAIL_STARTER_CURRENT},
+		{&detail_house_voltage_gauge, "HOUSE BATTERY", "V", "V", BAR_GRAPH_MODE_BIPOLAR, house_baseline, house_min, house_max, POWER_MONITOR_GAUGE_DETAIL_HOUSE_VOLTAGE},
+		{&detail_house_current_gauge, "HOUSE CURRENT", "A", "A", BAR_GRAPH_MODE_BIPOLAR, house_current_baseline, house_current_min, house_current_max, POWER_MONITOR_GAUGE_DETAIL_HOUSE_CURRENT},
+		{&detail_solar_voltage_gauge, "SOLAR VOLTS", "V", "V", BAR_GRAPH_MODE_POSITIVE_ONLY, 0.0f, 0.0f, 25.0f, POWER_MONITOR_GAUGE_DETAIL_SOLAR_VOLTAGE},
+		{&detail_solar_current_gauge, "SOLAR CURRENT", "A", "A", BAR_GRAPH_MODE_BIPOLAR, solar_current_baseline, solar_current_min, solar_current_max, POWER_MONITOR_GAUGE_DETAIL_SOLAR_CURRENT}
+	};
 
-	// Row 1: Starter Battery Voltage
-	printf("[D] power_monitor: Creating starter voltage gauge (width=%d, height=%d)\n", gauge_width, gauge_height);
-	bar_graph_gauge_init(&detail_starter_voltage_gauge, container, 0, 0, gauge_width, gauge_height, 2, 3);
-	printf("[D] power_monitor: Starter voltage gauge initialized: %d\n", detail_starter_voltage_gauge.initialized);
-	// Gauge uses fixed height calculated above (1/6 of available space
+	// Create gauges using loop with manual positioning
+	for (int i = 0; i < 6; i++) {
+		// Calculate Y position for this gauge
+		int y_pos = i * (gauge_height + gauge_padding);
 
-	bar_graph_gauge_configure_advanced(
-		&detail_starter_voltage_gauge, // gauge pointer
-		BAR_GRAPH_MODE_BIPOLAR, // graph mode
-		starter_baseline, starter_min, starter_max, // bounds: baseline, min, max
-		"STARTER BATTERY", "V", "V", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
-		true, true, true // Show title, Show Y-axis, Show Border
-	);
+		printf("[D] power_monitor: Creating gauge %d at position (%d, %d) size %dx%d\n",
+			i, 0, y_pos, gauge_width, gauge_height);
 
-	// Apply timeline settings for detail view
-	power_monitor_update_gauge_timeline_duration(POWER_MONITOR_GAUGE_DETAIL_STARTER_VOLTAGE);
+		// Initialize gauge with manual positioning
+		bar_graph_gauge_init(gauge_configs[i].gauge, container, 0, y_pos, gauge_width, gauge_height, 2, 3);
 
-	// Row 2: Starter Battery Current
-	bar_graph_gauge_init(&detail_starter_current_gauge, container, 0, 0, gauge_width, gauge_height, 2, 3);
-	bar_graph_gauge_configure_advanced(
-		&detail_starter_current_gauge, // gauge pointer
-		BAR_GRAPH_MODE_BIPOLAR, // graph mode
-		starter_current_baseline, starter_current_min, starter_current_max, // bounds: baseline, min, max
-		"STARTER CURRENT", "A", "A", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
-		true, true, true // Show title, Show Y-axis, Show Border
-	);
+		// Manually position the gauge container after initialization
+		lv_obj_set_pos(gauge_configs[i].gauge->container, 0, y_pos);
 
-	// Apply timeline settings for detail view
-	power_monitor_update_gauge_timeline_duration(POWER_MONITOR_GAUGE_DETAIL_STARTER_CURRENT);
+		// Configure gauge
+		bar_graph_gauge_configure_advanced(
+			gauge_configs[i].gauge,
+			gauge_configs[i].mode,
+			gauge_configs[i].baseline, gauge_configs[i].min_val, gauge_configs[i].max_val,
+			gauge_configs[i].title, gauge_configs[i].unit, gauge_configs[i].y_unit, PALETTE_WARM_WHITE,
+			true, true, true // Show title, Show Y-axis, Show Border
+		);
 
-	// Row 3: House Battery Voltage
-	bar_graph_gauge_init(&detail_house_voltage_gauge, container, 0, 0, gauge_width, gauge_height, 2, 3);
-	bar_graph_gauge_configure_advanced(
-		&detail_house_voltage_gauge, // gauge pointer
-		BAR_GRAPH_MODE_BIPOLAR, // graph mode
-		house_baseline, house_min, house_max, // bounds: baseline, min, max
-		"HOUSE BATTERY", "V", "V", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
-		true, true, true // Show title, Show Y-axis, Show Border
-	);
-
-	// Apply timeline settings for detail view
-	power_monitor_update_gauge_timeline_duration(POWER_MONITOR_GAUGE_DETAIL_HOUSE_VOLTAGE);
-
-	// Row 4: House Battery Current
-	bar_graph_gauge_init(&detail_house_current_gauge, container, 0, 0, gauge_width, gauge_height, 2, 3);
-	bar_graph_gauge_configure_advanced(
-		&detail_house_current_gauge, // gauge pointer
-		BAR_GRAPH_MODE_BIPOLAR, // graph mode
-		house_current_baseline, house_current_min, house_current_max, // bounds: baseline, min, max
-		"HOUSE CURRENT", "A", "A", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
-		true, true, true // Show title, Show Y-axis, Show Border
-	);
-
-	// Apply timeline settings for detail view
-	power_monitor_update_gauge_timeline_duration(POWER_MONITOR_GAUGE_DETAIL_HOUSE_CURRENT);
-
-	// Row 5: Solar Input Voltage
-	bar_graph_gauge_init(&detail_solar_voltage_gauge, container, 0, 0, gauge_width, gauge_height, 2, 3);
-	bar_graph_gauge_configure_advanced(
-		&detail_solar_voltage_gauge, // gauge pointer
-		BAR_GRAPH_MODE_POSITIVE_ONLY, // graph mode
-		0.0f, 0.0f, 25.0f, // bounds: baseline, min, max
-		"SOLAR VOLTS", "V", "V", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
-		true, true, true // Show title, Show Y-axis, Show Border
-	);
-
-	// Apply timeline settings for detail view
-	power_monitor_update_gauge_timeline_duration(POWER_MONITOR_GAUGE_DETAIL_SOLAR_VOLTAGE);
-
-	// Row 6: Solar Input Current
-	bar_graph_gauge_init(&detail_solar_current_gauge, container, 0, 0, gauge_width, gauge_height, 2, 3);
-	bar_graph_gauge_configure_advanced(
-		&detail_solar_current_gauge, // gauge pointer
-		BAR_GRAPH_MODE_BIPOLAR, // graph mode
-		solar_current_baseline, solar_current_min, solar_current_max, // bounds: baseline, min, max
-		"SOLAR CURRENT", "A", "A", PALETTE_WARM_WHITE, // title, unit, y-axis unit, color
-		true, true, true // Show title, Show Y-axis, Show Border
-	);
-	// Apply timeline settings for detail view
-	power_monitor_update_gauge_timeline_duration(POWER_MONITOR_GAUGE_DETAIL_SOLAR_CURRENT);
+		// Apply timeline settings
+		power_monitor_update_gauge_timeline_duration(gauge_configs[i].gauge_type);
+	}
 
 	// Update labels and ticks for all gauges
-	bar_graph_gauge_update_labels_and_ticks(&detail_starter_voltage_gauge);
-	bar_graph_gauge_update_labels_and_ticks(&detail_starter_current_gauge);
-	bar_graph_gauge_update_labels_and_ticks(&detail_house_voltage_gauge);
-	bar_graph_gauge_update_labels_and_ticks(&detail_house_current_gauge);
-	bar_graph_gauge_update_labels_and_ticks(&detail_solar_voltage_gauge);
-	bar_graph_gauge_update_labels_and_ticks(&detail_solar_current_gauge);
+	for (int i = 0; i < 6; i++) {
+
+		bar_graph_gauge_update_y_axis_labels(gauge_configs[i].gauge);
+	}
 
 }
 
@@ -688,9 +927,27 @@ static void power_monitor_apply_current_view_alert_flashing(void)
 	// Apply alert flashing to the currently active view (works for both home and detail screen)
 	power_monitor_view_type_t current_view = get_current_view_type();
 	if (current_view == POWER_MONITOR_VIEW_BAR_GRAPH) {
-		power_monitor_power_grid_view_apply_alert_flashing(data, starter_lo, starter_hi, house_lo, house_hi, solar_lo, solar_hi, blink_on);
-	} else if (current_view == POWER_MONITOR_VIEW_NUMERICAL) {
-		// Alert flashing for starter voltage view is handled by the generic view
+		power_monitor_voltage_grid_view_apply_alert_flashing(data, starter_lo, starter_hi, house_lo, house_hi, solar_lo, solar_hi, blink_on);
+	} else if (current_view == POWER_MONITOR_VIEW_AMPERAGE_GRID) {
+		// For amperage grid, use current alerts but we need current thresholds
+		int starter_current_lo = device_state_get_int("power_monitor.starter_alert_low_current_a");
+		int starter_current_hi = device_state_get_int("power_monitor.starter_alert_high_current_a");
+		int house_current_lo = device_state_get_int("power_monitor.house_alert_low_current_a");
+		int house_current_hi = device_state_get_int("power_monitor.house_alert_high_current_a");
+		int solar_current_lo = device_state_get_int("power_monitor.solar_alert_low_current_a");
+		int solar_current_hi = device_state_get_int("power_monitor.solar_alert_high_current_a");
+		power_monitor_amperage_grid_view_apply_alert_flashing(data, starter_current_lo, starter_current_hi, house_current_lo, house_current_hi, solar_current_lo, solar_current_hi, blink_on);
+	} else if (current_view == POWER_MONITOR_VIEW_POWER) {
+		// Get power alert thresholds
+		int starter_power_lo = device_state_get_int("power_monitor.starter_alert_low_power_w");
+		int starter_power_hi = device_state_get_int("power_monitor.starter_alert_high_power_w");
+		int house_power_lo = device_state_get_int("power_monitor.house_alert_low_power_w");
+		int house_power_hi = device_state_get_int("power_monitor.house_alert_high_power_w");
+		int solar_power_lo = device_state_get_int("power_monitor.solar_alert_low_power_w");
+		int solar_power_hi = device_state_get_int("power_monitor.solar_alert_high_power_w");
+		power_monitor_power_grid_view_apply_alert_flashing(data, starter_power_lo, starter_power_hi, house_power_lo, house_power_hi, solar_power_lo, solar_power_hi, blink_on);
+	} else if (current_view >= POWER_MONITOR_VIEW_NUMERICAL && current_view < POWER_MONITOR_VIEW_COUNT) {
+		// Single-value views - alert flashing is handled by the generic single value view component
 	} else {
 		printf("[W] power_monitor: Unknown view type: %d, skipping alert flashing\n", current_view);
 	}
@@ -708,10 +965,6 @@ static void power_monitor_update_detail_gauges(void)
 	// Get LERP data for smooth display values
 	lerp_power_monitor_data_t lerp_data;
 	lerp_data_get_current(&lerp_data);
-
-
-	// Data sampling and gauge updates are now handled centrally in power_monitor_update_all_gauge_histories()
-	// This function only handles UI-specific updates for the detail screen
 
 	if (detail_screen->sensor_data_section) {
 		power_monitor_update_sensor_labels_in_detail_screen(detail_screen->sensor_data_section, &lerp_data);
@@ -853,8 +1106,18 @@ void power_monitor_update_data_only(void)
 	power_monitor_update_detail_gauges();
 
 	// Update view data (this updates the data in the views, not the UI structure)
+	power_monitor_voltage_grid_view_update_data();
+	power_monitor_amperage_grid_view_update_data();
 	power_monitor_power_grid_view_update_data();
 	power_monitor_starter_voltage_view_update_data();
+	power_monitor_house_voltage_view_update_data();
+	power_monitor_solar_voltage_view_update_data();
+	power_monitor_starter_current_view_update_data();
+	power_monitor_house_current_view_update_data();
+	power_monitor_solar_current_view_update_data();
+	power_monitor_starter_power_view_update_data();
+	power_monitor_house_power_view_update_data();
+	power_monitor_solar_power_view_update_data();
 
 	// Current view alert flashing (still handled by power monitor)
 	power_monitor_apply_current_view_alert_flashing();
@@ -931,6 +1194,16 @@ static void power_monitor_init_defaults(void)
 		{"power_monitor.gauge_timeline_settings.solar_current.current_view", POWER_MONITOR_DEFAULT_TIMELINE_CURRENT_VIEW_SECONDS},
 		{"power_monitor.gauge_timeline_settings.solar_current.detail_view", POWER_MONITOR_DEFAULT_TIMELINE_DETAIL_VIEW_SECONDS},
 
+		// Power gauge timeline settings
+		{"power_monitor.gauge_timeline_settings.starter_power.current_view", POWER_MONITOR_DEFAULT_TIMELINE_CURRENT_VIEW_SECONDS},
+		{"power_monitor.gauge_timeline_settings.starter_power.detail_view", POWER_MONITOR_DEFAULT_TIMELINE_DETAIL_VIEW_SECONDS},
+
+		{"power_monitor.gauge_timeline_settings.house_power.current_view", POWER_MONITOR_DEFAULT_TIMELINE_CURRENT_VIEW_SECONDS},
+		{"power_monitor.gauge_timeline_settings.house_power.detail_view", POWER_MONITOR_DEFAULT_TIMELINE_DETAIL_VIEW_SECONDS},
+
+		{"power_monitor.gauge_timeline_settings.solar_power.current_view", POWER_MONITOR_DEFAULT_TIMELINE_CURRENT_VIEW_SECONDS},
+		{"power_monitor.gauge_timeline_settings.solar_power.detail_view", POWER_MONITOR_DEFAULT_TIMELINE_DETAIL_VIEW_SECONDS},
+
 		// Starter battery settings
 		{"power_monitor.starter_alert_low_voltage_v", (double)POWER_MONITOR_DEFAULT_STARTER_ALERT_LOW_VOLTAGE_V},
 		{"power_monitor.starter_alert_high_voltage_v", (double)POWER_MONITOR_DEFAULT_STARTER_ALERT_HIGH_VOLTAGE_V},
@@ -971,6 +1244,24 @@ static void power_monitor_init_defaults(void)
 		{"power_monitor.solar_baseline_current_a", (double)0.0f},
 		{"power_monitor.solar_min_current_a", (double)-40.0f},
 		{"power_monitor.solar_max_current_a", (double)40.0f},
+
+		// Power gauge settings
+		{"power_monitor.starter_alert_low_power_w", (double)-2000.0f},
+		{"power_monitor.starter_alert_high_power_w", (double)2000.0f},
+		{"power_monitor.starter_baseline_power_w", (double)0.0f},
+		{"power_monitor.starter_min_power_w", (double)-3000.0f},
+		{"power_monitor.starter_max_power_w", (double)3000.0f},
+
+		{"power_monitor.house_alert_low_power_w", (double)-1000.0f},
+		{"power_monitor.house_alert_high_power_w", (double)1000.0f},
+		{"power_monitor.house_baseline_power_w", (double)0.0f},
+		{"power_monitor.house_min_power_w", (double)-1500.0f},
+		{"power_monitor.house_max_power_w", (double)1500.0f},
+
+		{"power_monitor.solar_alert_low_power_w", (double)10.0f},
+		{"power_monitor.solar_alert_high_power_w", (double)2500.0f},
+		{"power_monitor.solar_min_power_w", (double)0.0f},
+		{"power_monitor.solar_max_power_w", (double)3000.0f},
 	};
 
 	// Process all defaults
@@ -994,6 +1285,16 @@ void power_monitor_init(void)
 
 	// Initialize shared current view manager (for backward compatibility)
 	current_view_manager_init(sizeof(available_views) / sizeof(available_views[0]));
+
+	// Initialize default view index only if not already set
+	extern int module_screen_view_get_view_index(const char *module_name);
+	int current_index = module_screen_view_get_view_index("power-monitor");
+	if (current_index < 0 || current_index >= POWER_MONITOR_VIEW_COUNT) {
+		printf("[I] power_monitor: Setting initial view index to 0 (voltage grid view)\n");
+		power_monitor_set_view_index(0);
+	} else {
+		printf("[I] power_monitor: Using existing view index %d\n", current_index);
+	}
 
 	// Navigation callbacks removed - using direct function calls
 
@@ -1060,6 +1361,7 @@ static void power_monitor_render_ui(void)
 	// Data is updated centrally in ui_update_timer_callback via module update
 	// Here we only update UI surfaces
 	power_monitor_update_detail_gauges();
+	power_monitor_voltage_grid_view_update_data();
 	power_monitor_power_grid_view_update_data();
 	power_monitor_starter_voltage_view_update_data();
 	power_monitor_apply_current_view_alert_flashing();
@@ -1133,7 +1435,9 @@ void power_monitor_cycle_current_view(void)
 		return;
 	}
 
-	power_monitor_navigation_cycle_to_next_view();
+	// Use shared current view manager instead of local cycling logic
+	extern void current_view_manager_cycle_to_next(void);
+	current_view_manager_cycle_to_next();
 
 	// Mark that we need to re-render the detail view on next update
 	// This avoids immediate re-rendering which can cause crashes
@@ -1254,10 +1558,59 @@ void power_monitor_update_data_type_timeline_duration(power_monitor_data_type_t 
 // Update single view gauge pointer at runtime
 void power_monitor_update_single_view_gauge_pointer(void)
 {
+	// Update starter voltage
 	if (single_view_starter_voltage && single_view_starter_voltage->initialized) {
 		gauge_map[POWER_MONITOR_GAUGE_SINGLE_STARTER_VOLTAGE].gauge = &single_view_starter_voltage->gauge;
 	} else {
 		gauge_map[POWER_MONITOR_GAUGE_SINGLE_STARTER_VOLTAGE].gauge = NULL;
+	}
+	// Update house voltage
+	if (single_view_house_voltage && single_view_house_voltage->initialized) {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_HOUSE_VOLTAGE].gauge = &single_view_house_voltage->gauge;
+	} else {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_HOUSE_VOLTAGE].gauge = NULL;
+	}
+	// Update solar voltage
+	if (single_view_solar_voltage && single_view_solar_voltage->initialized) {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_SOLAR_VOLTAGE].gauge = &single_view_solar_voltage->gauge;
+	} else {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_SOLAR_VOLTAGE].gauge = NULL;
+	}
+	// Update starter current
+	if (single_view_starter_current && single_view_starter_current->initialized) {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_STARTER_CURRENT].gauge = &single_view_starter_current->gauge;
+	} else {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_STARTER_CURRENT].gauge = NULL;
+	}
+	// Update house current
+	if (single_view_house_current && single_view_house_current->initialized) {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_HOUSE_CURRENT].gauge = &single_view_house_current->gauge;
+	} else {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_HOUSE_CURRENT].gauge = NULL;
+	}
+	// Update solar current
+	if (single_view_solar_current && single_view_solar_current->initialized) {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_SOLAR_CURRENT].gauge = &single_view_solar_current->gauge;
+	} else {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_SOLAR_CURRENT].gauge = NULL;
+	}
+	// Update starter power
+	if (single_view_starter_power && single_view_starter_power->initialized) {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_STARTER_POWER].gauge = &single_view_starter_power->gauge;
+	} else {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_STARTER_POWER].gauge = NULL;
+	}
+	// Update house power
+	if (single_view_house_power && single_view_house_power->initialized) {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_HOUSE_POWER].gauge = &single_view_house_power->gauge;
+	} else {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_HOUSE_POWER].gauge = NULL;
+	}
+	// Update solar power
+	if (single_view_solar_power && single_view_solar_power->initialized) {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_SOLAR_POWER].gauge = &single_view_solar_power->gauge;
+	} else {
+		gauge_map[POWER_MONITOR_GAUGE_SINGLE_SOLAR_POWER].gauge = NULL;
 	}
 }
 
@@ -1428,49 +1781,50 @@ void power_monitor_update_sensor_labels_in_detail_screen(lv_obj_t* sensor_sectio
 	char sensor_text[32];
 
 	// Update starter battery values
-	power_monitor_data_t* power_data_ptr = power_monitor_get_data();
-	if (!power_data_ptr) return;
+	power_monitor_data_t* power_data_pointer = power_monitor_get_data();
+	if (!power_data_pointer) return;
 
 	// Error states are being checked and passed to formatting function
 
 	number_formatting_config_t config = {
-		.label = power_data_ptr->sensor_labels.starter_voltage,
+		.label = power_data_pointer->sensor_labels.starter_voltage,
 		.font = &lv_font_noplato_24, // Use monospace font
 		.color = PALETTE_WHITE,
 		.warning_color = PALETTE_YELLOW,
 		.error_color = lv_color_hex(0xFF0000), // Red for errors
-		.show_warning = starter_alert && !power_data_ptr->starter_battery.voltage_error,
-		.show_error = power_data_ptr->starter_battery.voltage_error,
-		.warning_icon_size = 30,
-		.alignment = NUMBER_ALIGN_RIGHT // Right-justified for detail screen
+		.show_warning = starter_alert && !power_data_pointer->starter_battery.voltage.error,
+		.show_error = power_data_pointer->starter_battery.voltage.error,
+		.warning_icon_size = WARNING_ICON_SIZE_30,
+		.number_alignment = LABEL_ALIGN_RIGHT, // Right-justified for detail screen
+		.warning_alignment = LABEL_ALIGN_RIGHT
 	};
 	format_and_display_number(lerp_value_get_display(&lerp_data->starter_voltage), &config);
 
-	config.label = power_data_ptr->sensor_labels.starter_current;
-	config.show_warning = starter_current_alert && !power_data_ptr->starter_battery.current_error;
-	config.show_error = power_data_ptr->starter_battery.current_error;
+	config.label = power_data_pointer->sensor_labels.starter_current;
+	config.show_warning = starter_current_alert && !power_data_pointer->starter_battery.current.error;
+	config.show_error = power_data_pointer->starter_battery.current.error;
 	format_and_display_number(lerp_value_get_display(&lerp_data->starter_current), &config);
 
 	// Update house battery values
-	config.label = power_data_ptr->sensor_labels.house_voltage;
-	config.show_warning = house_alert && !power_data_ptr->house_battery.voltage_error;
-	config.show_error = power_data_ptr->house_battery.voltage_error;
+	config.label = power_data_pointer->sensor_labels.house_voltage;
+	config.show_warning = house_alert && !power_data_pointer->house_battery.voltage.error;
+	config.show_error = power_data_pointer->house_battery.voltage.error;
 	format_and_display_number(lerp_value_get_display(&lerp_data->house_voltage), &config);
 
-	config.label = power_data_ptr->sensor_labels.house_current;
-	config.show_warning = house_current_alert && !power_data_ptr->house_battery.current_error;
-	config.show_error = power_data_ptr->house_battery.current_error;
+	config.label = power_data_pointer->sensor_labels.house_current;
+	config.show_warning = house_current_alert && !power_data_pointer->house_battery.current.error;
+	config.show_error = power_data_pointer->house_battery.current.error;
 	format_and_display_number(lerp_value_get_display(&lerp_data->house_current), &config);
 
 	// Update solar input values
-	config.label = power_data_ptr->sensor_labels.solar_voltage;
-	config.show_warning = solar_alert && !power_data_ptr->solar_input.voltage_error;
-	config.show_error = power_data_ptr->solar_input.voltage_error;
+	config.label = power_data_pointer->sensor_labels.solar_voltage;
+	config.show_warning = solar_alert && !power_data_pointer->solar_input.voltage.error;
+	config.show_error = power_data_pointer->solar_input.voltage.error;
 	format_and_display_number(lerp_value_get_display(&lerp_data->solar_voltage), &config);
 
-	config.label = power_data_ptr->sensor_labels.solar_current;
-	config.show_warning = solar_current_alert && !power_data_ptr->solar_input.current_error;
-	config.show_error = power_data_ptr->solar_input.current_error;
+	config.label = power_data_pointer->sensor_labels.solar_current;
+	config.show_warning = solar_current_alert && !power_data_pointer->solar_input.current.error;
+	config.show_error = power_data_pointer->solar_input.current.error;
 	format_and_display_number(lerp_value_get_display(&lerp_data->solar_current), &config);
 }
 
@@ -1546,10 +1900,6 @@ void power_monitor_destroy_detail_screen(void)
 		memset(&data->sensor_labels, 0, sizeof(power_monitor_sensor_labels_t));
 	}
 
-	// History persistence is now handled by centralized system
-	// power_monitor_push_gauge_sample() auto-saves every 2 seconds
-	// No need to manually persist here
-
 	// Destroy the detail screen UI fully so next show will recreate and seed
 	if (detail_screen) {
 		detail_screen_destroy(detail_screen);
@@ -1603,6 +1953,7 @@ void power_monitor_handle_back_button(void)
 	s_ui_state.rendering_in_progress = false;
 
 	// Reset view state
+	power_monitor_voltage_grid_view_reset_state();
 	power_monitor_power_grid_view_reset_state();
 
 	// Handle back button - this will destroy the detail screen and clean up containers
@@ -1648,7 +1999,7 @@ static void power_monitor_toggle_alerts_modal(void)
 		(void(*)(void*))alerts_modal_destroy,
 		(void(*)(void*))alerts_modal_show,
 		(bool(*)(void*))alerts_modal_is_visible,
-		(void*)&power_alerts_config,
+		(void*)&battery_alerts_config,
 		NULL
 	);
 }
@@ -1696,6 +2047,14 @@ void power_monitor_render_current_view(lv_obj_t* container)
 
 	// Always render the current view fresh - no complex cleanup logic
 	if (current_type == POWER_MONITOR_VIEW_BAR_GRAPH) {
+			printf("[I] power_monitor: Rendering voltage grid view content\n");
+			power_monitor_voltage_grid_view_render(container);
+			printf("[I] power_monitor: Voltage grid view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_AMPERAGE_GRID) {
+			printf("[I] power_monitor: Rendering amperage grid view content\n");
+			power_monitor_amperage_grid_view_render(container);
+			printf("[I] power_monitor: Amperage grid view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_POWER) {
 			printf("[I] power_monitor: Rendering power grid view content\n");
 			power_monitor_power_grid_view_render(container);
 			printf("[I] power_monitor: Power grid view shown and rendered\n");
@@ -1703,6 +2062,38 @@ void power_monitor_render_current_view(lv_obj_t* container)
 			printf("[I] power_monitor: Rendering starter voltage view content\n");
 			power_monitor_starter_voltage_view_render(container);
 			printf("[I] power_monitor: Starter voltage view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_VOLTAGE) {
+			printf("[I] power_monitor: Rendering house voltage view content\n");
+			power_monitor_house_voltage_view_render(container);
+			printf("[I] power_monitor: House voltage view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_VOLTAGE) {
+			printf("[I] power_monitor: Rendering solar voltage view content\n");
+			power_monitor_solar_voltage_view_render(container);
+			printf("[I] power_monitor: Solar voltage view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_STARTER_CURRENT) {
+			printf("[I] power_monitor: Rendering starter current view content\n");
+			power_monitor_starter_current_view_render(container);
+			printf("[I] power_monitor: Starter current view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_CURRENT) {
+			printf("[I] power_monitor: Rendering house current view content\n");
+			power_monitor_house_current_view_render(container);
+			printf("[I] power_monitor: House current view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_CURRENT) {
+			printf("[I] power_monitor: Rendering solar current view content\n");
+			power_monitor_solar_current_view_render(container);
+			printf("[I] power_monitor: Solar current view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_STARTER_POWER) {
+			printf("[I] power_monitor: Rendering starter power view content\n");
+			power_monitor_starter_power_view_render(container);
+			printf("[I] power_monitor: Starter power view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_HOUSE_POWER) {
+			printf("[I] power_monitor: Rendering house power view content\n");
+			power_monitor_house_power_view_render(container);
+			printf("[I] power_monitor: House power view shown and rendered\n");
+	} else if (current_type == POWER_MONITOR_VIEW_SOLAR_POWER) {
+			printf("[I] power_monitor: Rendering solar power view content\n");
+			power_monitor_solar_power_view_render(container);
+			printf("[I] power_monitor: Solar power view shown and rendered\n");
 	}
 
 	// Timeline settings are applied when gauges are created, not every frame
@@ -1801,7 +2192,7 @@ static int power_monitor_get_view_index(void)
 	int index = module_screen_view_get_view_index("power-monitor");
 
 	// Validate and clamp the index
-	if (index < 0 || index >= 2) {
+	if (index < 0 || index >= POWER_MONITOR_VIEW_COUNT) {
 		printf("[W] power_monitor: Invalid view index %d from device state, using 0\n", index);
 		index = 0;
 	}
@@ -1815,9 +2206,9 @@ static int power_monitor_get_view_index(void)
 static void power_monitor_set_view_index(int index)
 {
 	// Validate and clamp the index
-	if (index < 0 || index >= 2) {
+	if (index < 0 || index >= POWER_MONITOR_VIEW_COUNT) {
 		printf("[W] power_monitor: Invalid view index %d, clamping to valid range\n", index);
-		index = (index < 0) ? 0 : 1;
+		index = (index < 0) ? 0 : (POWER_MONITOR_VIEW_COUNT - 1);
 	}
 
 	// Set in device state
@@ -1835,24 +2226,88 @@ static void power_monitor_set_view_index(int index)
 
 /**
  * @brief Destroy the current view objects properly
+ * @param old_view_index The index of the view being destroyed (before the new view is set)
  */
-static void power_monitor_destroy_current_view(void)
+static void power_monitor_destroy_current_view(int old_view_index)
 {
 	if (s_ui_state.view_destroy_in_progress) {
 		printf("[W] power_monitor: View destroy in progress, skipping\n");
 		return;
 	}
 	s_ui_state.view_destroy_in_progress = true;
-	int view_index = power_monitor_get_view_index();
-	printf("[I] power_monitor: Destroying current view objects for index %d, view_index\n");
+	int view_index = old_view_index; // Use the old view index that's being destroyed
+	printf("[I] power_monitor: Destroying current view objects for index %d\n", view_index);
 
 	// CRITICAL: Cleanup gauge canvas buffers BEFORE destroying LVGL objects
 	// This prevents memory leaks from malloc'd canvas buffers
 	printf("[I] power_monitor: Cleaning up gauge canvas buffers before LVGL object destruction\n");
-	extern void power_monitor_reset_static_gauges(void);
-	extern void power_monitor_reset_starter_voltage_static_gauge(void);
-	power_monitor_reset_static_gauges();
-	power_monitor_reset_starter_voltage_static_gauge();
+
+	// Call the appropriate reset function based on current view
+	switch(view_index) {
+		case 0: { // Voltage grid view
+			extern void power_monitor_reset_static_gauges(void);
+			power_monitor_reset_static_gauges();
+			break;
+		}
+		case 1: { // Amperage grid view
+			extern void power_monitor_reset_amperage_static_gauges(void);
+			power_monitor_reset_amperage_static_gauges();
+			break;
+		}
+		case 2: { // Power grid view
+			extern void power_monitor_power_grid_view_reset_state(void);
+			power_monitor_power_grid_view_reset_state();
+			break;
+		}
+		case 3: { // Starter voltage view
+			extern void power_monitor_reset_starter_voltage_static_gauge(void);
+			power_monitor_reset_starter_voltage_static_gauge();
+			break;
+		}
+		case 4: { // House voltage view
+			extern void power_monitor_reset_house_voltage_static_gauge(void);
+			power_monitor_reset_house_voltage_static_gauge();
+			break;
+		}
+		case 5: { // Solar voltage view
+			extern void power_monitor_reset_solar_voltage_static_gauge(void);
+			power_monitor_reset_solar_voltage_static_gauge();
+			break;
+		}
+		case 6: { // Starter current view
+			extern void power_monitor_reset_starter_current_static_gauge(void);
+			power_monitor_reset_starter_current_static_gauge();
+			break;
+		}
+		case 7: { // House current view
+			extern void power_monitor_reset_house_current_static_gauge(void);
+			power_monitor_reset_house_current_static_gauge();
+			break;
+		}
+		case 8: { // Solar current view
+			extern void power_monitor_reset_solar_current_static_gauge(void);
+			power_monitor_reset_solar_current_static_gauge();
+			break;
+		}
+		case 9: { // Starter power view
+			extern void power_monitor_reset_starter_power_static_gauge(void);
+			power_monitor_reset_starter_power_static_gauge();
+			break;
+		}
+		case 10: { // House power view
+			extern void power_monitor_reset_house_power_static_gauge(void);
+			power_monitor_reset_house_power_static_gauge();
+			break;
+		}
+		case 11: { // Solar power view
+			extern void power_monitor_reset_solar_power_static_gauge(void);
+			power_monitor_reset_solar_power_static_gauge();
+			break;
+		}
+		default:
+			printf("[W] power_monitor: Unknown view index %d, no reset function\n", view_index);
+			break;
+	}
 
 	// Get the detail screen container to clean
 	extern detail_screen_t* detail_screen;
@@ -1870,7 +2325,7 @@ static void power_monitor_destroy_current_view(void)
 		printf("[W] power_monitor: No detail screen container to clean\n");
 	}
 
-	printf("[I] power_monitor: Current view objects destroyed for index %d, view_index\n");
+	printf("[I] power_monitor: Current view objects destroyed for index %d\n", view_index);
 	s_ui_state.view_destroy_in_progress = false;
 }
 
@@ -1884,7 +2339,7 @@ static void power_monitor_destroy_current_view(void)
 static void power_monitor_module_init(void)
 {
 	printf("[I] power_monitor: Power monitor module initializing via standardized interface\n");
-	power_monitor_init_with_default_view(POWER_MONITOR_VIEW_BAR_GRAPH);
+	power_monitor_init();
 }
 
 /**
@@ -1925,7 +2380,13 @@ static void power_monitor_module_update(void)
 				printf("[I] power_monitor: Performing delayed re-render of detail view after cycle\n");
 
 				// DESTROY: Properly destroy the current view object
-				power_monitor_destroy_current_view();
+				// The view index has already been incremented by current_view_manager_cycle_to_next()
+				// So we need to get the previous index
+				int current_index = power_monitor_get_view_index();
+				// Calculate previous index (decrement with wrap-around)
+				int old_view_index = (current_index - 1 + POWER_MONITOR_VIEW_COUNT) % POWER_MONITOR_VIEW_COUNT;
+				printf("[I] power_monitor: Switching from view %d to view %d\n", old_view_index, current_index);
+				power_monitor_destroy_current_view(old_view_index);
 
 				// Ensure layout is calculated on parent container before creating new view
 				// Use detail screen's reusable layout preparation function for consistency
@@ -1936,7 +2397,7 @@ static void power_monitor_module_update(void)
 				}
 
 				// CREATE: Create new view object with updated index
-				int current_index = power_monitor_get_view_index();
+				// current_index was already calculated above
 
 				// Use the callback system instead of direct call
 				if( detail_screen->on_current_view_created ){

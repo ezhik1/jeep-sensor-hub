@@ -48,15 +48,15 @@ void format_and_display_number(float value, const number_formatting_config_t* co
 		lv_obj_update_layout(value_container);
 		lv_obj_update_layout(row_container);
 
-		// Apply alignment based on configuration
-		switch (config->alignment) {
-			case NUMBER_ALIGN_LEFT:
+		// Apply alignment based on number alignment configuration
+		switch (config->number_alignment) {
+			case LABEL_ALIGN_LEFT:
 				lv_obj_align(value_label, LV_ALIGN_LEFT_MID, 0, 0);
 				break;
-			case NUMBER_ALIGN_CENTER:
+			case LABEL_ALIGN_CENTER:
 				lv_obj_align(value_label, LV_ALIGN_CENTER, 0, 0);
 				break;
-			case NUMBER_ALIGN_RIGHT:
+			case LABEL_ALIGN_RIGHT:
 			default:
 				lv_obj_align(value_label, LV_ALIGN_RIGHT_MID, 0, 0);
 				break;
@@ -69,15 +69,15 @@ void format_and_display_number(float value, const number_formatting_config_t* co
 		// Align the label within its existing container based on config
 		row_container = lv_obj_get_parent(value_label);
 
-		// Apply alignment based on configuration
-		switch (config->alignment) {
-			case NUMBER_ALIGN_LEFT:
+		// Apply alignment based on number alignment configuration
+		switch (config->number_alignment) {
+			case LABEL_ALIGN_LEFT:
 				lv_obj_align(value_label, LV_ALIGN_LEFT_MID, 0, 0);
 				break;
-			case NUMBER_ALIGN_CENTER:
+			case LABEL_ALIGN_CENTER:
 				lv_obj_align(value_label, LV_ALIGN_CENTER, 0, 0);
 				break;
-			case NUMBER_ALIGN_RIGHT:
+			case LABEL_ALIGN_RIGHT:
 			default:
 				lv_obj_align(value_label, LV_ALIGN_RIGHT_MID, 0, 0);
 				break;
@@ -93,28 +93,28 @@ void format_and_display_number(float value, const number_formatting_config_t* co
 		// For detail screen rows, this will be the value_container we created
 		// For other contexts, this will be the original parent
 		lv_obj_t* value_container = lv_obj_get_parent(value_label);
-		create_warning_icon(value_container, value_label, config->warning_icon_size, config->alignment);
+		create_warning_icon(value_container, value_label, config->warning_icon_size, config->warning_alignment);
 
 		// For non-detail-screen contexts (like power grid view), position the icon
 		// at the same location as the value label
-		if (!is_detail_screen_row) {
-			lv_obj_t* warning_icon = lv_obj_get_child(value_container, lv_obj_get_child_cnt(value_container) - 1);
-			if (warning_icon && lv_obj_has_flag(warning_icon, LV_OBJ_FLAG_USER_1)) {
-				// Apply alignment based on configuration
-				switch (config->alignment) {
-					case NUMBER_ALIGN_LEFT:
-						lv_obj_align(warning_icon, LV_ALIGN_LEFT_MID, 0, 0);
-						break;
-					case NUMBER_ALIGN_CENTER:
-						lv_obj_align(warning_icon, LV_ALIGN_CENTER, 0, 0);
-						break;
-					case NUMBER_ALIGN_RIGHT:
-					default:
-						lv_obj_align(warning_icon, LV_ALIGN_RIGHT_MID, 0, 0);
-						break;
-				}
+
+		lv_obj_t* warning_icon = lv_obj_get_child(value_container, lv_obj_get_child_cnt(value_container) - 1);
+		if (warning_icon && lv_obj_has_flag(warning_icon, LV_OBJ_FLAG_USER_1)) {
+			// Apply alignment based on warning alignment configuration
+			switch (config->warning_alignment) {
+				case LABEL_ALIGN_LEFT:
+					lv_obj_align(warning_icon, LV_ALIGN_LEFT_MID, 0, 0);
+					break;
+				case LABEL_ALIGN_CENTER:
+					lv_obj_align(warning_icon, LV_ALIGN_CENTER, 0, 0);
+					break;
+				case LABEL_ALIGN_RIGHT:
+				default:
+					lv_obj_align(warning_icon, LV_ALIGN_RIGHT_MID, 0, 0);
+					break;
 			}
 		}
+
 		return;
 	}
 
@@ -125,12 +125,28 @@ void format_and_display_number(float value, const number_formatting_config_t* co
 	lv_obj_t* value_container = lv_obj_get_parent(value_label);
 	hide_warning_icon(value_container);
 
-	// Always display one decimal place for all numbers
-	char formatted_text[32];
-	snprintf(formatted_text, sizeof(formatted_text), "%.1f", value);
+	// Format the number with thousands handling
+	char number_text[32];
+	char suffix_text[8] = "";
+	bool has_suffix = false;
 
-	// Update label text
-	lv_label_set_text(value_label, formatted_text);
+	// Use the same formatting logic as numberpad to avoid crashes
+	// Handle both positive and negative numbers with the same rules
+	if (value >= 1000.0f || value <= -1000.0f) {
+		// Format as k notation (both positive and negative)
+		format_value_with_magnitude(value, number_text, sizeof(number_text));
+	} else if ((value >= 100.0f && value < 1000.0f) || (value <= -100.0f && value > -1000.0f)) {
+		// Format as whole number for values 100-999 and -100 to -999
+		snprintf(number_text, sizeof(number_text), "%.0f", value);
+	} else {
+		// Format as regular number with decimal
+		snprintf(number_text, sizeof(number_text), "%.1f", value);
+	}
+
+	// Update main label text
+	lv_label_set_text(value_label, number_text);
+
+	// No suffix handling needed since 'k' is included directly in the text
 
 	// Apply font if provided, otherwise use monospace font
 	if (config->font) {
@@ -140,15 +156,15 @@ void format_and_display_number(float value, const number_formatting_config_t* co
 		lv_obj_set_style_text_font(value_label, &lv_font_montserrat_16, 0);
 	}
 
-	// Set text alignment based on configuration
-	switch (config->alignment) {
-		case NUMBER_ALIGN_LEFT:
+	// Set text alignment based on number alignment configuration
+	switch (config->number_alignment) {
+		case LABEL_ALIGN_LEFT:
 			lv_obj_set_style_text_align(value_label, LV_TEXT_ALIGN_LEFT, 0);
 			break;
-		case NUMBER_ALIGN_CENTER:
+		case LABEL_ALIGN_CENTER:
 			lv_obj_set_style_text_align(value_label, LV_TEXT_ALIGN_CENTER, 0);
 			break;
-		case NUMBER_ALIGN_RIGHT:
+		case LABEL_ALIGN_RIGHT:
 		default:
 			lv_obj_set_style_text_align(value_label, LV_TEXT_ALIGN_RIGHT, 0);
 			break;
@@ -185,21 +201,7 @@ void create_warning_icon(lv_obj_t* parent, lv_obj_t* label, lv_coord_t icon_size
 
 	// Create warning icon using bitmap
 	lv_obj_t* warning_icon = warning_icon_create(parent, icon_size_enum, PALETTE_YELLOW);
-	if (warning_icon) {
-		// Align the icon based on alignment parameter
-		switch (alignment) {
-			case NUMBER_ALIGN_LEFT:
-				lv_obj_align(warning_icon, LV_ALIGN_LEFT_MID, 0, 0);
-				break;
-			case NUMBER_ALIGN_CENTER:
-				lv_obj_align(warning_icon, LV_ALIGN_CENTER, 0, 0);
-				break;
-			case NUMBER_ALIGN_RIGHT:
-			default:
-				lv_obj_align(warning_icon, LV_ALIGN_RIGHT_MID, 0, 0);
-				break;
-		}
-	}
+	// Note: alignment is handled by the caller after creation to ensure correct parent context
 }
 
 void hide_warning_icon(lv_obj_t* parent)
@@ -212,13 +214,51 @@ void hide_warning_icon(lv_obj_t* parent)
 		return;
 	}
 
-	// Find and hide any existing warning icon
+	// Find and DELETE any existing warning icons
 	uint32_t child_count = lv_obj_get_child_cnt(parent);
-	for (uint32_t i = 0; i < child_count; i++) {
+	for (int i = child_count - 1; i >= 0; i--) {
 		lv_obj_t* child = lv_obj_get_child(parent, i);
 		if (child && lv_obj_is_valid(child) && lv_obj_has_flag(child, LV_OBJ_FLAG_USER_1)) {
-			lv_obj_add_flag(child, LV_OBJ_FLAG_HIDDEN);
-			// Don't break - hide ALL warning icons to prevent duplicates
+			lv_obj_del(child);
+			// Continue to delete ALL warning icons to prevent duplicates
 		}
 	}
+}
+
+// Format values with magnitude suffixes (k for thousands, M for millions)
+void format_value_with_magnitude(float value, char* buffer, size_t buffer_size)
+{
+	if (fabsf(value) >= 1000000.0f) {
+		// Format with 'M' suffix for millions
+		snprintf(buffer, buffer_size, "%.1fm", value / 1000000.0f);
+	} else if (fabsf(value) > 999.0f) {
+		// Format with 'k' suffix for thousands
+		snprintf(buffer, buffer_size, "%.1fk", value / 1000.0f);
+	} else {
+		// Format as whole number for values <= 999
+		snprintf(buffer, buffer_size, "%.0f", value);
+	}
+}
+
+// Generic alert flashing - applies color based on threshold and blink state
+bool apply_alert_flashing(lv_obj_t* label, float value, float threshold_low, float threshold_high, bool blink_on)
+{
+	if (!label || !lv_obj_is_valid(label)) return false;
+
+	// Check if value is outside thresholds
+	bool alert = (value <= threshold_low) || (value >= threshold_high);
+
+	if (alert) {
+		// Only change color, no hiding/showing to prevent layout shifts
+		if (blink_on) {
+			lv_obj_set_style_text_color(label, PALETTE_YELLOW, 0);
+		} else {
+			lv_obj_set_style_text_color(label, PALETTE_WHITE, 0);
+		}
+	} else {
+		// Normal state - always white
+		lv_obj_set_style_text_color(label, PALETTE_WHITE, 0);
+	}
+
+	return alert;
 }
